@@ -42,7 +42,11 @@ def _parser() -> argparse.ArgumentParser:
         if name == "inspect":
             command.add_argument("--require-separated-role", action="store_true")
         if name == "ready":
-            command.add_argument("--lane", choices=DatabaseAccessLane, required=True)
+            command.add_argument(
+                "--lane",
+                choices=tuple(lane.value for lane in DatabaseAccessLane),
+                required=True,
+            )
         if name == "migrate":
             command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
@@ -74,7 +78,11 @@ def _parser() -> argparse.ArgumentParser:
         command = mysql_commands.add_parser(name)
         command.add_argument("--dsn-env", required=True, metavar="NAME")
         if name == "ready":
-            command.add_argument("--lane", choices=DatabaseAccessLane, required=True)
+            command.add_argument(
+                "--lane",
+                choices=tuple(lane.value for lane in DatabaseAccessLane),
+                required=True,
+            )
         if name == "migrate":
             command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(

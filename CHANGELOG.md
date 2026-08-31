@@ -36,6 +36,12 @@ and uses Semantic Versioning for the supported surface described in
   migration ledger so startup checks can verify the installed schema without
   giving application accounts migration authority.
 
+### Fixed
+
+- Database readiness commands parse runtime and retention lane values on every
+  supported Python version, and the development extra includes the driver
+  required to collect the SQLAlchemy/Alembic recipe tests.
+
 ## [0.1.2] - 2026-08-31
 
 ### Fixed
