@@ -1,12 +1,17 @@
 # Pydantic AI integration reference
 
-Read this only when the host uses Pydantic AI. Install the optional extra that
-matches the checked-out library:
+Read this only when the host uses Pydantic AI. In an application, install the
+published optional extra:
 
 ```bash
-THREVO_ACTIONS_REF=0bd0ab1715a134658c9fe065c19b67a188fac91e
-python -m pip install \
-  "threvo-actions[pydantic-ai] @ git+https://github.com/BlackPigIndustries/threvo-actions.git@$THREVO_ACTIONS_REF"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.2"
+```
+
+When contributing from a source checkout, install its locked integration
+environment instead:
+
+```bash
+uv sync --extra pydantic-ai --locked
 ```
 
 The current integration uses a Pydantic AI `Capability`, not a parallel loop:

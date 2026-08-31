@@ -26,6 +26,18 @@ def test_skill_version_matches_package() -> None:
     assert f'version: "{threvo_actions.__version__}"' in skill
 
 
+def test_pydantic_ai_skill_uses_the_published_versioned_extra() -> None:
+    reference = (SKILL_ROOT / "references" / "pydantic-ai.md").read_text()
+
+    assert (
+        f'python -m pip install "threvo-actions[pydantic-ai]=={threvo_actions.__version__}"'
+        in reference
+    )
+    assert "uv sync --extra pydantic-ai --locked" in reference
+    assert "git+https://" not in reference
+    assert "THREVO_ACTIONS_REF" not in reference
+
+
 def test_documented_conformance_helpers_are_importable() -> None:
     conformance = import_module("threvo_actions.conformance")
 
