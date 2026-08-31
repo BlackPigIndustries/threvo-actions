@@ -17,6 +17,7 @@ from threvo_actions.migrations import (
     plan_postgres_migrations,
     quote_schema_name,
     render_postgres_grants,
+    render_postgres_migration_script,
 )
 from threvo_actions.models import LifecycleStatus
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
@@ -66,6 +67,52 @@ def test_postgres_plan_emits_exact_rendered_pending_sql_and_metadata() -> None:
 def test_postgres_plan_rejects_unknown_versions() -> None:
     with pytest.raises(MigrationStateError, match="unknown version"):
         plan_postgres_migrations(schema="actions", pending_versions=(5,))
+
+
+def test_postgres_script_renders_complete_fresh_database_bundle() -> None:
+    script = render_postgres_migration_script(schema="actions", from_version=0)
+    plan = plan_postgres_migrations(schema="actions")
+
+    assert script.startswith("BEGIN;\n")
+    assert script.endswith("COMMIT;\n")
+    assert 'CREATE SCHEMA IF NOT EXISTS "actions"' in script
+    assert 'CREATE TABLE IF NOT EXISTS "actions".schema_migrations' in script
+    assert "pg_advisory_xact_lock" in script
+    assert "PostgreSQL migration history does not match expected version 0" in script
+    assert "retired lifecycle states" in script
+    for migration in plan:
+        assert migration.sql in script
+        assert (
+            f"VALUES ({migration.version}, '{migration.filename}', '{migration.checksum}')"
+        ) in script
+    assert "__THREVO_ACTIONS_" not in script
+
+
+def test_postgres_script_pins_and_validates_an_existing_prefix() -> None:
+    script = render_postgres_migration_script(
+        schema="actions",
+        from_version=2,
+        writers_quiesced=True,
+    )
+
+    assert "001_action_runtime.sql" in script
+    assert "002_stale_no_effect.sql" in script
+    assert "003_generated_lifecycle_guard.sql" in script
+    assert "004_active_lifecycle_guard.sql" in script
+    assert 'CREATE TABLE "actions".proposals' not in script
+    assert "PostgreSQL migration history does not match expected version 2" in script
+
+
+def test_postgres_script_rejects_invalid_history_and_missing_quiescence() -> None:
+    with pytest.raises(MigrationStateError, match="unknown from-version"):
+        render_postgres_migration_script(schema="actions", from_version=5)
+
+    with pytest.raises(MigrationStateError, match="stopped runtime and retention writers"):
+        render_postgres_migration_script(schema="actions", from_version=2)
+
+    current = render_postgres_migration_script(schema="actions", from_version=4)
+    assert "expected version 4" in current
+    assert "-- Migration" not in current
 
 
 def test_postgres_grants_quote_roles_and_keep_lanes_distinct() -> None:

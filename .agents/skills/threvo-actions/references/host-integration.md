@@ -54,16 +54,32 @@ Before accepting work, call `check_postgres_readiness()` with the existing pool
 or run `postgres ready --lane runtime|retention` with each application DSN.
 Treat a false result or exit code `3` as a startup failure.
 
+When a deployment needs immutable reviewed SQL, render `postgres script --all`
+for a fresh database or `postgres script --from-version VERSION` for an exact
+existing ledger. Existing contract upgrades also require
+`--writers-quiesced`. Pin the output with the deployment release and apply it
+with the migrator while writers are actually stopped. The script contains the
+transaction, advisory lock, schema and ledger bootstrap, history assertion,
+preflights, migration bodies, and checksum-bearing ledger inserts. It does not
+apply grants. Apply it with a client that returns failure for SQL errors (`psql
+--set ON_ERROR_STOP=1`, for example). Never execute the JSON `postgres plan`
+output as a migration.
+
 When a host uses SQLAlchemy and Alembic, keep the library's action schema and
 immutable migration ledger separate from the application's Alembic ledger.
-Call `migrate_postgres()` with a dedicated migrator asyncpg pool from the
-serialized deployment before Alembic opens its application-schema connection;
-do not copy packaged SQL into an Alembic revision or migrate in application
-startup. The two ledgers are not one transaction. At startup, keep SQLAlchemy
+Run `threvo-actions postgres migrate` as a serialized deployment step before
+`alembic upgrade`; do not invoke the package migrator dynamically from
+Alembic's `env.py` or from application startup. The two ledgers are not one
+transaction. At startup, keep SQLAlchemy
 on host business data, give `PostgresActionStore` and
 `PostgresRetentionStore` independent asyncpg pools, and gate both pools with
 `check_postgres_readiness()`. Never imply that a SQLAlchemy transaction and an
 action-store transaction commit atomically.
+
+The PostgreSQL action DSNs may point to a dedicated database because the store
+never joins host business tables. Prefer that maximum-isolation topology when
+credentials, ownership, backups, or incident containment must be independent;
+accept the extra operational surface and the absence of cross-database atomicity.
 
 Do not use `MemoryActionStore`, `EphemeralProtection`, sequential identifiers,
 or a fixed clock in a production process. Do not give the runtime store the

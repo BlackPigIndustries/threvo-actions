@@ -2,8 +2,9 @@
 
 Use this recipe when SQLAlchemy and Alembic already own your application's
 business schema. `threvo-actions` keeps its own schema, migration ledger, and
-checksums. Alembic orchestrates the deployment, but it does not copy the
-library SQL into host-managed Alembic files.
+checksums. Run the two migration systems as explicit deployment steps. Do not
+make Alembic's `env.py` dynamically execute whichever library migrations happen
+to be installed.
 
 ```bash
 python -m pip install "threvo-actions[sqlalchemy]==0.1.2"
@@ -29,54 +30,43 @@ action URLs are passed directly to asyncpg and begin with `postgresql://`.
 Load all four through your secret manager. Do not put a literal DSN in command
 arguments or source code.
 
-## Add the action migration to async Alembic
+## Run migrations in deployment order
 
-Copy this helper into your deployment module:
+Keep Alembic's generated `env.py` concerned only with the application schema.
+In one serialized deployment job, run:
 
-```python
---8<-- "examples/frameworks/sqlalchemy_alembic/action_migrations.py"
+```bash
+threvo-actions postgres plan \
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
+threvo-actions postgres migrate \
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions \
+  --writers-quiesced
+alembic upgrade head
 ```
 
-In the async `env.py` produced by `alembic init -t async`, call it before
-opening Alembic's SQLAlchemy connection:
-
-```python
-import os
-
-from action_migrations import migrate_action_schema
-
-
-async def run_async_migrations() -> None:
-    await migrate_action_schema(
-        migrator_dsn=os.environ["ACTIONS_MIGRATOR_DATABASE_URL"],
-        writers_quiesced=(
-            os.environ.get("ACTIONS_WRITERS_QUIESCED", "false").lower()
-            == "true"
-        ),
-    )
-
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-```
-
-Keep the rest of Alembic's generated async template unchanged. Set
-`ACTIONS_WRITERS_QUIESCED=true` only after the deployment has actually drained
-runtime and retention writers. The flag is an acknowledgement, not a drain.
-
-This sequence is intentionally not one transaction: the library migrator and
-Alembic use independent ledgers and connections. If the action migration
-fails, application migrations do not begin. If a later Alembic migration
+Pass `--writers-quiesced` only after the deployment has actually drained both
+action writer lanes. Fresh action-schema bootstrap does not require it. If the
+action migration fails, do not start Alembic. If a later Alembic migration
 fails, leave the completed action migration in place, correct the application
-migration, and rerun the deployment. Never reverse or edit the library ledger.
+migration, and rerun the deployment. The ledgers and transactions are
+intentionally independent; never reverse or edit the library ledger.
 
-Do not run `migrate_action_schema` in a web-process lifespan. Schema mutation
-belongs in a serialized deployment job.
+For environments where a DBA must approve immutable SQL, render and pin a
+complete library-owned script as a release artifact:
+
+```bash
+threvo-actions postgres script --from-version 3 \
+  --schema threvo_actions --writers-quiesced \
+  > deploy/sql/threvo-actions-3-to-current.sql
+```
+
+Use `--all` instead for a fresh database. The script validates its declared
+starting ledger, includes ledger inserts and checksums, and applies in one
+transaction. Apply that file as the action-migration deployment step, then run
+Alembic. Do not copy the JSON `postgres plan` output into a revision, and do not
+regenerate an already reviewed SQL artifact during deployment.
+Make the SQL client propagate failures to the deployment runner; `psql` needs
+`--set ON_ERROR_STOP=1` when applying the file.
 
 ## Gate application startup
 

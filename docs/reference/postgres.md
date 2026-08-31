@@ -28,6 +28,7 @@
         - postgres_migration_compatibility
         - quote_schema_name
         - render_postgres_grants
+        - render_postgres_migration_script
       show_source: false
 
 See [Migration compatibility](migration-compatibility.md) before automating an

@@ -18,6 +18,29 @@ different positive bound for the explicit migration command.
 For an existing schema, pass `--writers-quiesced` only after draining runtime
 and retention writers. Fresh bootstrap does not require the acknowledgement.
 
+The three action credentials may point to a dedicated actions database rather
+than the database that holds application tables. The adapter never joins host
+tables. This topology gives action DDL, privileges, backups, and incident
+containment their own boundary, at the cost of another database to operate and
+without any cross-database atomic transaction claim.
+
+Deployments that require a reviewed SQL file can render the complete migration
+transaction offline:
+
+```bash
+threvo-actions postgres script --all --schema threvo_actions \
+  > threvo-actions-bootstrap.sql
+threvo-actions postgres script --from-version 3 --schema threvo_actions \
+  --writers-quiesced > threvo-actions-3-to-current.sql
+```
+
+`--all` requires a fresh migration ledger. `--from-version` declares the exact
+existing prefix and the script refuses any ledger mismatch. The output includes
+schema and ledger bootstrap, advisory locking, migration SQL, the retired-state
+preflight, checksum-bearing ledger inserts, and a single transaction. Apply it
+with the migrator role and a client that propagates SQL errors (`psql --set
+ON_ERROR_STOP=1`, for example). It does not apply runtime or retention grants.
+
 The adapter never discovers a database URL or creates a pool. The explicit CLI reads only the
 environment-variable name supplied with `--dsn-env`, which keeps credentials out of process
 arguments. Applications pass an existing asyncpg pool to `PostgresActionStore`. Retention workers construct a separate

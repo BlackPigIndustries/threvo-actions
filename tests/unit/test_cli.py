@@ -177,6 +177,48 @@ def test_postgres_plan_is_read_only_and_emits_pending_exact_sql(
     assert pool.closed
 
 
+def test_postgres_script_renders_without_database_credentials_or_driver(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setitem(sys.modules, "asyncpg", None)
+    monkeypatch.delenv("ACTIONS_TEST_DATABASE_URL", raising=False)
+
+    assert (
+        cli.main(
+            [
+                "postgres",
+                "script",
+                "--all",
+                "--schema",
+                "actions_test",
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert output.startswith("BEGIN;\n")
+    assert 'CREATE SCHEMA IF NOT EXISTS "actions_test"' in output
+    assert output.endswith("COMMIT;\n")
+
+
+def test_postgres_script_requires_quiescence_for_contract_upgrade(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit, match="2"):
+        cli.main(
+            [
+                "postgres",
+                "script",
+                "--from-version",
+                "2",
+            ]
+        )
+
+    assert "stopped runtime and retention writers" in capsys.readouterr().err
+
+
 def test_grant_commands_render_without_database_credentials_or_drivers(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

@@ -14,6 +14,8 @@ from threvo_actions.migrations import (
     _render_migration_sql,
     inspect_postgres,
     migrate_postgres,
+    postgres_migration_compatibility,
+    render_postgres_migration_script,
 )
 from threvo_actions.models import LifecycleStatus
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
@@ -74,6 +76,47 @@ def test_migration_is_explicit_repeatable_and_dry_inspection_does_not_write() ->
                     schema,
                 )
             assert function_config == ["search_path=pg_catalog"]
+        finally:
+            async with pool.acquire() as connection:
+                await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            await pool.close()
+
+    asyncio.run(scenario())
+
+
+def test_offline_script_bootstraps_the_same_immutable_migration_history() -> None:
+    async def scenario() -> None:
+        schema = f"test_actions_{uuid.uuid4().hex}"
+        pool = await asyncpg.create_pool(require_test_dsn(), min_size=1, max_size=2)
+        script = render_postgres_migration_script(schema=schema, from_version=0)
+        try:
+            async with pool.acquire() as connection:
+                await connection.execute(script)
+
+            status = await inspect_postgres(pool, schema=schema)
+            assert status.applied_versions == (1, 2, 3, 4)
+            assert status.pending_versions == ()
+            async with pool.acquire() as connection:
+                rows = await connection.fetch(
+                    f'SELECT version, filename, checksum FROM "{schema}".schema_migrations '
+                    "ORDER BY version"
+                )
+            assert tuple(row["filename"] for row in rows) == tuple(
+                compatibility.filename for compatibility in postgres_migration_compatibility()
+            )
+            assert tuple(row["checksum"] for row in rows) == tuple(
+                hashlib.sha256(
+                    files("threvo_actions")
+                    .joinpath("_migrations", "postgres", row["filename"])
+                    .read_bytes()
+                ).hexdigest()
+                for row in rows
+            )
+
+            async with pool.acquire() as connection:
+                with pytest.raises(asyncpg.PostgresError, match="expected version 0"):
+                    await connection.execute(script)
+            assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3, 4)
         finally:
             async with pool.acquire() as connection:
                 await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
@@ -408,12 +451,23 @@ def test_retired_row_blocks_upgrade_transaction_and_recovery_is_forward_only() -
                 await migrate_postgres(pool, schema=schema, writers_quiesced=True)
             assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3)
 
+            script = render_postgres_migration_script(
+                schema=schema,
+                from_version=3,
+                writers_quiesced=True,
+            )
+            async with pool.acquire() as connection:
+                with pytest.raises(asyncpg.PostgresError, match="retired lifecycle states"):
+                    await connection.execute(script)
+            assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3)
+
             async with pool.acquire() as connection:
                 await connection.execute(
                     f'DELETE FROM "{schema}".proposals '
                     "WHERE proposal_reference = 'proposal:retired'"
                 )
-            recovered = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
+                await connection.execute(script)
+            recovered = await inspect_postgres(pool, schema=schema)
             assert recovered.applied_versions == (1, 2, 3, 4)
         finally:
             async with pool.acquire() as connection:

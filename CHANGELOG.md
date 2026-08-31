@@ -25,6 +25,12 @@ and uses Semantic Versioning for the supported surface described in
   qualified topology, privilege separation, and explicit data-protection
   exclusions. A shared conformance scenario now proves guarded revisions and
   semantic-effect admission through independently created connection sources.
+- `postgres script` renders a complete, credential-free SQL transaction for a
+  fresh database or an explicitly pinned existing ledger, including locking,
+  safety preflights, migration bookkeeping, and checksums.
+- Store security profiles report whether lifecycle, effect-admission,
+  append-only-evidence, and role-separated-erasure guarantees are enforced by
+  the database, by the adapter process, or are unsupported.
 
 ### Changed
 
@@ -35,6 +41,10 @@ and uses Semantic Versioning for the supported surface described in
 - Generated application grants now include read-only access to the non-secret
   migration ledger so startup checks can verify the installed schema without
   giving application accounts migration authority.
+- SQLAlchemy/Alembic guidance now runs the library migrator as a separate
+  serialized deployment step so an existing host revision cannot change with
+  the installed library version. PostgreSQL docs include the dedicated-database
+  maximum-isolation topology.
 
 ### Fixed
 

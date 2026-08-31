@@ -27,6 +27,13 @@ def _positive_seconds(value: str) -> float:
     return seconds
 
 
+def _nonnegative_integer(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("must be nonnegative")
+    return number
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="threvo-actions")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -54,6 +61,15 @@ def _parser() -> argparse.ArgumentParser:
                 type=_positive_seconds,
                 default=30.0,
             )
+    postgres_script = postgres_commands.add_parser(
+        "script",
+        help="render a complete offline migration script",
+    )
+    postgres_script.add_argument("--schema", default="threvo_actions")
+    script_start = postgres_script.add_mutually_exclusive_group(required=True)
+    script_start.add_argument("--all", action="store_true", dest="all_migrations")
+    script_start.add_argument("--from-version", type=_nonnegative_integer)
+    postgres_script.add_argument("--writers-quiesced", action="store_true")
     postgres_grants = postgres_commands.add_parser("grants")
     postgres_grants.add_argument("--schema", default="threvo_actions")
     postgres_grants.add_argument("--runtime-role", required=True)
@@ -360,6 +376,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
         return 0
     if args.command == "postgres":
+        if args.postgres_command == "script":
+            from .migrations import MigrationStateError, render_postgres_migration_script
+
+            try:
+                script = render_postgres_migration_script(
+                    schema=args.schema,
+                    from_version=0 if args.all_migrations else args.from_version,
+                    writers_quiesced=args.writers_quiesced,
+                )
+            except (ValueError, MigrationStateError) as exc:
+                parser.error(str(exc))
+            print(script, end="")
+            return 0
         if args.postgres_command == "grants":
             from .migrations import render_postgres_grants
 

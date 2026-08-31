@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from examples.frameworks.sqlalchemy_alembic import action_migrations, application
+from examples.frameworks.sqlalchemy_alembic import application
 
 from threvo_actions.readiness import (
     DatabaseAccessLane,
@@ -38,38 +38,6 @@ def ready(lane: DatabaseAccessLane) -> DatabaseReadiness:
         privilege_boundary_valid=True,
         issues=(),
     )
-
-
-def test_action_migration_uses_and_closes_dedicated_pool(monkeypatch: pytest.MonkeyPatch) -> None:
-    pool = FakePool()
-    calls: list[tuple[object, str, bool]] = []
-
-    async def create_pool(*args: object, **kwargs: object) -> FakePool:
-        assert args == ("postgresql://migrator/actions",)
-        assert kwargs == {"min_size": 1, "max_size": 1}
-        return pool
-
-    async def migrate_postgres(
-        source: object,
-        *,
-        schema: str,
-        writers_quiesced: bool,
-    ) -> None:
-        calls.append((source, schema, writers_quiesced))
-
-    monkeypatch.setattr(action_migrations.asyncpg, "create_pool", create_pool)
-    monkeypatch.setattr(action_migrations, "migrate_postgres", migrate_postgres)
-
-    asyncio.run(
-        action_migrations.migrate_action_schema(
-            migrator_dsn="postgresql://migrator/actions",
-            schema="actions",
-            writers_quiesced=True,
-        )
-    )
-
-    assert calls == [(pool, "actions", True)]
-    assert pool.closed
 
 
 def test_application_recipe_checks_both_lanes_and_closes_resources(

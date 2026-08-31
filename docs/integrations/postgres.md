@@ -11,6 +11,13 @@ it does not claim storage encryption or deletion from external copies.
 python -m pip install "threvo-actions[postgres]==0.1.2"
 ```
 
+The action schema can live beside the application's tables or in a dedicated
+PostgreSQL database. A dedicated database is the maximum-isolation option: use
+it when action credentials, backups, ownership, and incident blast radius must
+be separate from business data. The adapter never joins host tables, so only
+the migrator, runtime, and retention DSNs change. This separation does not make
+an action-store transaction atomic with the host application's transaction.
+
 ## Apply migrations explicitly
 
 The package never discovers credentials or migrates at import time. Put the DSN
@@ -44,6 +51,31 @@ arguments. The example `export` still enters the literal DSN into shell
 history; load production credentials through your secret manager instead.
 `migrate` uses an advisory lock and applies packaged, forward-only migrations.
 The default lock wait is 30 seconds.
+
+For a reviewed SQL artifact instead of a live package invocation, render a
+complete fresh-database script without credentials or a database driver:
+
+```bash
+threvo-actions postgres script --all --schema threvo_actions \
+  > threvo-actions-bootstrap.sql
+```
+
+For an existing database, inspect first and pin the exact ledger version:
+
+```bash
+threvo-actions postgres script --from-version 3 \
+  --schema threvo_actions --writers-quiesced \
+  > threvo-actions-3-to-current.sql
+```
+
+Review and pin the generated file with the deployment release, then apply it
+once with the migrator credential while writers are actually stopped. The
+script validates that the database still has the declared migration prefix
+before applying DDL; it fails and rolls back if the target has drifted. Do not
+use the JSON emitted by `postgres plan` as an executable migration because it
+intentionally omits ledger operations and transaction guards.
+Configure the SQL client to propagate failures to the deployment runner; for
+`psql`, include `--set ON_ERROR_STOP=1` when applying the file.
 
 For an existing schema, the current lifecycle contract migrations require
 runtime and retention writers to be drained. `--writers-quiesced` is an

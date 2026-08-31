@@ -4,6 +4,7 @@
 threvo-actions skill path
 threvo-actions postgres inspect --dsn-env DATABASE_URL [--schema threvo_actions]
 threvo-actions postgres plan --dsn-env DATABASE_URL [--schema threvo_actions]
+threvo-actions postgres script (--all | --from-version VERSION) [--schema threvo_actions] [--writers-quiesced]
 threvo-actions postgres ready --dsn-env DATABASE_URL [--schema threvo_actions] --lane runtime|retention
 threvo-actions postgres migrate --dsn-env DATABASE_URL [--schema threvo_actions] [--writers-quiesced]
 threvo-actions postgres grants --schema threvo_actions --runtime-role ROLE --retention-role ROLE
@@ -29,6 +30,19 @@ the exact schema-rendered SQL, immutable source checksum, compatibility phase,
 and quiescence requirement for each pending migration. It does not include or
 execute the migration ledger updates and is a review artifact, not a substitute
 for `migrate`.
+
+`postgres script` is an offline renderer and needs no DSN or database driver.
+Use `--all` only for a fresh database. For an existing database, inspect it
+first and pass its exact current version with `--from-version`. The generated
+transaction creates the schema and migration ledger when needed, validates the
+expected immutable ledger prefix, takes the migration advisory lock, runs the
+same migration bodies and retired-state preflight as the live migrator, records
+filenames and checksums, and commits only when every step succeeds. It does not
+apply grants. An existing contract upgrade still requires writers to be
+stopped both when the script is rendered and when it is applied;
+`--writers-quiesced` records the acknowledgement but cannot stop them.
+Apply the file with a client configured to return failure on any SQL error; for
+`psql`, use `--set ON_ERROR_STOP=1`.
 
 PostgreSQL and MySQL contract migrations refuse an existing schema upgrade
 without `--writers-quiesced`. The option records the operator's explicit

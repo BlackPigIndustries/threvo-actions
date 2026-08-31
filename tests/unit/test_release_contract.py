@@ -209,6 +209,7 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "postgres_migration_compatibility",
             "quote_schema_name",
             "render_postgres_grants",
+            "render_postgres_migration_script",
         },
         "threvo_actions.migration_compatibility": {
             "MigrationCompatibility",
@@ -242,6 +243,9 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "POSTGRESQL_STORE_SECURITY_PROFILE",
             "SQLITE_STORE_SECURITY_PROFILE",
             "StorePrivilegeBoundary",
+            "StoreGuarantee",
+            "StoreGuaranteeEnforcement",
+            "StoreGuaranteeLevel",
             "StoreSecurityProfile",
             "StoreSupportTier",
             "StoreWriterTopology",

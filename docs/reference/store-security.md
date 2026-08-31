@@ -8,7 +8,9 @@ the tested adapter—not legal, regulatory, or third-party certifications.
 from threvo_actions.store_security import official_store_security_profiles
 
 for profile in official_store_security_profiles():
-    print(profile.identifier, profile.support_tier, profile.limitations)
+    print(profile.identifier, profile.support_tier)
+    for claim in profile.guarantee_enforcement:
+        print(claim.guarantee, claim.level)
 ```
 
 ## Current profiles
@@ -24,6 +26,25 @@ No official adapter configures storage encryption, authenticates the issuer
 named in evidence, or erases WAL/binary logs/journals, replicas, snapshots,
 exports, and backups. The profile exposes those facts as false fields so an
 application cannot infer them from adapter support.
+
+## Per-guarantee enforcement
+
+Each profile reports where four security-relevant persistence guarantees are
+enforced. `database_engine` means database constraints, transactions, triggers,
+procedures, or privileges defend the guarantee beneath ordinary adapter code.
+`adapter_process` means bypassing that process also bypasses the claim.
+`unsupported` means the profile does not provide the guarantee.
+
+| Guarantee | PostgreSQL | MySQL | SQLite |
+| --- | --- | --- | --- |
+| Lifecycle transitions | Database engine | Database engine | Database engine |
+| Atomic effect admission | Database engine | Database engine | Database engine |
+| Append-only active evidence | Database engine | Database engine | Adapter process |
+| Role-separated erasure | Database engine | Database engine | Unsupported |
+
+These levels describe the qualified adapter configuration, not every account
+with administrative access. Database owners and infrastructure operators remain
+outside the ordinary runtime/retention boundary.
 
 `independent_connection_conformance=True` means the repository runs the shared
 race scenario for that official profile. PostgreSQL and MySQL receive two

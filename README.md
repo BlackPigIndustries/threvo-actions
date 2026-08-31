@@ -68,14 +68,19 @@ same effect. Transport acceptance remains verification-pending until the host's
 authoritative verifier reports a terminal business outcome.
 
 The optional PostgreSQL adapter supplies guarded persistence, explicit
-advisory-locked migrations, and separate runtime/retention privilege boundaries.
+advisory-locked migrations, a credential-free complete SQL renderer, and
+separate runtime/retention privilege boundaries. Its three action roles can
+target a dedicated database when deployments need maximum isolation from host
+business persistence.
 The optional MySQL 8 adapter supplies InnoDB-backed guarded persistence,
 immutable explicit migrations, and security-definer runtime/retention lanes.
 The SQLite adapter supplies explicit migrations and durable storage for local
 development, evaluation, tests, and bounded single-writer deployments; it does
 not claim database-role separation or general multi-worker production safety.
 The SQLAlchemy/Alembic recipe keeps host business persistence and migrations
-separate from qualified asyncpg action stores and the library-owned ledger.
+separate from qualified asyncpg action stores and the library-owned ledger. It
+runs the library migration before Alembic as a serialized deployment step
+rather than dynamically invoking installed package code from `env.py`.
 The optional Pydantic AI Capability exposes typed command tools while treating
 framework approvals and message history as untrusted continuation material.
 See the [PostgreSQL guide](docs/postgres.md),
@@ -119,10 +124,11 @@ generic checks is a baseline; every host action and external connector still
 needs domain-specific adversarial tests.
 
 Official store security profiles make the tested writer topology, privilege
-boundary, and data-handling exclusions inspectable. The independent-connection
-scenario exercises one-winner revisions and semantic-effect admission through
-separately created connection sources. Its report is reproducible test evidence,
-not a signed, deployment, or compliance certificate.
+boundary, per-guarantee enforcement level, and data-handling exclusions
+inspectable. The independent-connection scenario exercises one-winner revisions
+and semantic-effect admission through separately created connection sources.
+Its report is reproducible test evidence, not a signed, deployment, or
+compliance certificate.
 
 The [refund example](examples/refund/app.py) proves stable per-intent PSP
 idempotency, atomic live-balance reservation, timeout-after-acceptance recovery,

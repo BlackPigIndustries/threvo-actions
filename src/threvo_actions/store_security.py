@@ -29,6 +29,31 @@ class StorePrivilegeBoundary(StrEnum):
     PROCESS_ONLY = "process_only"
 
 
+class StoreGuarantee(StrEnum):
+    """A persistence guarantee that an adapter may enforce at different levels."""
+
+    LIFECYCLE_TRANSITIONS = "lifecycle_transitions"
+    ATOMIC_EFFECT_ADMISSION = "atomic_effect_admission"
+    APPEND_ONLY_EVIDENCE = "append_only_evidence"
+    ROLE_SEPARATED_ERASURE = "role_separated_erasure"
+
+
+class StoreGuaranteeLevel(StrEnum):
+    """The boundary responsible for enforcing one persistence guarantee."""
+
+    DATABASE_ENGINE = "database_engine"
+    ADAPTER_PROCESS = "adapter_process"
+    UNSUPPORTED = "unsupported"
+
+
+@dataclass(frozen=True)
+class StoreGuaranteeEnforcement:
+    """The enforcement level claimed for one qualified store guarantee."""
+
+    guarantee: StoreGuarantee
+    level: StoreGuaranteeLevel
+
+
 @dataclass(frozen=True)
 class StoreSecurityProfile:
     """Data-handling and operating claims for one store configuration."""
@@ -38,6 +63,7 @@ class StoreSecurityProfile:
     support_tier: StoreSupportTier
     writer_topology: StoreWriterTopology
     privilege_boundary: StorePrivilegeBoundary
+    guarantee_enforcement: tuple[StoreGuaranteeEnforcement, ...]
     qualification_targets: tuple[str, ...]
     independent_connection_conformance: bool
     requires_host_protected_private_state: bool
@@ -47,12 +73,19 @@ class StoreSecurityProfile:
     limitations: tuple[str, ...]
 
 
+_DATABASE_ENGINE_GUARANTEES = tuple(
+    StoreGuaranteeEnforcement(guarantee, StoreGuaranteeLevel.DATABASE_ENGINE)
+    for guarantee in StoreGuarantee
+)
+
+
 POSTGRESQL_STORE_SECURITY_PROFILE = StoreSecurityProfile(
     identifier="postgresql/v1",
     adapter=DatabaseAdapter.POSTGRESQL,
     support_tier=StoreSupportTier.PRODUCTION_ORIENTED_OFFICIAL,
     writer_topology=StoreWriterTopology.MULTI_PROCESS,
     privilege_boundary=StorePrivilegeBoundary.DATABASE_ROLES,
+    guarantee_enforcement=_DATABASE_ENGINE_GUARANTEES,
     qualification_targets=("PostgreSQL 15", "PostgreSQL 16"),
     independent_connection_conformance=True,
     requires_host_protected_private_state=True,
@@ -71,6 +104,7 @@ MYSQL_STORE_SECURITY_PROFILE = StoreSecurityProfile(
     support_tier=StoreSupportTier.PRODUCTION_ORIENTED_OFFICIAL,
     writer_topology=StoreWriterTopology.MULTI_PROCESS,
     privilege_boundary=StorePrivilegeBoundary.DATABASE_ROLES,
+    guarantee_enforcement=_DATABASE_ENGINE_GUARANTEES,
     qualification_targets=("MySQL 8.0", "MySQL 8.4"),
     independent_connection_conformance=True,
     requires_host_protected_private_state=True,
@@ -89,6 +123,24 @@ SQLITE_STORE_SECURITY_PROFILE = StoreSecurityProfile(
     support_tier=StoreSupportTier.BOUNDED_USE_OFFICIAL,
     writer_topology=StoreWriterTopology.BOUNDED_SINGLE_WRITER,
     privilege_boundary=StorePrivilegeBoundary.PROCESS_ONLY,
+    guarantee_enforcement=(
+        StoreGuaranteeEnforcement(
+            StoreGuarantee.LIFECYCLE_TRANSITIONS,
+            StoreGuaranteeLevel.DATABASE_ENGINE,
+        ),
+        StoreGuaranteeEnforcement(
+            StoreGuarantee.ATOMIC_EFFECT_ADMISSION,
+            StoreGuaranteeLevel.DATABASE_ENGINE,
+        ),
+        StoreGuaranteeEnforcement(
+            StoreGuarantee.APPEND_ONLY_EVIDENCE,
+            StoreGuaranteeLevel.ADAPTER_PROCESS,
+        ),
+        StoreGuaranteeEnforcement(
+            StoreGuarantee.ROLE_SEPARATED_ERASURE,
+            StoreGuaranteeLevel.UNSUPPORTED,
+        ),
+    ),
     qualification_targets=("CPython sqlite3 on Python 3.11-3.13",),
     independent_connection_conformance=True,
     requires_host_protected_private_state=True,

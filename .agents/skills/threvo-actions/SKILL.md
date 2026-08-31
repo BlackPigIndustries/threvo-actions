@@ -80,6 +80,13 @@ and migrations and must preserve atomic compare-and-set, semantic-effect
 admission, tenant isolation, append-only evidence, and resumable logical erasure. Run the
 shared conformance suite plus database-native race and rollback tests.
 
+For PostgreSQL deployment, keep the library migration ledger separate from a
+host Alembic ledger. Run `threvo-actions postgres migrate` before `alembic
+upgrade` in a serialized deployment job; never invoke the installed package
+migrator dynamically from Alembic's `env.py`. Use `postgres script --all` or
+`--from-version VERSION` when an immutable, complete SQL artifact is required.
+The three action roles may target a dedicated database for maximum isolation.
+
 SQLite erasure is a logical tombstone, not proof of secure deletion from free
 pages, journals, WAL files, snapshots, backups, or the filesystem. Use
 revocable encryption keys and explicit deletion policies for those copies.

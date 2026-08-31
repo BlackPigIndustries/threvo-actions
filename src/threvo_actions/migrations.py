@@ -185,6 +185,144 @@ def plan_postgres_migrations(
     )
 
 
+def render_postgres_migration_script(
+    *,
+    schema: str,
+    from_version: int,
+    writers_quiesced: bool = False,
+) -> str:
+    """Render a complete offline upgrade script pinned to an expected version.
+
+    ``from_version=0`` renders a fresh-database bootstrap. Existing databases
+    must name their exact current version so the script can validate the
+    immutable migration ledger before applying any DDL.
+    """
+
+    quoted_schema = quote_schema_name(schema)
+    migrations = _packaged_migrations()
+    latest_version = migrations[-1].version
+    if from_version < 0 or from_version > latest_version:
+        raise MigrationStateError("PostgreSQL migration script has an unknown from-version")
+
+    applied_versions = tuple(range(1, from_version + 1))
+    pending_versions = tuple(
+        migration.version for migration in migrations if migration.version > from_version
+    )
+    required_quiescence = migrations_requiring_writer_quiescence(
+        postgres_migration_compatibility(),
+        applied_versions=applied_versions,
+        pending_versions=pending_versions,
+    )
+    if from_version > 0 and required_quiescence and not writers_quiesced:
+        versions = ", ".join(str(item.version) for item in required_quiescence)
+        raise MigrationStateError(
+            "PostgreSQL migrations "
+            f"{versions} require stopped runtime and retention writers; "
+            "retry with writers_quiesced=True after draining them"
+        )
+
+    expected = migrations[:from_version]
+    planned = plan_postgres_migrations(
+        schema=schema,
+        pending_versions=pending_versions,
+    )
+    sections = [
+        "BEGIN;",
+        "SET LOCAL lock_timeout = '30s';",
+        (
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            f"{_quote_postgres_literal(f'threvo-actions:migrations:{schema}')}::text, 0));"
+        ),
+        f"CREATE SCHEMA IF NOT EXISTS {quoted_schema};",
+        f"""CREATE TABLE IF NOT EXISTS {quoted_schema}.schema_migrations (
+    version integer PRIMARY KEY CHECK (version > 0),
+    filename text NOT NULL,
+    checksum text NOT NULL CHECK (length(checksum) = 64),
+    applied_at timestamptz NOT NULL DEFAULT now()
+);""",
+        _render_postgres_history_assertion(
+            quoted_schema=quoted_schema,
+            expected=expected,
+            from_version=from_version,
+        ),
+    ]
+    if required_quiescence:
+        sections.append(
+            "-- Runtime and retention writers were declared quiesced when this script was rendered."
+        )
+    for migration in planned:
+        sections.append(f"-- Migration {migration.version}: {migration.filename}")
+        if migration.filename == "004_active_lifecycle_guard.sql":
+            sections.append(_render_postgres_retired_state_assertion(quoted_schema))
+        sections.append(migration.sql.rstrip())
+        sections.append(
+            f"INSERT INTO {quoted_schema}.schema_migrations "
+            "(version, filename, checksum) "
+            f"VALUES ({migration.version}, {_quote_postgres_literal(migration.filename)}, "
+            f"{_quote_postgres_literal(migration.checksum)});"
+        )
+    sections.append("COMMIT;")
+    return "\n\n".join(sections) + "\n"
+
+
+def _quote_postgres_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _render_postgres_history_assertion(
+    *,
+    quoted_schema: str,
+    expected: tuple[_Migration, ...],
+    from_version: int,
+) -> str:
+    if not expected:
+        mismatch = f"EXISTS (SELECT 1 FROM {quoted_schema}.schema_migrations)"
+    else:
+        values = ",\n        ".join(
+            f"({migration.version}, {_quote_postgres_literal(migration.filename)}, "
+            f"{_quote_postgres_literal(migration.checksum)})"
+            for migration in expected
+        )
+        mismatch = f"""EXISTS (
+        SELECT 1
+        FROM {quoted_schema}.schema_migrations AS actual
+        FULL OUTER JOIN (
+            VALUES
+        {values}
+        ) AS expected(version, filename, checksum) USING (version)
+        WHERE actual.version IS NULL
+           OR expected.version IS NULL
+           OR actual.filename IS DISTINCT FROM expected.filename
+           OR actual.checksum IS DISTINCT FROM expected.checksum
+    )"""
+    message = f"PostgreSQL migration history does not match expected version {from_version}"
+    return f"""DO $threvo_actions_history$
+BEGIN
+    IF {mismatch} THEN
+        RAISE EXCEPTION {_quote_postgres_literal(message)} USING ERRCODE = '55000';
+    END IF;
+END;
+$threvo_actions_history$;"""
+
+
+def _render_postgres_retired_state_assertion(quoted_schema: str) -> str:
+    message = (
+        "PostgreSQL schema contains retired lifecycle states; "
+        "remediate them explicitly before retrying the forward migration"
+    )
+    return f"""DO $threvo_actions_lifecycle$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM {quoted_schema}.proposals
+        WHERE lifecycle_status IN ('prepared', 'compensated')
+    ) THEN
+        RAISE EXCEPTION {_quote_postgres_literal(message)}
+            USING ERRCODE = '55000';
+    END IF;
+END;
+$threvo_actions_lifecycle$;"""
+
+
 def render_postgres_grants(
     *,
     schema: str,
