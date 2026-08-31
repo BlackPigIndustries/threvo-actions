@@ -23,9 +23,11 @@ from tests.unit.test_runtime import (
 
 from threvo_actions.conformance import (
     ConformanceError,
+    IndependentStoreConformanceCase,
     RuntimeConformanceDriver,
     StoreConformanceCase,
     assert_action_store_conforms,
+    assert_independent_store_connections_conform,
     assert_providers_conform,
     assert_runtime_conforms,
 )
@@ -104,6 +106,48 @@ def test_memory_store_passes_the_public_store_contract() -> None:
                 original=original,
                 evidence=authority(original),
                 observed_at=NOW,
+            )
+        )
+
+    asyncio.run(scenario())
+
+
+def test_store_contracts_derive_valid_references_from_maximum_width_inputs() -> None:
+    async def scenario() -> None:
+        base = proposal("proposal:max-width")
+        document = base.model_dump(mode="python")
+        document["proposal_reference"] = "p" * 255
+        document["semantic_effect_reference"] = "e" * 255
+        protected = document["protected_private_snapshot"]
+        commitment = document["commitment"]
+        assert isinstance(protected, dict)
+        assert isinstance(commitment, dict)
+        protected["key_handle"] = "k" * 255
+        commitment["key_handle"] = "h" * 255
+        commitment["digest"] = "d" * 255
+        original = type(base).model_validate(document)
+        evidence = authority(original)
+
+        shared_store = MemoryActionStore()
+        await assert_action_store_conforms(
+            StoreConformanceCase(
+                store=shared_store,
+                retention_store=shared_store,
+                original=original,
+                evidence=evidence,
+                observed_at=NOW,
+            )
+        )
+
+        independent_store = MemoryActionStore()
+        await assert_independent_store_connections_conform(
+            IndependentStoreConformanceCase(
+                first_store=independent_store,
+                second_store=independent_store,
+                original=original,
+                evidence=evidence,
+                observed_at=NOW,
+                security_profile_identifier="test/max-width",
             )
         )
 

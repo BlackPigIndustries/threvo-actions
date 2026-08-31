@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import math
 import time
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence, Set
 from dataclasses import dataclass, fields, is_dataclass
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
-from .models import LifecycleStatus
+from .models import LifecycleStatus, SafeReference
 from .receipts import AuthorityReceipt, AuthorityReceiptStatus
 from .runtime import OperationOutcome
 from .stores.base import (
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from .stores.base import ActionStore, RetentionStore, StoredProposal
 
 T = TypeVar("T")
+_SAFE_REFERENCE_ADAPTER = TypeAdapter(SafeReference)
 
 
 class ConformanceError(AssertionError):
@@ -37,6 +39,11 @@ class ConformanceError(AssertionError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def _derived_safe_reference(source: str, *, purpose: str, discriminator: str) -> str:
+    digest = hashlib.sha256(f"{purpose}\0{source}\0{discriminator}".encode()).hexdigest()
+    return _SAFE_REFERENCE_ADAPTER.validate_python(f"conformance:{purpose}:{digest}")
 
 
 @dataclass(frozen=True)
@@ -219,14 +226,21 @@ async def assert_action_store_conforms(case: StoreConformanceCase) -> None:
     """Exercise tenant isolation, guarded updates, and atomic effect admission."""
 
     await case.store.create(case.original)
+    competitor_reference = _derived_safe_reference(
+        case.original.proposal_reference,
+        purpose="proposal-competitor",
+        discriminator="primary",
+    )
     competitor = case.original.model_copy(
         update={
-            "proposal_reference": f"{case.original.proposal_reference}:competitor",
+            "proposal_reference": competitor_reference,
             "protected_private_snapshot": (
                 case.original.protected_private_snapshot.model_copy(
                     update={
-                        "key_handle": (
-                            f"{case.original.protected_private_snapshot.key_handle}:competitor"
+                        "key_handle": _derived_safe_reference(
+                            case.original.protected_private_snapshot.key_handle,
+                            purpose="payload-key",
+                            discriminator="competitor",
                         )
                     }
                 )
@@ -236,8 +250,16 @@ async def assert_action_store_conforms(case: StoreConformanceCase) -> None:
             "commitment": (
                 case.original.commitment.model_copy(
                     update={
-                        "key_handle": f"{case.original.commitment.key_handle}:competitor",
-                        "digest": f"{case.original.commitment.digest}:competitor",
+                        "key_handle": _derived_safe_reference(
+                            case.original.commitment.key_handle,
+                            purpose="commitment-key",
+                            discriminator="competitor",
+                        ),
+                        "digest": _derived_safe_reference(
+                            case.original.commitment.digest,
+                            purpose="commitment-digest",
+                            discriminator="competitor",
+                        ),
                     }
                 )
                 if case.original.commitment is not None
@@ -491,14 +513,21 @@ async def assert_action_store_conforms(case: StoreConformanceCase) -> None:
         "store_effect_owner_verified",
     )
 
+    terminal_reference = _derived_safe_reference(
+        competitor.proposal_reference,
+        purpose="proposal-terminal",
+        discriminator="terminal",
+    )
     terminal_contender = competitor.model_copy(
         update={
-            "proposal_reference": f"{competitor.proposal_reference}:terminal",
+            "proposal_reference": terminal_reference,
             "protected_private_snapshot": (
                 competitor.protected_private_snapshot.model_copy(
                     update={
-                        "key_handle": (
-                            f"{competitor.protected_private_snapshot.key_handle}:terminal"
+                        "key_handle": _derived_safe_reference(
+                            competitor.protected_private_snapshot.key_handle,
+                            purpose="payload-key",
+                            discriminator="terminal",
                         )
                     }
                 )
@@ -508,8 +537,16 @@ async def assert_action_store_conforms(case: StoreConformanceCase) -> None:
             "commitment": (
                 competitor.commitment.model_copy(
                     update={
-                        "key_handle": f"{competitor.commitment.key_handle}:terminal",
-                        "digest": f"{competitor.commitment.digest}:terminal",
+                        "key_handle": _derived_safe_reference(
+                            competitor.commitment.key_handle,
+                            purpose="commitment-key",
+                            discriminator="terminal",
+                        ),
+                        "digest": _derived_safe_reference(
+                            competitor.commitment.digest,
+                            purpose="commitment-digest",
+                            discriminator="terminal",
+                        ),
                     }
                 )
                 if competitor.commitment is not None
@@ -711,10 +748,20 @@ async def _assert_store_update_invariants(case: StoreConformanceCase) -> None:
     await case.store.create(probe)
     first_evidence = _conformance_evidence(case, probe)
     second_evidence = first_evidence.model_copy(
-        update={"channel_assurance": f"{first_evidence.channel_assurance}:second"}
+        update={
+            "channel_assurance": _derived_safe_reference(
+                first_evidence.channel_assurance,
+                purpose="authority-channel",
+                discriminator="second",
+            )
+        }
     )
     first_receipt = AuthorityReceipt(
-        receipt_reference=f"{probe.proposal_reference}:receipt:one",
+        receipt_reference=_derived_safe_reference(
+            probe.proposal_reference,
+            purpose="receipt",
+            discriminator="one",
+        ),
         correlation_reference=probe.proposal_reference,
         causation_reference=probe.proposal_reference,
         observed_at=case.observed_at,
@@ -722,7 +769,13 @@ async def _assert_store_update_invariants(case: StoreConformanceCase) -> None:
         participant=first_evidence.authority,
     )
     second_receipt = first_receipt.model_copy(
-        update={"receipt_reference": f"{probe.proposal_reference}:receipt:two"}
+        update={
+            "receipt_reference": _derived_safe_reference(
+                probe.proposal_reference,
+                purpose="receipt",
+                discriminator="two",
+            )
+        }
     )
     authorized = probe.model_copy(
         update={
@@ -902,14 +955,28 @@ def _conformance_proposal(
     case: StoreConformanceCase,
     suffix: str,
 ) -> StoredProposal:
-    proposal_reference = f"{case.original.proposal_reference}:{suffix}"
+    proposal_reference = _derived_safe_reference(
+        case.original.proposal_reference,
+        purpose="proposal-probe",
+        discriminator=suffix,
+    )
     return case.original.model_copy(
         update={
             "proposal_reference": proposal_reference,
-            "semantic_effect_reference": (f"{case.original.semantic_effect_reference}:{suffix}"),
+            "semantic_effect_reference": _derived_safe_reference(
+                case.original.semantic_effect_reference,
+                purpose="semantic-effect",
+                discriminator=suffix,
+            ),
             "protected_private_snapshot": (
                 case.original.protected_private_snapshot.model_copy(
-                    update={"key_handle": f"payload-key:{proposal_reference}"}
+                    update={
+                        "key_handle": _derived_safe_reference(
+                            case.original.protected_private_snapshot.key_handle,
+                            purpose="payload-key",
+                            discriminator=suffix,
+                        )
+                    }
                 )
                 if case.original.protected_private_snapshot is not None
                 else None
@@ -917,8 +984,16 @@ def _conformance_proposal(
             "commitment": (
                 case.original.commitment.model_copy(
                     update={
-                        "key_handle": f"commitment-key:{proposal_reference}",
-                        "digest": f"commitment-digest:{proposal_reference}",
+                        "key_handle": _derived_safe_reference(
+                            case.original.commitment.key_handle,
+                            purpose="commitment-key",
+                            discriminator=suffix,
+                        ),
+                        "digest": _derived_safe_reference(
+                            case.original.commitment.digest,
+                            purpose="commitment-digest",
+                            discriminator=suffix,
+                        ),
                     }
                 )
                 if case.original.commitment is not None
@@ -949,15 +1024,21 @@ def _conformance_evidence(
 
 
 def _independent_proposal(original: StoredProposal, suffix: str) -> StoredProposal:
-    proposal_reference = f"{original.proposal_reference}:independent:{suffix}"
+    proposal_reference = _derived_safe_reference(
+        original.proposal_reference,
+        purpose="proposal-independent",
+        discriminator=suffix,
+    )
     return original.model_copy(
         update={
             "proposal_reference": proposal_reference,
             "protected_private_snapshot": (
                 original.protected_private_snapshot.model_copy(
                     update={
-                        "key_handle": (
-                            f"{original.protected_private_snapshot.key_handle}:independent:{suffix}"
+                        "key_handle": _derived_safe_reference(
+                            original.protected_private_snapshot.key_handle,
+                            purpose="payload-key",
+                            discriminator=f"independent:{suffix}",
                         )
                     }
                 )
@@ -967,8 +1048,16 @@ def _independent_proposal(original: StoredProposal, suffix: str) -> StoredPropos
             "commitment": (
                 original.commitment.model_copy(
                     update={
-                        "key_handle": f"{original.commitment.key_handle}:independent:{suffix}",
-                        "digest": f"{original.commitment.digest}:independent:{suffix}",
+                        "key_handle": _derived_safe_reference(
+                            original.commitment.key_handle,
+                            purpose="commitment-key",
+                            discriminator=f"independent:{suffix}",
+                        ),
+                        "digest": _derived_safe_reference(
+                            original.commitment.digest,
+                            purpose="commitment-digest",
+                            discriminator=f"independent:{suffix}",
+                        ),
                     }
                 )
                 if original.commitment is not None
