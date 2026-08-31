@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import subprocess
 import tomllib
@@ -31,6 +32,18 @@ def test_release_requires_tag_commit_to_already_be_on_main() -> None:
     assert "git fetch --no-tags origin main:refs/remotes/origin/main" in workflow
     assert 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main' in workflow
     assert "Release tags must point to a commit already contained in main." in workflow
+
+
+def test_release_actions_are_pinned_to_immutable_commits() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    action_references = re.findall(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", workflow, re.MULTILINE)
+
+    assert action_references
+    for reference in action_references:
+        action, separator, revision = reference.partition("@")
+        assert separator == "@", reference
+        assert "/" in action, reference
+        assert re.fullmatch(r"[0-9a-f]{40}", revision), reference
 
 
 def test_release_verifier_rejects_private_context_fingerprints() -> None:
