@@ -8,7 +8,6 @@
         - MySQLActionStore
         - MySQLRetentionStore
         - MySQLConnectionSource
-        - check_mysql_readiness
         - MySQLAdapterLimitError
         - MySQLStoredDataCorruptionError
       show_source: false
@@ -21,6 +20,7 @@
         - MySQLMigrationStatus
         - MySQLMigrationStateError
         - MySQLConnectionSource
+        - check_mysql_readiness
         - inspect_mysql
         - migrate_mysql
         - mysql_migration_compatibility

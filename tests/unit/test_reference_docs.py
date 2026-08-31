@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from importlib import import_module
+from pathlib import Path
+
+ROOT = Path(__file__).parents[2]
+
+
+def test_explicit_reference_members_exist_in_the_declared_module() -> None:
+    checked: list[str] = []
+    for path in sorted((ROOT / "docs" / "reference").glob("*.md")):
+        module_name: str | None = None
+        reading_members = False
+        for line in path.read_text().splitlines():
+            if line.startswith("::: "):
+                module_name = line.removeprefix("::: ").strip()
+                reading_members = False
+                continue
+            if line.strip() == "members:":
+                reading_members = True
+                continue
+            if not reading_members:
+                continue
+            if not line.startswith("        - "):
+                if line.strip():
+                    reading_members = False
+                continue
+            assert module_name is not None, path
+            member_name = line.strip().removeprefix("- ")
+            module = import_module(module_name)
+            assert hasattr(module, member_name), f"{path}: {module_name}.{member_name}"
+            checked.append(f"{module_name}.{member_name}")
+
+    assert checked
