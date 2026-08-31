@@ -101,3 +101,26 @@ def test_mysql_grants_quote_accounts_and_keep_lanes_distinct() -> None:
             retention_user="same",
             retention_host="localhost",
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("runtime_user", "runtime\\'user"),
+        ("runtime_host", "localhost\\"),
+        ("retention_user", "retention\\user"),
+        ("retention_host", "10.0.0.1\\' OR 1=1"),
+    ),
+)
+def test_mysql_grants_reject_backslashes_in_account_parts(field: str, value: str) -> None:
+    arguments = {
+        "database": "actions",
+        "runtime_user": "runtime",
+        "runtime_host": "localhost",
+        "retention_user": "retention",
+        "retention_host": "localhost",
+    }
+    arguments[field] = value
+
+    with pytest.raises(ValueError, match="without NUL or backslash"):
+        render_mysql_grants(**arguments)

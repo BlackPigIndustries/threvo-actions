@@ -70,8 +70,10 @@ def _quote_mysql_identifier(value: str, *, label: str) -> str:
 
 
 def _quote_mysql_account_part(value: str, *, label: str, maximum: int) -> str:
-    if not value or "\x00" in value or len(value) > maximum:
-        raise ValueError(f"MySQL {label} must be 1 to {maximum} characters without NUL")
+    if not value or "\x00" in value or "\\" in value or len(value) > maximum:
+        raise ValueError(
+            f"MySQL {label} must be 1 to {maximum} characters without NUL or backslash"
+        )
     return "'" + value.replace("'", "''") + "'"
 
 
