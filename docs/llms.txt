@@ -1,0 +1,39 @@
+# threvo-actions
+
+> A Python control plane for financial actions that need validation,
+> accountable authority, drift refusal, idempotency, and completion proof.
+
+Documentation: https://blackpigindustries.github.io/threvo-actions/
+Source: https://github.com/blackpigindustries/threvo-actions
+
+## Start here
+
+- Overview: https://blackpigindustries.github.io/threvo-actions/
+- Installation: https://blackpigindustries.github.io/threvo-actions/getting-started/installation/
+- First action: https://blackpigindustries.github.io/threvo-actions/getting-started/first-action/
+- Action lifecycle: https://blackpigindustries.github.io/threvo-actions/getting-started/lifecycle/
+
+## Features
+
+- Typed action contracts: https://blackpigindustries.github.io/threvo-actions/features/action-contracts/
+- Private state: https://blackpigindustries.github.io/threvo-actions/features/private-state/
+- Confirm-first authority: https://blackpigindustries.github.io/threvo-actions/features/confirm-first/
+- Drift refusal and idempotency: https://blackpigindustries.github.io/threvo-actions/features/drift-and-idempotency/
+- Authoritative verification: https://blackpigindustries.github.io/threvo-actions/features/verification/
+- Receipts: https://blackpigindustries.github.io/threvo-actions/features/receipts/
+- Retention and erasure: https://blackpigindustries.github.io/threvo-actions/features/retention/
+
+## Integrations and reference
+
+- Coding agents: https://blackpigindustries.github.io/threvo-actions/integrations/coding-agents/
+- Pydantic AI: https://blackpigindustries.github.io/threvo-actions/integrations/pydantic-ai/
+- PostgreSQL: https://blackpigindustries.github.io/threvo-actions/integrations/postgres/
+- MySQL: https://blackpigindustries.github.io/threvo-actions/integrations/mysql/
+- SQLite: https://blackpigindustries.github.io/threvo-actions/integrations/sqlite/
+- Custom stores: https://blackpigindustries.github.io/threvo-actions/integrations/custom-stores/
+- Examples: https://blackpigindustries.github.io/threvo-actions/examples/
+- Full API reference: https://blackpigindustries.github.io/threvo-actions/reference/
+- Conformance suite: https://blackpigindustries.github.io/threvo-actions/testing/conformance/
+- Clean-room adoption result: https://blackpigindustries.github.io/threvo-actions/testing/clean-room-adoption-2026-08-30/
+- Testing helpers: https://blackpigindustries.github.io/threvo-actions/testing/helpers/
+- Security guarantees: https://blackpigindustries.github.io/threvo-actions/guarantees-and-limitations/

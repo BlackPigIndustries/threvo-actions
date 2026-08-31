@@ -1,0 +1,1 @@
+"""Supplier-destination reference application."""

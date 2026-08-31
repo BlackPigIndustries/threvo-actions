@@ -1,0 +1,133 @@
+[project]
+name = "threvo-actions"
+version = "0.1.2"
+description = "Experimental confirm-first financial action contracts"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "Threvo" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+dependencies = ["pydantic>=2.10.0,<3"]
+
+[project.urls]
+Documentation = "https://blackpigindustries.github.io/threvo-actions/"
+Issues = "https://github.com/BlackPigIndustries/threvo-actions/issues"
+Repository = "https://github.com/BlackPigIndustries/threvo-actions"
+
+[project.scripts]
+threvo-actions = "threvo_actions.cli:main"
+
+[project.optional-dependencies]
+mysql = ["aiomysql>=0.3.2,<1", "cryptography>=44.0.0"]
+postgres = ["asyncpg>=0.30.0,<1"]
+pydantic-ai = ["pydantic-ai-slim==2.33.0"]
+docs = [
+    "mkdocs-material>=9.6.23,<10",
+    "mkdocstrings[python]>=0.30.1,<1",
+]
+dev = [
+    "bandit>=1.9.4",
+    "build>=1.3.0",
+    "fastapi>=0.115.0,<1",
+    "httpx>=0.28.0,<1",
+    "mypy>=1.19.1",
+    "pip-audit>=2.7.0",
+    "pytest>=9.0.2",
+    "ruff>=0.15.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/threvo_actions"]
+
+[tool.hatch.build.targets.wheel.force-include]
+".agents/skills/threvo-actions" = "threvo_actions/.agents/skills/threvo-actions"
+"tests/golden" = "threvo_actions/golden"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/LICENSE",
+    "/README.md",
+    "/SECURITY.md",
+    "/.agents/skills/threvo-actions",
+    "/docs",
+    "/examples",
+    "/benchmarks",
+    "/src",
+]
+exclude = [
+    "/.env*",
+    "/.git",
+    "/.gitignore",
+    "/.github",
+    "/.hypothesis",
+    "/.mypy_cache",
+    "/.pytest_cache",
+    "/.ruff_cache",
+    "/.venv",
+    "/AGENTS.md",
+    "/CLAUDE.md",
+    "/dist",
+    "/tests",
+    "/uv.lock",
+    "**/__pycache__",
+    "**/*.pyc",
+]
+
+[tool.hatch.build.targets.sdist.force-include]
+"tests/golden" = "tests/golden"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "examples"]
+pythonpath = ["src", "."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests", "examples", "benchmarks"]
+extend-exclude = ["docs/**/*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "S", "TCH"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+"tests/integration/postgres/test_privileges.py" = ["S101", "S608"]
+"tests/integration/mysql/test_privileges.py" = ["S101", "S608"]
+"tests/integration/postgres/test_migrations.py" = ["S101", "S608"]
+"tests/integration/postgres/test_constraints_and_leakage.py" = ["S101", "S608"]
+"src/threvo_actions/migrations.py" = ["S608"]
+"src/threvo_actions/mysql_migrations.py" = ["S608"]
+"src/threvo_actions/stores/mysql.py" = ["S608"]
+"src/threvo_actions/stores/postgres.py" = ["S608"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["aiomysql", "aiomysql.*", "asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "examples/refund/test_example.py",
+    "examples/supplier_destination/test_example.py",
+]
+skips = ["B608"] # Dynamic identifiers pass through the strict PostgreSQL schema-name validator.

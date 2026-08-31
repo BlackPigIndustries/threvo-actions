@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+import hashlib
+import shutil
+import subprocess
+import tomllib
+from importlib import import_module
+from pathlib import Path
+
+import pytest
+from scripts.verify_release import _assert_no_private_context, _publication_source_paths
+
+import threvo_actions
+
+ROOT = Path(__file__).parents[2]
+
+
+def test_release_metadata_is_consistent() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    skill = (ROOT / ".agents/skills/threvo-actions/SKILL.md").read_text()
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+
+    assert project["version"] == threvo_actions.__version__
+    assert f'version: "{threvo_actions.__version__}"' in skill
+    assert f"## [{threvo_actions.__version__}] - " in changelog
+
+
+def test_release_requires_tag_commit_to_already_be_on_main() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "git fetch --no-tags origin main:refs/remotes/origin/main" in workflow
+    assert 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main' in workflow
+    assert "Release tags must point to a commit already contained in main." in workflow
+
+
+def test_release_verifier_rejects_private_context_fingerprints() -> None:
+    normalized_marker = b"syntheticprivatehostmarker"
+    fingerprints = {
+        len(normalized_marker): frozenset({hashlib.sha256(normalized_marker).hexdigest()})
+    }
+
+    variants = (
+        b"synthetic private host marker",
+        b"SYNTHETIC_private-host-marker",
+        b"synthetic<!-- hidden -->private\nhost marker",
+        b"synthetic&#x70;rivate host marker",
+    )
+    for variant in variants:
+        with pytest.raises(ValueError, match="private host-application context"):
+            _assert_no_private_context([variant], fingerprints=fingerprints)
+
+
+def test_release_verifier_accepts_public_developer_content() -> None:
+    normalized_marker = b"syntheticprivatehostmarker"
+    fingerprints = {
+        len(normalized_marker): frozenset({hashlib.sha256(normalized_marker).hexdigest()})
+    }
+
+    _assert_no_private_context(
+        [b"Framework-neutral financial action documentation."],
+        fingerprints=fingerprints,
+    )
+
+
+def test_publication_source_scan_covers_every_tracked_file() -> None:
+    git = shutil.which("git")
+    assert git is not None
+    tracked = (
+        subprocess.run(  # noqa: S603 -- fixed git command against the repository root.
+            [git, "ls-files", "-z"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode()
+        .split("\0")
+    )
+
+    scanned = {path.relative_to(ROOT).as_posix() for path in _publication_source_paths()}
+    tracked_files = {relative for relative in tracked if relative and (ROOT / relative).is_file()}
+
+    assert tracked_files <= scanned
+
+
+def test_0_1_public_root_contract_is_frozen() -> None:
+    expected = {
+        "Action",
+        "ActionConfigurationError",
+        "ActionDefinition",
+        "ActionNotRegisteredError",
+        "ActionOperationResult",
+        "ActionRegistry",
+        "ActionRuntime",
+        "ActionStore",
+        "ActionType",
+        "AnyApproval",
+        "ApprovalReasonCode",
+        "AuthoritativeTarget",
+        "AuthorityBinding",
+        "AuthorityDecision",
+        "AuthorityEvaluation",
+        "AuthorityEvaluatorPort",
+        "AuthorityEvidence",
+        "AuthorityReceipt",
+        "AuthorityReceiptStatus",
+        "AuthorityValidationFailure",
+        "AuthorityValidationResult",
+        "AuthorizationDeniedError",
+        "AuthorizationPort",
+        "AuthorizationResult",
+        "CanonicalizationError",
+        "Clock",
+        "CommitmentProvider",
+        "ConfirmingAuthority",
+        "DecisionContext",
+        "DefinitionConformanceError",
+        "DefinitionTypeMismatchError",
+        "DuplicateActionError",
+        "EffectClaimResult",
+        "EffectKind",
+        "EventSink",
+        "EvidenceConsumer",
+        "ExecutionContext",
+        "ExecutionReceipt",
+        "ExecutionReceiptStatus",
+        "ExecutionResult",
+        "ExecutionStatus",
+        "ExternalReference",
+        "GovernedExecutor",
+        "GovernedExecutorPort",
+        "IdentifierProvider",
+        "InvalidActionResultError",
+        "InvalidAuthorityEvidenceError",
+        "ItemOutcome",
+        "ItemOutcomeStatus",
+        "KeyedCommitment",
+        "LifecycleStatus",
+        "MOfNApprovals",
+        "MemoryActionStore",
+        "Money",
+        "NoopEventSink",
+        "OperationOutcome",
+        "Participant",
+        "PreparationContext",
+        "PreparationPort",
+        "PreparedAction",
+        "ProposalAlreadyExistsError",
+        "ProposalNotFoundError",
+        "ProposalReceipt",
+        "ProposalReceiptStatus",
+        "ProposalView",
+        "ProposingAgent",
+        "ProtectedPayload",
+        "ProtectionCodec",
+        "ReadContext",
+        "Receipt",
+        "RequestingPrincipal",
+        "ResolvedState",
+        "RetentionPort",
+        "RetentionStore",
+        "RetentionStoreUnavailableError",
+        "RuntimeAttributionError",
+        "RuntimeEvent",
+        "RuntimeEventType",
+        "RuntimeReasonCode",
+        "SingleApproval",
+        "StateResolverPort",
+        "StoreInvariantError",
+        "StoredProposal",
+        "SystemClock",
+        "UuidIdentifiers",
+        "VerificationReceipt",
+        "VerificationReceiptStatus",
+        "VerificationResult",
+        "VerificationStatus",
+        "VerifierPort",
+        "assert_definition_conforms",
+        "authority_evidence_matches_binding",
+        "canonicalize_v1",
+        "commitment_payload_v1",
+        "resolve_runtime_revision",
+        "validate_authority_evidence",
+        "validate_proposal_create",
+        "validate_proposal_update",
+    }
+
+    assert set(threvo_actions.__all__) == expected
+    assert all(hasattr(threvo_actions, name) for name in expected)
+
+
+def test_0_1_documented_adapter_contracts_remain_importable() -> None:
+    documented = {
+        "threvo_actions.testing": {
+            "EphemeralProtection",
+            "FixedClock",
+            "RecordingEventSink",
+            "SequentialIdentifiers",
+        },
+        "threvo_actions.migrations": {
+            "ConnectionSource",
+            "InvalidSchemaNameError",
+            "MigrationStateError",
+            "MigrationStatus",
+            "inspect_postgres",
+            "migrate_postgres",
+            "quote_schema_name",
+        },
+        "threvo_actions.mysql_migrations": {
+            "MySQLConnectionSource",
+            "MySQLMigrationStateError",
+            "MySQLMigrationStatus",
+            "inspect_mysql",
+            "migrate_mysql",
+        },
+        "threvo_actions.sqlite_migrations": {
+            "SQLiteMigrationStateError",
+            "SQLiteMigrationStatus",
+            "inspect_sqlite",
+            "migrate_sqlite",
+        },
+        "threvo_actions.stores.postgres": {
+            "ConnectionSource",
+            "PostgresActionStore",
+            "PostgresRetentionStore",
+            "StoredDataCorruptionError",
+        },
+        "threvo_actions.stores.mysql": {
+            "MySQLActionStore",
+            "MySQLAdapterLimitError",
+            "MySQLConnectionSource",
+            "MySQLRetentionStore",
+            "MySQLStoredDataCorruptionError",
+        },
+        "threvo_actions.stores.sqlite": {
+            "SQLiteActionStore",
+            "SQLiteRetentionStore",
+            "SQLiteStoredDataCorruptionError",
+        },
+    }
+
+    for module_name, names in documented.items():
+        module = import_module(module_name)
+        assert all(hasattr(module, name) for name in names)

@@ -1,0 +1,18 @@
+{
+  "document": {
+    "metadata": {
+      "é": "café"
+    },
+    "currency": "EUR",
+    "amount": "42.10",
+    "items": [2, 1],
+    "approved": true,
+    "note": null,
+    "action": "refund"
+  },
+  "proposal_reference": "proposal:α",
+  "canonical_utf8": "{\"action\":\"refund\",\"amount\":\"42.10\",\"approved\":true,\"currency\":\"EUR\",\"items\":[2,1],\"metadata\":{\"é\":\"café\"},\"note\":null}",
+  "commitment_payload_hex": "74687265766f2d616374696f6e733a70726f706f73616c2d636f6d6d69746d656e743a76310000000b70726f706f73616c3aceb100000000000000797b22616374696f6e223a22726566756e64222c22616d6f756e74223a2234322e3130222c22617070726f766564223a747275652c2263757272656e6379223a22455552222c226974656d73223a5b322c315d2c226d65746164617461223a7b22c3a9223a22636166c3a9227d2c226e6f7465223a6e756c6c7d",
+  "hmac_sha256_key_utf8": "test-key-v1",
+  "hmac_sha256_hex": "1427768229e8e7a292ffc2556a35a673cdd9d5c80d88460a13598dc600af0294"
+}

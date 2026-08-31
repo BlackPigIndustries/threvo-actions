@@ -1,0 +1,86 @@
+{
+  "vector_version": "receipt-golden/v1",
+  "receipt_schema_version": "internal/v0",
+  "receipts": [
+    {
+      "schema_version": "internal/v0",
+      "receipt_reference": "receipt:proposal:example",
+      "correlation_reference": "proposal:example",
+      "causation_reference": "request:example",
+      "observed_at": "2026-08-29T12:00:00Z",
+      "external_reference": null,
+      "corrects_receipt_reference": null,
+      "supersedes_receipt_reference": null,
+      "reason_code": null,
+      "receipt_type": "proposal",
+      "status": "prepared",
+      "requesting_principal": {
+        "kind": "requesting_principal",
+        "reference": "user:requester"
+      },
+      "proposing_agent": {
+        "kind": "proposing_agent",
+        "reference": "agent:finance-assistant"
+      }
+    },
+    {
+      "schema_version": "internal/v0",
+      "receipt_reference": "receipt:authority:example",
+      "correlation_reference": "proposal:example",
+      "causation_reference": "proposal:example",
+      "observed_at": "2026-08-29T12:00:00Z",
+      "external_reference": null,
+      "corrects_receipt_reference": null,
+      "supersedes_receipt_reference": null,
+      "reason_code": null,
+      "receipt_type": "authority",
+      "status": "recorded",
+      "participant": {
+        "kind": "confirming_authority",
+        "reference": "user:manager"
+      }
+    },
+    {
+      "schema_version": "internal/v0",
+      "receipt_reference": "receipt:execution:example",
+      "correlation_reference": "proposal:example",
+      "causation_reference": "proposal:example",
+      "observed_at": "2026-08-29T12:00:00Z",
+      "external_reference": {
+        "system": "example-psp",
+        "reference": "refund:public-example"
+      },
+      "corrects_receipt_reference": null,
+      "supersedes_receipt_reference": null,
+      "reason_code": null,
+      "receipt_type": "execution",
+      "status": "accepted",
+      "participant": {
+        "kind": "governed_executor",
+        "reference": "service:refunds"
+      },
+      "item_outcomes": []
+    },
+    {
+      "schema_version": "internal/v0",
+      "receipt_reference": "receipt:verification:example",
+      "correlation_reference": "proposal:example",
+      "causation_reference": "proposal:example",
+      "observed_at": "2026-08-29T12:00:00Z",
+      "external_reference": {
+        "system": "example-psp",
+        "reference": "refund:public-example"
+      },
+      "corrects_receipt_reference": null,
+      "supersedes_receipt_reference": null,
+      "reason_code": null,
+      "receipt_type": "verification",
+      "status": "verified_completion",
+      "participant": {
+        "kind": "authoritative_target",
+        "reference": "psp:refunds"
+      },
+      "item_outcomes": []
+    }
+  ]
+}

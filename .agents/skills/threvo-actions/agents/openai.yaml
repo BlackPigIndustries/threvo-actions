@@ -1,0 +1,4 @@
+interface:
+  display_name: "Threvo Actions"
+  short_description: "Build accountable financial actions safely"
+  default_prompt: "Use $threvo-actions to add a confirm-first financial action to this Python application."

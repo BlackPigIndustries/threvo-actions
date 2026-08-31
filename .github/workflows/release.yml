@@ -1,0 +1,224 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require the tagged commit to be on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release tags must point to a commit already contained in main." >&2
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Require a verified annotated tag
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const ref = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `tags/${context.ref.replace('refs/tags/', '')}`,
+            });
+            if (ref.data.object.type !== 'tag') {
+              core.setFailed('Release tags must be annotated and signed.');
+              return;
+            }
+            const tag = await github.rest.git.getTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_sha: ref.data.object.sha,
+            });
+            if (!tag.data.verification?.verified) {
+              core.setFailed(
+                `GitHub did not verify the release tag: ${tag.data.verification?.reason}`,
+              );
+            }
+      - run: uv run --no-project python scripts/verify_release.py --tag "$GITHUB_REF_NAME"
+
+  build:
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: >-
+          uv sync --extra dev --extra mysql --extra pydantic-ai
+          --extra postgres --extra docs --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src/threvo_actions examples benchmarks scripts
+      - run: uv run pytest -q
+      - run: uv run bandit -q -c pyproject.toml -r src examples benchmarks scripts
+      - run: uv run pip-audit
+      - run: uv run mkdocs build --strict
+      - run: uv build
+      - run: uv run python scripts/verify_release.py --dist dist
+      - name: Separate publishable packages from the digest manifest
+        run: |
+          mkdir release
+          mv dist release/packages
+          mv release/packages/SHA256SUMS release/SHA256SUMS
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            release/packages/*.whl
+            release/packages/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+
+  qualify-artifacts:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        profile: [core, postgres, pydantic-ai, all]
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install wheel and source distribution in clean environments
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          case "$PROFILE" in
+            core) profile_extras="" ;;
+            postgres) profile_extras="[postgres]" ;;
+            pydantic-ai) profile_extras="[pydantic-ai]" ;;
+            all) profile_extras="[mysql,postgres,pydantic-ai]" ;;
+            *) exit 1 ;;
+          esac
+          for artifact in release/packages/*.whl release/packages/*.tar.gz; do
+            consumer_root=$(mktemp -d)
+            uv venv --python "${{ matrix.python-version }}" "$consumer_root/venv"
+            uv pip install \
+              --python "$consumer_root/venv/bin/python" \
+              "${artifact}${profile_extras}"
+            "$consumer_root/venv/bin/python" - <<'PY'
+          import threvo_actions
+          assert threvo_actions.__version__ == "${{ github.ref_name }}".removeprefix("v")
+          PY
+          done
+
+  qualify-examples:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Run both reference applications against the built wheel
+        run: |
+          consumer_root=$(mktemp -d)
+          uv venv "$consumer_root/venv"
+          uv pip install \
+            --python "$consumer_root/venv/bin/python" \
+            "$(find release/packages -name '*.whl' -print -quit)[mysql,postgres,pydantic-ai]" \
+            fastapi httpx pytest
+          tar -xzf "$(find release/packages -name '*.tar.gz' -print -quit)" \
+            -C "$consumer_root"
+          extracted_root=$(find "$consumer_root" -maxdepth 1 -type d \
+            -name 'threvo_actions-*' -print -quit)
+          cp -R "$extracted_root/examples" "$consumer_root/consumer-examples"
+          cd "$consumer_root/consumer-examples"
+          "$consumer_root/venv/bin/python" -m pytest -q \
+            refund/test_example.py supplier_destination/test_example.py
+
+  publish-testpypi:
+    needs: [qualify-artifacts, qualify-examples]
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/threvo-actions/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release/packages
+          repository-url: https://test.pypi.org/legacy/
+
+  verify-testpypi:
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Download TestPyPI artifacts and match the CI-built digests
+        run: >-
+          python scripts/verify_index_artifacts.py
+          --version "${GITHUB_REF_NAME#v}"
+          --release release
+          --attempts 12
+
+  publish-pypi:
+    needs: verify-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/threvo-actions/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release/packages

@@ -1,0 +1,307 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --extra dev --extra mysql --extra pydantic-ai --extra postgres --extra docs --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src/threvo_actions examples benchmarks scripts
+      - run: uv run python scripts/verify_release.py
+      - run: uv run bandit -q -c pyproject.toml -r src examples benchmarks scripts
+      - run: uv run pip-audit
+      - run: uv run mkdocs build --strict
+      - run: uv run python -m examples.docs.quickstart
+      - run: uv run python -m examples.docs.lifecycle_scenarios
+      - run: uv run python -m examples.docs.pydantic_ai_agent
+      - run: uv run python -m examples.docs.pydantic_ai_deferred
+      - run: uvx --from skills-ref agentskills validate .agents/skills/threvo-actions
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --extra dev --locked
+      - run: >-
+          uv run pytest -q
+          --ignore=tests/integration/postgres
+          --ignore=tests/integration/pydantic_ai
+
+  pydantic-ai:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --extra dev --extra pydantic-ai --locked
+      - run: uv run pytest -q tests/integration/pydantic_ai
+
+  postgres:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version: ["15", "16"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_DB: threvo_actions_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d threvo_actions_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      THREVO_ACTIONS_TEST_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/threvo_actions_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --extra dev --extra postgres --locked
+      - run: uv run pytest -q tests/integration/postgres
+      - run: >-
+          DATABASE_URL="$THREVO_ACTIONS_TEST_POSTGRES_DSN"
+          uv run python -m examples.docs.postgres_runtime
+
+  mysql:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        mysql-version: ["8.0", "8.4"]
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql-version }}
+        env:
+          MYSQL_DATABASE: threvo_actions_example
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -proot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      THREVO_ACTIONS_TEST_MYSQL_DSN: mysql://root:root@127.0.0.1:3306/mysql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --extra dev --extra mysql --locked
+      - run: uv run pytest -q tests/integration/mysql
+      - if: matrix.python-version == '3.13' && matrix.mysql-version == '8.4'
+        name: Verify wheel and sdist MySQL migration smoke
+        env:
+          ACTIONS_MIGRATOR_DATABASE_URL: mysql://root:root@127.0.0.1:3306/threvo_actions_example
+        run: |
+          uv build
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            mysql_distribution_test_root=$(mktemp -d)
+            uv venv "$mysql_distribution_test_root/venv"
+            uv pip install \
+              --python "$mysql_distribution_test_root/venv/bin/python" \
+              "${artifact}[mysql]"
+            "$mysql_distribution_test_root/venv/bin/threvo-actions" mysql inspect \
+              --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
+            "$mysql_distribution_test_root/venv/bin/threvo-actions" mysql migrate \
+              --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
+            "$mysql_distribution_test_root/venv/bin/threvo-actions" mysql inspect \
+              --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
+          done
+      - if: matrix.python-version == '3.13' && matrix.mysql-version == '8.4'
+        run: >-
+          DATABASE_URL='mysql://root:root@127.0.0.1:3306/threvo_actions_example'
+          uv run python -m examples.docs.mysql_runtime
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [quality, test, pydantic-ai, postgres, mysql]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: uv build
+      - run: uv run python scripts/verify_release.py --dist dist
+      - name: Verify distribution contents
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          dist = Path("dist")
+          wheel = next(dist.glob("*.whl"))
+          sdist = next(dist.glob("*.tar.gz"))
+          skill_root = Path(".agents/skills/threvo-actions")
+          expected_skill = {
+              path.relative_to(Path(".")).as_posix(): path.read_bytes()
+              for path in skill_root.rglob("*")
+              if path.is_file()
+          }
+          required_package_files = {
+              "threvo_actions/py.typed",
+              "threvo_actions/_migrations/postgres/001_action_runtime.sql",
+              "threvo_actions/_migrations/mysql/001_action_runtime.sql",
+              "threvo_actions/_migrations/mysql/002_harden_database_boundaries.sql",
+              "threvo_actions/_migrations/sqlite/001_action_runtime.sql",
+              "threvo_actions/integrations/pydantic_ai.py",
+          }
+          expected_wheel_skill = {
+              f"threvo_actions/{relative}": contents
+              for relative, contents in expected_skill.items()
+          }
+          required_sdist_files = {
+              "examples/refund/app.py",
+              "examples/supplier_destination/app.py",
+              "benchmarks/runtime_overhead.py",
+          }
+
+          with zipfile.ZipFile(wheel) as archive:
+              wheel_names = set(archive.namelist())
+              assert required_package_files | set(expected_wheel_skill) <= wheel_names
+              actual_wheel_skill = {
+                  name for name in wheel_names
+                  if name.startswith("threvo_actions/.agents/skills/threvo-actions/")
+              }
+              assert actual_wheel_skill == set(expected_wheel_skill)
+              for name, contents in expected_wheel_skill.items():
+                  assert archive.read(name) == contents
+              entry_points = next(
+                  name for name in wheel_names if name.endswith(".dist-info/entry_points.txt")
+              )
+              assert "threvo-actions = threvo_actions.cli:main" in archive.read(
+                  entry_points
+              ).decode()
+
+          with tarfile.open(sdist) as archive:
+              members = archive.getmembers()
+              sdist_names = [member.name for member in members]
+              for required in required_package_files | required_sdist_files:
+                  assert any(name.endswith(f"/{required}") for name in sdist_names)
+              actual_sdist_skill = {
+                  member.name.split("/", 1)[1]: member
+                  for member in members
+                  if member.isfile()
+                  and "/.agents/skills/threvo-actions/" in member.name
+              }
+              assert set(actual_sdist_skill) == set(expected_skill)
+              for name, contents in expected_skill.items():
+                  extracted = archive.extractfile(actual_sdist_skill[name])
+                  assert extracted is not None
+                  assert extracted.read() == contents
+          PY
+      - name: Verify core-only wheel and sdist installations
+        run: |
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            distribution_test_root=$(mktemp -d)
+            uv venv "$distribution_test_root/venv"
+            uv pip install --python "$distribution_test_root/venv/bin/python" "$artifact"
+            "$distribution_test_root/venv/bin/threvo-actions" skill path
+            sqlite_database="$distribution_test_root/actions.sqlite3"
+            "$distribution_test_root/venv/bin/threvo-actions" sqlite inspect \
+              --database "$sqlite_database"
+            test ! -e "$sqlite_database"
+            "$distribution_test_root/venv/bin/threvo-actions" sqlite migrate \
+              --database "$sqlite_database"
+            "$distribution_test_root/venv/bin/threvo-actions" sqlite inspect \
+              --database "$sqlite_database"
+            "$distribution_test_root/venv/bin/python" - <<'PY'
+          import importlib.util
+          from importlib.resources import files
+
+          import threvo_actions
+
+          assert threvo_actions.__version__
+          sqlite_migration = files("threvo_actions").joinpath(
+              "_migrations", "sqlite", "001_action_runtime.sql"
+          )
+          assert "CREATE TABLE proposals" in sqlite_migration.read_text()
+          skill = files("threvo_actions").joinpath(
+              ".agents", "skills", "threvo-actions"
+          )
+          assert skill.joinpath("SKILL.md").read_text()
+          assert skill.joinpath("agents", "openai.yaml").read_text()
+          for reference in (
+              "authoring.md",
+              "host-integration.md",
+              "pydantic-ai.md",
+              "testing.md",
+          ):
+              assert skill.joinpath("references", reference).read_text()
+          assert importlib.util.find_spec("pydantic_ai") is None
+          try:
+              import threvo_actions.integrations.pydantic_ai
+          except ImportError as exc:
+              assert "threvo-actions[pydantic-ai]" in str(exc)
+          else:
+              raise AssertionError("optional integration imported without its extra")
+          PY
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository history for secrets
+        uses: docker://ghcr.io/gitleaks/gitleaks:v8.30.0
+        with:
+          args: git /github/workspace --no-banner --redact

@@ -1,0 +1,373 @@
+"""Pydantic AI Capability for confirm-first financial actions."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Awaitable, Mapping, Sequence
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+
+from pydantic import BaseModel, Field, JsonValue, ValidationError
+
+try:
+    from pydantic_ai import (
+        ApprovalRequired,
+        DeferredToolRequests,
+        DeferredToolResults,
+        ModelRetry,
+        RunContext,
+        ToolApproved,
+        ToolDenied,
+    )
+    from pydantic_ai.capabilities import AbstractCapability
+    from pydantic_ai.tools import Tool
+    from pydantic_ai.toolsets import FunctionToolset
+except ModuleNotFoundError as exc:
+    if exc.name is not None and exc.name.startswith("pydantic_ai"):
+        raise ImportError(
+            "Pydantic AI integration requires: pip install 'threvo-actions[pydantic-ai]'"
+        ) from exc
+    raise
+
+from ..models import (
+    ActionType,
+    EvidenceConsumer,
+    ExperimentalModel,
+    LifecycleStatus,
+    ProposingAgent,
+    RequestingPrincipal,
+    SafeReference,
+)
+from ..registry import ReadContext
+from ..runtime import (
+    ActionOperationResult,
+    ActionRuntime,
+    AuthorizationDeniedError,
+    OperationOutcome,
+    ProposalNotFoundError,
+)
+
+if TYPE_CHECKING:
+    from ..registry import ActionDefinition
+
+DepsT = TypeVar("DepsT")
+DepsContraT = TypeVar("DepsContraT", contravariant=True)
+CommandT = TypeVar("CommandT", bound=BaseModel)
+PrivateSnapshotT = TypeVar("PrivateSnapshotT", bound=BaseModel)
+PreviewT = TypeVar("PreviewT", bound=BaseModel)
+ResultT = TypeVar("ResultT", bound=BaseModel)
+
+JsonObject = dict[str, JsonValue]
+_TOOL_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$", flags=re.ASCII)
+
+
+class ActionAgentContext(ExperimentalModel):
+    """Trusted host context resolved from authenticated agent dependencies."""
+
+    tenant_reference: SafeReference
+    requesting_principal: RequestingPrincipal
+    evidence_consumer: EvidenceConsumer
+    proposing_agent: ProposingAgent | None = None
+
+
+class IntegrationOutcome(StrEnum):
+    INVALID_CONTINUATION = "invalid_continuation"
+    PREPARATION_DENIED = "preparation_denied"
+
+
+class ActionToolResult(ExperimentalModel):
+    """Display-safe result returned to the model after a continuation attempt."""
+
+    proposal_reference: SafeReference | None = None
+    lifecycle_status: LifecycleStatus | None = None
+    outcome: OperationOutcome | IntegrationOutcome
+    revision: int | None = None
+    display_preview: JsonObject = Field(default_factory=dict)
+    safe_result: JsonObject | None = None
+    fresh_proposal_reference: SafeReference | None = None
+
+
+class DeferredActionRequest(ExperimentalModel):
+    """Safe request passed to an optional server-side inline authority handler."""
+
+    tool_call_id: SafeReference
+    tool_name: SafeReference
+    proposal_reference: SafeReference
+    action_type: ActionType
+
+
+class ActionContextResolver(Protocol[DepsContraT]):
+    def __call__(self, deps: DepsContraT) -> ActionAgentContext: ...
+
+
+class InlineAuthorityHandler(Protocol[DepsContraT]):
+    def __call__(
+        self,
+        request: DeferredActionRequest,
+        *,
+        deps: DepsContraT,
+    ) -> bool | Awaitable[bool]: ...
+
+
+class _ContinuationMetadata(ExperimentalModel):
+    proposal_reference: SafeReference
+    tool_name: SafeReference
+    action_type: ActionType
+    display_preview: JsonObject
+
+
+class _BuildableBinding(Protocol[DepsContraT]):
+    @property
+    def name(self) -> str: ...
+
+    def build_tool(self, runtime: ActionRuntime) -> Tool[DepsContraT]: ...
+
+
+def _tool_result(result: ActionOperationResult) -> ActionToolResult:
+    return ActionToolResult(
+        proposal_reference=result.proposal_reference,
+        lifecycle_status=result.lifecycle_status,
+        outcome=result.outcome,
+        revision=result.revision,
+        display_preview=result.display_preview,
+        safe_result=result.safe_result,
+        fresh_proposal_reference=result.fresh_proposal_reference,
+    )
+
+
+def _continuation_metadata(value: object) -> _ContinuationMetadata | None:
+    try:
+        return _ContinuationMetadata.model_validate(value)
+    except ValidationError:
+        return None
+
+
+@dataclass(frozen=True)
+class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]):
+    """Explicitly binds one action definition to one model-visible tool."""
+
+    definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT]
+    context_resolver: ActionContextResolver[DepsT]
+    name: str
+    description: str
+
+    def __post_init__(self) -> None:
+        if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
+            raise ValueError("tool name must be a lowercase Python-style identifier")
+        if not self.description.strip():
+            raise ValueError("tool description must not be empty")
+
+    def build_tool(self, runtime: ActionRuntime) -> Tool[DepsT]:
+        definition = self.definition
+        context_resolver = self.context_resolver
+        tool_name = self.name
+
+        async def financial_action_tool(
+            ctx: RunContext[DepsT],
+            **arguments: object,
+        ) -> ActionToolResult:
+            trusted = context_resolver(ctx.deps)
+            if ctx.tool_call_approved:
+                continuation = _continuation_metadata(ctx.tool_call_metadata)
+                if (
+                    continuation is None
+                    or continuation.tool_name != tool_name
+                    or continuation.action_type != definition.action_type
+                ):
+                    return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
+                try:
+                    read_context = ReadContext(
+                        tenant_reference=trusted.tenant_reference,
+                        consumer=trusted.evidence_consumer,
+                    )
+                    await runtime.read(
+                        definition,
+                        proposal_reference=continuation.proposal_reference,
+                        context=read_context,
+                    )
+                    result = await runtime.execute(
+                        definition,
+                        tenant_reference=trusted.tenant_reference,
+                        proposal_reference=continuation.proposal_reference,
+                    )
+                    if result.outcome in {
+                        OperationOutcome.VERIFICATION_PENDING,
+                        OperationOutcome.FAILED_UNKNOWN,
+                    }:
+                        result = await runtime.reconcile(
+                            definition,
+                            tenant_reference=trusted.tenant_reference,
+                            proposal_reference=result.proposal_reference,
+                        )
+                    await runtime.read(
+                        definition,
+                        proposal_reference=result.proposal_reference,
+                        context=read_context,
+                    )
+                    if result.fresh_proposal_reference is not None:
+                        await runtime.read(
+                            definition,
+                            proposal_reference=result.fresh_proposal_reference,
+                            context=read_context,
+                        )
+                except ProposalNotFoundError:
+                    return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
+                return _tool_result(result)
+
+            try:
+                command = definition.command_model.model_validate(arguments)
+            except ValidationError as exc:
+                raise ModelRetry(
+                    "Financial action arguments do not match the declared command schema."
+                ) from exc
+            try:
+                prepared = await runtime.prepare(
+                    definition,
+                    tenant_reference=trusted.tenant_reference,
+                    command=command,
+                    requesting_principal=trusted.requesting_principal,
+                    proposing_agent=trusted.proposing_agent,
+                )
+            except AuthorizationDeniedError:
+                return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+            try:
+                prepared_view = await runtime.read(
+                    definition,
+                    proposal_reference=prepared.proposal_reference,
+                    context=ReadContext(
+                        tenant_reference=trusted.tenant_reference,
+                        consumer=trusted.evidence_consumer,
+                    ),
+                )
+            except ProposalNotFoundError:
+                return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+            metadata = _ContinuationMetadata(
+                proposal_reference=prepared.proposal_reference,
+                tool_name=tool_name,
+                action_type=definition.action_type,
+                display_preview=prepared_view.display_preview,
+            )
+            raise ApprovalRequired(metadata=metadata.model_dump(mode="json"))
+
+        return Tool[DepsT].from_schema(
+            function=financial_action_tool,
+            name=self.name,
+            description=self.description,
+            json_schema=definition.command_model.model_json_schema(),
+            takes_ctx=True,
+            sequential=True,
+        )
+
+
+@dataclass(init=False)
+class ActionCapability(AbstractCapability[DepsT]):
+    """Expose confirm-first actions without trusting framework approval as authority."""
+
+    _toolset: FunctionToolset[DepsT]
+    _tool_names: frozenset[str]
+    _inline_authority_handler: InlineAuthorityHandler[DepsT] | None
+
+    def __init__(
+        self,
+        *,
+        runtime: ActionRuntime,
+        bindings: Sequence[_BuildableBinding[DepsT]],
+        inline_authority_handler: InlineAuthorityHandler[DepsT] | None = None,
+        id: str = "threvo_actions",
+    ) -> None:
+        if not bindings:
+            raise ValueError("at least one action tool binding is required")
+        self.id = id
+        self.description = "Prepare and safely resume confirm-first financial actions."
+        self.defer_loading = False
+        self._inline_authority_handler = inline_authority_handler
+        self._tool_names = frozenset(binding.name for binding in bindings)
+        if len(self._tool_names) != len(bindings):
+            raise ValueError("action tool names must be unique")
+        self._toolset = FunctionToolset(
+            [binding.build_tool(runtime) for binding in bindings],
+            id=id,
+            sequential=True,
+        )
+
+    @classmethod
+    def get_serialization_name(cls) -> str | None:
+        return None
+
+    def get_instructions(self) -> str:
+        return (
+            "Financial action tools prepare a proposal before they can execute. "
+            "A framework approval request is not proof of financial authority. "
+            "Treat an effect as complete only when the tool outcome is verified."
+        )
+
+    def get_toolset(self) -> FunctionToolset[DepsT]:
+        return self._toolset
+
+    def build_continuation_results(
+        self,
+        requests: DeferredToolRequests,
+        *,
+        decisions: Mapping[str, bool],
+    ) -> DeferredToolResults:
+        """Build framework continuations while preserving safe proposal metadata."""
+
+        metadata = {
+            tool_call_id: requests.metadata[tool_call_id]
+            for tool_call_id in decisions
+            if tool_call_id in requests.metadata
+        }
+        return requests.build_results(approvals=dict(decisions), metadata=metadata)
+
+    async def handle_deferred_tool_calls(
+        self,
+        ctx: RunContext[DepsT],
+        *,
+        requests: DeferredToolRequests,
+    ) -> DeferredToolResults | None:
+        handler = self._inline_authority_handler
+        if handler is None:
+            return None
+        deferred_requests = requests
+        approvals: dict[str, bool | ToolApproved | ToolDenied] = {}
+        metadata: dict[str, dict[str, object]] = {}
+        for call in deferred_requests.approvals:
+            if call.tool_name not in self._tool_names:
+                continue
+            continuation = _continuation_metadata(deferred_requests.metadata.get(call.tool_call_id))
+            if continuation is None or continuation.tool_name != call.tool_name:
+                approvals[call.tool_call_id] = ToolDenied(
+                    "Financial action continuation metadata is invalid."
+                )
+                continue
+            request = DeferredActionRequest(
+                tool_call_id=call.tool_call_id,
+                tool_name=call.tool_name,
+                proposal_reference=continuation.proposal_reference,
+                action_type=continuation.action_type,
+            )
+            approved = handler(request, deps=ctx.deps)
+            if isinstance(approved, Awaitable):
+                approved = await approved
+            approvals[call.tool_call_id] = (
+                ToolApproved()
+                if approved
+                else ToolDenied("Financial action authority was not established.")
+            )
+            metadata[call.tool_call_id] = continuation.model_dump(mode="json")
+        if not approvals:
+            return None
+        return DeferredToolResults(approvals=approvals, metadata=metadata)
+
+
+__all__ = [
+    "ActionAgentContext",
+    "ActionCapability",
+    "ActionContextResolver",
+    "ActionToolBinding",
+    "ActionToolResult",
+    "DeferredActionRequest",
+    "InlineAuthorityHandler",
+    "IntegrationOutcome",
+]
