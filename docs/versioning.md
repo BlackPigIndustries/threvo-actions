@@ -15,7 +15,8 @@ line:
   `threvo_actions.stores.postgres`, `threvo_actions.stores.mysql`,
   `threvo_actions.stores.sqlite`, `threvo_actions.migrations`,
   `threvo_actions.mysql_migrations`, and
-  `threvo_actions.sqlite_migrations`;
+  `threvo_actions.sqlite_migrations`, plus compatibility metadata in
+  `threvo_actions.migration_compatibility`;
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
@@ -25,6 +26,12 @@ that callers are already required to handle as unknown, new public helpers, or
 bug and security fixes that preserve this contract. Removing a name, making a
 valid call invalid, changing a result's meaning, or weakening a safety check is
 not permitted in `0.1.x`.
+
+A correctness or security fix may require a new explicit safety
+acknowledgement. Such a change must fail closed, preserve a documented path for
+the previously valid operation, and be called out in the changelog. Requiring
+`writers_quiesced=True` before an existing schema crosses a declared contract
+migration is one such acknowledgement; it does not affect fresh bootstrap.
 
 ## Still experimental
 
@@ -40,6 +47,11 @@ minor `0.x` release with a migration note:
 Persisted rows remain upgradeable through the adapter's explicit migration
 path. An experimental wire shape must not be exchanged between independently
 versioned systems without an application-owned compatibility agreement.
+
+Each immutable packaged migration declares whether it expands or contracts the
+schema contract, whether the preceding runtime remains compatible, and whether
+writers must be stopped. This metadata describes deployment compatibility; it
+does not let an older library silently accept a newer migration history.
 
 ## Version changes
 

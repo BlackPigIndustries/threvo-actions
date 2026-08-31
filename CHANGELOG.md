@@ -6,6 +6,18 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Added
+
+- Every packaged database migration now publishes an expand/contract phase,
+  previous-runtime compatibility, and writer-quiescence requirement.
+
+### Changed
+
+- PostgreSQL and MySQL upgrades containing contract migrations refuse to run
+  against an existing schema until the deploy explicitly acknowledges that
+  runtime and retention writers are stopped. Fresh schema bootstrap remains
+  non-interactive.
+
 ## [0.1.2] - 2026-08-31
 
 ### Fixed

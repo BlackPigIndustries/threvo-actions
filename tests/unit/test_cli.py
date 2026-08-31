@@ -73,9 +73,11 @@ def test_postgres_commands_use_named_environment_secret_and_close_pool(
         *,
         schema: str,
         lock_timeout: timedelta,
+        writers_quiesced: bool,
     ) -> MigrationStatus:
         assert unused_pool is pool
         assert lock_timeout.total_seconds() == 12.0
+        assert writers_quiesced
         calls.append(f"migrate:{schema}")
         return MigrationStatus((1,), ())
 
@@ -94,7 +96,7 @@ def test_postgres_commands_use_named_environment_secret_and_close_pool(
         "actions_test",
     ]
     if command == "migrate":
-        argv.extend(["--lock-timeout-seconds", "12"])
+        argv.extend(["--lock-timeout-seconds", "12", "--writers-quiesced"])
     assert cli.main(argv) == 0
 
     assert created_with == ["postgresql://secret"]
@@ -209,9 +211,11 @@ def test_mysql_commands_use_named_environment_secret_and_close_pool(
         unused_pool: object,
         *,
         lock_timeout: timedelta,
+        writers_quiesced: bool,
     ) -> MySQLMigrationStatus:
         assert unused_pool is pool
         assert lock_timeout.total_seconds() == 12.0
+        assert writers_quiesced
         calls.append("migrate")
         return MySQLMigrationStatus((1,), (), "8.4.11")
 
@@ -225,7 +229,7 @@ def test_mysql_commands_use_named_environment_secret_and_close_pool(
     )
     argv = ["mysql", command, "--dsn-env", "ACTIONS_TEST_MYSQL_URL"]
     if command == "migrate":
-        argv.extend(["--lock-timeout-seconds", "12"])
+        argv.extend(["--lock-timeout-seconds", "12", "--writers-quiesced"])
 
     assert cli.main(argv) == 0
     assert calls == [command]

@@ -11,6 +11,11 @@ from importlib.resources import files
 from math import ceil, isfinite
 from typing import TYPE_CHECKING, Protocol
 
+from .migration_compatibility import (
+    MigrationCompatibility,
+    MigrationPhase,
+    migrations_requiring_writer_quiescence,
+)
 from .models import LifecycleStatus
 
 if TYPE_CHECKING:
@@ -39,6 +44,24 @@ class _MySQLMigration:
     checksum: str
 
 
+_MYSQL_MIGRATION_COMPATIBILITY = (
+    MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
+    MigrationCompatibility(
+        2,
+        "002_harden_database_boundaries.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
+)
+
+
+def mysql_migration_compatibility() -> tuple[MigrationCompatibility, ...]:
+    """Return immutable compatibility metadata for MySQL migrations."""
+
+    return _MYSQL_MIGRATION_COMPATIBILITY
+
+
 class _Cursor(Protocol):
     async def execute(self, query: str, args: tuple[object, ...] | None = None) -> int: ...
 
@@ -63,9 +86,9 @@ class MySQLConnectionSource(Protocol):
 
 @cache
 def _packaged_mysql_migrations() -> tuple[_MySQLMigration, ...]:
-    filenames = ("001_action_runtime.sql", "002_harden_database_boundaries.sql")
     migrations: list[_MySQLMigration] = []
-    for version, filename in enumerate(filenames, start=1):
+    for compatibility in mysql_migration_compatibility():
+        filename = compatibility.filename
         sql = (
             files("threvo_actions")
             .joinpath("_migrations", "mysql", filename)
@@ -73,7 +96,7 @@ def _packaged_mysql_migrations() -> tuple[_MySQLMigration, ...]:
         )
         migrations.append(
             _MySQLMigration(
-                version=version,
+                version=compatibility.version,
                 filename=filename,
                 sql=sql,
                 checksum=hashlib.sha256(sql.encode()).hexdigest(),
@@ -917,6 +940,7 @@ async def migrate_mysql(
     pool: MySQLConnectionSource,
     *,
     lock_timeout: timedelta = timedelta(seconds=30),
+    writers_quiesced: bool = False,
 ) -> MySQLMigrationStatus:
     """Apply packaged migrations while holding a database-scoped advisory lock."""
 
@@ -947,6 +971,18 @@ async def migrate_mysql(
                 """
             )
             status = _migration_status(await _history(cursor), migrations, server_version=version)
+            required_quiescence = migrations_requiring_writer_quiescence(
+                mysql_migration_compatibility(),
+                applied_versions=status.applied_versions,
+                pending_versions=status.pending_versions,
+            )
+            if required_quiescence and not writers_quiesced:
+                versions = ", ".join(str(item.version) for item in required_quiescence)
+                raise MySQLMigrationStateError(
+                    "MySQL migrations "
+                    f"{versions} require stopped runtime and retention writers; "
+                    "retry with writers_quiesced=True after draining them"
+                )
             for migration in migrations:
                 if migration.version not in status.pending_versions:
                     continue

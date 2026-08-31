@@ -203,7 +203,13 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "MigrationStatus",
             "inspect_postgres",
             "migrate_postgres",
+            "postgres_migration_compatibility",
             "quote_schema_name",
+        },
+        "threvo_actions.migration_compatibility": {
+            "MigrationCompatibility",
+            "MigrationPhase",
+            "migrations_requiring_writer_quiescence",
         },
         "threvo_actions.mysql_migrations": {
             "MySQLConnectionSource",
@@ -211,12 +217,14 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "MySQLMigrationStatus",
             "inspect_mysql",
             "migrate_mysql",
+            "mysql_migration_compatibility",
         },
         "threvo_actions.sqlite_migrations": {
             "SQLiteMigrationStateError",
             "SQLiteMigrationStatus",
             "inspect_sqlite",
             "migrate_sqlite",
+            "sqlite_migration_compatibility",
         },
         "threvo_actions.stores.postgres": {
             "ConnectionSource",

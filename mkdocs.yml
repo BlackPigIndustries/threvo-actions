@@ -124,6 +124,7 @@ nav:
       - PostgreSQL and migrations: reference/postgres.md
       - MySQL and migrations: reference/mysql.md
       - SQLite and migrations: reference/sqlite.md
+      - Migration compatibility: reference/migration-compatibility.md
       - Conformance helpers: reference/conformance.md
       - CLI: reference/cli.md
   - Project:

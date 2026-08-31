@@ -13,6 +13,8 @@ from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .migration_compatibility import MigrationCompatibility, MigrationPhase
+
 if TYPE_CHECKING:
     import os
     from collections.abc import Sequence
@@ -36,9 +38,21 @@ class _SQLiteMigration:
     checksum: str
 
 
+_SQLITE_MIGRATION_COMPATIBILITY = (
+    MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
+)
+
+
+def sqlite_migration_compatibility() -> tuple[MigrationCompatibility, ...]:
+    """Return immutable compatibility metadata for SQLite migrations."""
+
+    return _SQLITE_MIGRATION_COMPATIBILITY
+
+
 @cache
 def _packaged_sqlite_migrations() -> tuple[_SQLiteMigration, ...]:
-    filename = "001_action_runtime.sql"
+    compatibility = sqlite_migration_compatibility()[0]
+    filename = compatibility.filename
     sql = (
         files("threvo_actions")
         .joinpath("_migrations", "sqlite", filename)
@@ -46,7 +60,7 @@ def _packaged_sqlite_migrations() -> tuple[_SQLiteMigration, ...]:
     )
     return (
         _SQLiteMigration(
-            version=1,
+            version=compatibility.version,
             filename=filename,
             sql=sql,
             checksum=hashlib.sha256(sql.encode()).hexdigest(),

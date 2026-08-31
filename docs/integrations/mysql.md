@@ -12,7 +12,8 @@ python -m pip install "threvo-actions[mysql]==0.1.2"
 read -rsp 'MySQL migration DSN: ' ACTIONS_MIGRATOR_DATABASE_URL && printf '\n'
 export ACTIONS_MIGRATOR_DATABASE_URL
 threvo-actions mysql inspect --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
-threvo-actions mysql migrate --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
+threvo-actions mysql migrate --dsn-env ACTIONS_MIGRATOR_DATABASE_URL \
+  --writers-quiesced
 threvo-actions mysql inspect --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
 ```
 
@@ -161,9 +162,10 @@ startup task:
 3. Run `mysql inspect` with the migration credential. Resolve schema/history
    drift before applying anything, and review the pending SQL for metadata-lock
    and replication impact on the actual table sizes.
-4. Run `mysql migrate` once against the primary. Keep writers quiesced until
-   it completes, replicas have applied the DDL, and `mysql inspect` is current
-   on the primary and every promotion candidate.
+4. Run `mysql migrate --writers-quiesced` once against the primary. The flag
+   acknowledges the drain; it does not perform it. Keep writers quiesced until
+   the migration completes, replicas have applied the DDL, and `mysql inspect`
+   is current on the primary and every promotion candidate.
 5. Resume writers gradually and monitor lock waits, replication lag, routine
    errors, and failed proposal writes.
 

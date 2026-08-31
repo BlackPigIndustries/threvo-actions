@@ -22,5 +22,10 @@
         - MigrationStateError
         - inspect_postgres
         - migrate_postgres
+        - postgres_migration_compatibility
         - quote_schema_name
       show_source: false
+
+See [Migration compatibility](migration-compatibility.md) before automating an
+upgrade. Contract migrations on an existing schema require an explicit writer
+quiescence acknowledgement.

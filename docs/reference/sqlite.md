@@ -19,4 +19,5 @@
         - SQLiteMigrationStateError
         - inspect_sqlite
         - migrate_sqlite
+        - sqlite_migration_compatibility
       show_source: false

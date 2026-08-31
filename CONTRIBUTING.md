@@ -52,6 +52,13 @@ Boundary models are strict and closed. Use `Decimal` with explicit currency,
 timezone-aware datetimes, explicit discriminators, and separate participant
 identity types. Never add a catch-all discriminator or arbitrary payload field.
 
+Every new database migration declares `MigrationCompatibility` metadata. Use
+`expand` only when the prior runtime can safely continue writing throughout the
+change. A `contract` migration documents old-runtime incompatibility and must
+require writer quiescence unless a focused concurrency proof demonstrates that
+old and new writers can safely overlap. Applied SQL and recorded checksums stay
+immutable.
+
 ## Security and privacy
 
 Read [SECURITY.md](SECURITY.md) and [docs/threat-model.md](docs/threat-model.md).

@@ -41,8 +41,10 @@ threvo-actions postgres inspect --dsn-env ACTIONS_MIGRATION_DATABASE_URL
 ```
 
 Run `postgres migrate` only after the operator or deployment workflow has
-explicitly authorized that target, using the same `--dsn-env` form. Then
-inspect again with the runtime and retention roles, adding
+explicitly authorized that target, using the same `--dsn-env` form. If pending
+compatibility metadata requires writer quiescence, drain runtime and retention
+writers and pass `--writers-quiesced`; the flag only acknowledges the drain.
+Then inspect again with the runtime and retention roles, adding
 `--require-separated-role` where the role must not own proposal tables.
 
 Do not use `MemoryActionStore`, `EphemeralProtection`, sequential identifiers,
@@ -102,12 +104,14 @@ The creation routine validates the exact stored Pydantic shape before writing.
 
 Before a MySQL upgrade, verify backups and replication health, quiesce runtime
 and retention writers, run `mysql inspect`, and apply the immutable package to
-the primary once. The advisory lock serializes migrators only; it does not stop
-application writes. Keep writers quiesced until replicas have applied the DDL
-and inspection is current on the primary and promotion candidates. MySQL DDL
-may commit implicitly. After an interruption, preserve the partial state and
-rerun the same package; never edit migration history or checksums. Restore a
-tested backup when the idempotent recovery path cannot reach current parity.
+the primary once with `mysql migrate --writers-quiesced`. The flag records the
+acknowledgement but does not stop processes. The advisory lock serializes
+migrators only; it does not stop application writes. Keep writers quiesced
+until replicas have applied the DDL and inspection is current on the primary
+and promotion candidates. MySQL DDL may commit implicitly. After an
+interruption, preserve the partial state and rerun the same package; never edit
+migration history or checksums. Restore a tested backup when the idempotent
+recovery path cannot reach current parity.
 
 The official MySQL adapter preserves the shared 255-character bound for tenant,
 proposal, and semantic-effect references. It validates its remaining bounds

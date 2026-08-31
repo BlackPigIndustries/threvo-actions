@@ -40,6 +40,7 @@ def _parser() -> argparse.ArgumentParser:
         if name == "inspect":
             command.add_argument("--require-separated-role", action="store_true")
         if name == "migrate":
+            command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
                 "--lock-timeout-seconds",
                 type=_positive_seconds,
@@ -65,6 +66,7 @@ def _parser() -> argparse.ArgumentParser:
         command = mysql_commands.add_parser(name)
         command.add_argument("--dsn-env", required=True, metavar="NAME")
         if name == "migrate":
+            command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
                 "--lock-timeout-seconds",
                 type=_positive_seconds,
@@ -92,6 +94,7 @@ async def _postgres(
     schema: str,
     lock_timeout_seconds: float,
     require_separated_role: bool,
+    writers_quiesced: bool,
 ) -> int:
     try:
         import asyncpg
@@ -108,6 +111,7 @@ async def _postgres(
                 pool,
                 schema=schema,
                 lock_timeout=timedelta(seconds=lock_timeout_seconds),
+                writers_quiesced=writers_quiesced,
             )
             if command == "migrate"
             else await inspect_postgres(pool, schema=schema)
@@ -207,6 +211,7 @@ async def _mysql(
     command: str,
     dsn: str,
     lock_timeout_seconds: float,
+    writers_quiesced: bool,
 ) -> int:
     try:
         import aiomysql
@@ -227,6 +232,7 @@ async def _mysql(
             await migrate_mysql(
                 pool,
                 lock_timeout=timedelta(seconds=lock_timeout_seconds),
+                writers_quiesced=writers_quiesced,
             )
             if command == "migrate"
             else await inspect_mysql(pool)
@@ -268,6 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 schema=args.schema,
                 lock_timeout_seconds=getattr(args, "lock_timeout_seconds", 30.0),
                 require_separated_role=getattr(args, "require_separated_role", False),
+                writers_quiesced=getattr(args, "writers_quiesced", False),
             )
         )
     if args.command == "sqlite":
@@ -287,6 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 command=args.mysql_command,
                 dsn=dsn,
                 lock_timeout_seconds=getattr(args, "lock_timeout_seconds", 30.0),
+                writers_quiesced=getattr(args, "writers_quiesced", False),
             )
         )
     raise AssertionError("unreachable command")

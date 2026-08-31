@@ -24,7 +24,8 @@ an operator or deployment workflow to mutate it. Then run:
 
 ```bash
 threvo-actions postgres migrate \
-  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions \
+  --writers-quiesced
 threvo-actions postgres inspect \
   --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
 ```
@@ -35,6 +36,11 @@ arguments. The example `export` still enters the literal DSN into shell
 history; load production credentials through your secret manager instead.
 `migrate` uses an advisory lock and applies packaged, forward-only migrations.
 The default lock wait is 30 seconds.
+
+For an existing schema, the current lifecycle contract migrations require
+runtime and retention writers to be drained. `--writers-quiesced` is an
+explicit acknowledgement of that external deployment step; the command does
+not stop workers itself. A fresh database bootstrap does not require the flag.
 
 Lifecycle migrations replace the database status constraint and transition
 trigger from the same closed Python contract used by the runtime. Before an

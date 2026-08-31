@@ -11,6 +11,11 @@ from importlib.resources import files
 from math import isfinite
 from typing import TYPE_CHECKING, Protocol
 
+from .migration_compatibility import (
+    MigrationCompatibility,
+    MigrationPhase,
+    migrations_requiring_writer_quiescence,
+)
 from .models import LifecycleStatus
 from .stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 
@@ -66,6 +71,32 @@ class _Migration:
     checksum: str
 
 
+_POSTGRES_MIGRATION_COMPATIBILITY = (
+    MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
+    MigrationCompatibility(2, "002_stale_no_effect.sql", MigrationPhase.EXPAND, True, False),
+    MigrationCompatibility(
+        3,
+        "003_generated_lifecycle_guard.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
+    MigrationCompatibility(
+        4,
+        "004_active_lifecycle_guard.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
+)
+
+
+def postgres_migration_compatibility() -> tuple[MigrationCompatibility, ...]:
+    """Return immutable compatibility metadata for PostgreSQL migrations."""
+
+    return _POSTGRES_MIGRATION_COMPATIBILITY
+
+
 def quote_schema_name(schema: str) -> str:
     if (
         _SCHEMA_PATTERN.fullmatch(schema) is None
@@ -78,14 +109,9 @@ def quote_schema_name(schema: str) -> str:
 
 @cache
 def _packaged_migrations() -> tuple[_Migration, ...]:
-    filenames = (
-        "001_action_runtime.sql",
-        "002_stale_no_effect.sql",
-        "003_generated_lifecycle_guard.sql",
-        "004_active_lifecycle_guard.sql",
-    )
     migrations: list[_Migration] = []
-    for version, filename in enumerate(filenames, start=1):
+    for compatibility in postgres_migration_compatibility():
+        filename = compatibility.filename
         sql = (
             files("threvo_actions")
             .joinpath("_migrations", "postgres", filename)
@@ -93,7 +119,7 @@ def _packaged_migrations() -> tuple[_Migration, ...]:
         )
         migrations.append(
             _Migration(
-                version=version,
+                version=compatibility.version,
                 filename=filename,
                 sql=sql,
                 checksum=hashlib.sha256(sql.encode()).hexdigest(),
@@ -136,6 +162,7 @@ async def migrate_postgres(
     *,
     schema: str,
     lock_timeout: timedelta = timedelta(seconds=30),
+    writers_quiesced: bool = False,
 ) -> MigrationStatus:
     lock_timeout_seconds = lock_timeout.total_seconds()
     if not isfinite(lock_timeout_seconds) or lock_timeout_seconds <= 0:
@@ -175,6 +202,18 @@ async def migrate_postgres(
             "ORDER BY version"
         )
         status = _migration_status(rows=rows, migrations=migrations)
+        required_quiescence = migrations_requiring_writer_quiescence(
+            postgres_migration_compatibility(),
+            applied_versions=status.applied_versions,
+            pending_versions=status.pending_versions,
+        )
+        if required_quiescence and not writers_quiesced:
+            versions = ", ".join(str(item.version) for item in required_quiescence)
+            raise MigrationStateError(
+                "PostgreSQL migrations "
+                f"{versions} require stopped runtime and retention writers; "
+                "retry with writers_quiesced=True after draining them"
+            )
         for migration in migrations:
             if migration.version not in status.pending_versions:
                 continue

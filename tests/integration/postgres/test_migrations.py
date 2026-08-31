@@ -199,7 +199,11 @@ def test_existing_version_one_schema_upgrades_without_checksum_or_grant_drift() 
                 await connection.execute(f'GRANT EXECUTE ON FUNCTION {signature} TO "{role}"')
 
             before = await inspect_postgres(pool, schema=schema)
-            after = await migrate_postgres(pool, schema=schema)
+            with pytest.raises(MigrationStateError, match="stopped runtime and retention writers"):
+                await migrate_postgres(pool, schema=schema)
+            assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1,)
+
+            after = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
 
             assert before.applied_versions == (1,)
             assert before.pending_versions == (2, 3, 4)
@@ -258,7 +262,7 @@ def test_populated_version_one_schema_preserves_every_active_status_on_upgrade()
                         status=status.value,
                     )
 
-            after = await migrate_postgres(pool, schema=schema)
+            after = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
 
             assert after.applied_versions == (1, 2, 3, 4)
             async with pool.acquire() as connection:
@@ -401,7 +405,7 @@ def test_retired_row_blocks_upgrade_transaction_and_recovery_is_forward_only() -
                 )
 
             with pytest.raises(MigrationStateError, match="retired lifecycle states"):
-                await migrate_postgres(pool, schema=schema)
+                await migrate_postgres(pool, schema=schema, writers_quiesced=True)
             assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3)
 
             async with pool.acquire() as connection:
@@ -409,7 +413,7 @@ def test_retired_row_blocks_upgrade_transaction_and_recovery_is_forward_only() -
                     f'DELETE FROM "{schema}".proposals '
                     "WHERE proposal_reference = 'proposal:retired'"
                 )
-            recovered = await migrate_postgres(pool, schema=schema)
+            recovered = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
             assert recovered.applied_versions == (1, 2, 3, 4)
         finally:
             async with pool.acquire() as connection:

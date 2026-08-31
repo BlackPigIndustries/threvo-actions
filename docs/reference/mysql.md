@@ -22,4 +22,9 @@
         - MySQLConnectionSource
         - inspect_mysql
         - migrate_mysql
+        - mysql_migration_compatibility
       show_source: false
+
+See [Migration compatibility](migration-compatibility.md) before automating an
+upgrade. Contract migrations on an existing schema require an explicit writer
+quiescence acknowledgement.

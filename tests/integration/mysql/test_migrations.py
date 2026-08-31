@@ -461,7 +461,13 @@ def test_populated_version_one_preserves_maximum_public_reference_widths(
                 await connection.commit()
             monkeypatch.setattr(mysql_migrations, "_packaged_mysql_migrations", original_loader)
             monkeypatch.setattr(mysql_migrations, "_assert_current_schema", original_assert)
-            assert (await migrate_mysql(pool)).applied_versions == (1, 2)
+            with pytest.raises(
+                MySQLMigrationStateError,
+                match="stopped runtime and retention writers",
+            ):
+                await migrate_mysql(pool)
+            assert (await inspect_mysql(pool)).applied_versions == (1,)
+            assert (await migrate_mysql(pool, writers_quiesced=True)).applied_versions == (1, 2)
             loaded = await MySQLActionStore(pool).get(
                 record.tenant_reference, record.proposal_reference
             )
@@ -614,7 +620,7 @@ def test_migration_recovers_after_real_failure_between_ddl_boundaries(
             assert interrupted.pending_versions == (2,)
 
             monkeypatch.setattr(mysql_migrations, "_packaged_mysql_migrations", original_loader)
-            recovered = await migrate_mysql(pool)
+            recovered = await migrate_mysql(pool, writers_quiesced=True)
             assert recovered.applied_versions == (1, 2)
             assert recovered.pending_versions == ()
 
