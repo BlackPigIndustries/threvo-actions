@@ -1571,6 +1571,24 @@ def test_stale_no_effect_refuses_effect_shaped_payloads() -> None:
         )
 
 
+def test_partial_results_require_a_mixed_success_and_failure_outcome() -> None:
+    all_failed = (
+        ItemOutcome(item_reference="item:one", status=ItemOutcomeStatus.FAILED_KNOWN),
+        ItemOutcome(item_reference="item:two", status=ItemOutcomeStatus.FAILED_UNKNOWN),
+    )
+
+    with pytest.raises(ValueError, match="partial execution requires at least one successful"):
+        ExecutionResult[Result](
+            status=ExecutionStatus.PARTIALLY_SUCCEEDED,
+            item_outcomes=all_failed,
+        )
+    with pytest.raises(ValueError, match="verified completion requires at least one successful"):
+        VerificationResult[Result](
+            status=VerificationStatus.VERIFIED_COMPLETION,
+            item_outcomes=all_failed,
+        )
+
+
 def test_atomic_precondition_refusal_allows_a_fresh_authorized_proposal() -> None:
     async def scenario() -> None:
         runtime, store, _, _ = runtime_parts()
@@ -2014,7 +2032,11 @@ def test_authoritative_partial_outcome_for_atomic_action_requires_manual_reconci
                 status=VerificationStatus.VERIFIED_COMPLETION,
                 item_outcomes=(
                     ItemOutcome(
-                        item_reference="unexpected:item",
+                        item_reference="unexpected:success",
+                        status=ItemOutcomeStatus.SUCCEEDED,
+                    ),
+                    ItemOutcome(
+                        item_reference="unexpected:failure",
                         status=ItemOutcomeStatus.FAILED_KNOWN,
                         reason_code="unexpected_partial_effect",
                     ),

@@ -129,7 +129,7 @@ Map facts, not optimism:
 - `FAILED_KNOWN`: the target proves no effect happened.
 - `FAILED_UNKNOWN`: an effect may have happened; reconcile before any resend.
 - `PARTIALLY_SUCCEEDED`: only for `effect_kind="itemized"`, with real item
-  outcomes containing at least one unsuccessful item.
+  outcomes containing at least one successful and one unsuccessful item.
 
 ### `verify`
 
@@ -140,6 +140,8 @@ Map facts, not optimism:
   proves absence.
 - `TARGET_UNAVAILABLE`: the authoritative query could not run.
 
+`VERIFIED_COMPLETION` with item outcomes requires at least one successful item;
+map an all-failed batch to the appropriate failure status instead.
 Absence cannot carry a result or per-item outcomes. The model requires
 `settling_boundary_passed=True` for `AUTHORITATIVE_FINAL_ABSENCE` and rejects
 that flag for every other status.

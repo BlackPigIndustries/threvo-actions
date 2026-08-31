@@ -118,6 +118,10 @@ class ExecutionResult(ExperimentalModel, Generic[ResultT]):
             item.status is ItemOutcomeStatus.SUCCEEDED for item in self.item_outcomes
         ):
             raise ValueError("partial execution requires at least one unsuccessful item")
+        if self.status is ExecutionStatus.PARTIALLY_SUCCEEDED and not any(
+            item.status is ItemOutcomeStatus.SUCCEEDED for item in self.item_outcomes
+        ):
+            raise ValueError("partial execution requires at least one successful item")
         if self.status is ExecutionStatus.STALE_NO_EFFECT and any(
             (
                 self.result is not None,
@@ -154,6 +158,12 @@ class VerificationResult(ExperimentalModel, Generic[ResultT]):
         }
         if self.status in absence_statuses and (self.result is not None or self.item_outcomes):
             raise ValueError("absence verification cannot carry effect outcomes")
+        if (
+            self.status is VerificationStatus.VERIFIED_COMPLETION
+            and self.item_outcomes
+            and not any(item.status is ItemOutcomeStatus.SUCCEEDED for item in self.item_outcomes)
+        ):
+            raise ValueError("verified completion requires at least one successful item")
         if (
             self.status is VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE
         ) is not self.settling_boundary_passed:
