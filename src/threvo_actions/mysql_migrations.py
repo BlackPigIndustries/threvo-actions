@@ -208,7 +208,9 @@ async def _check_mysql_readiness_cursor(
 
 
 def _mysql_grant_prefix(grant: str) -> str:
-    prefix, separator, _account = grant.rpartition(" TO ")
+    prefix, separator, account = grant.rpartition(" TO ")
+    if " WITH GRANT OPTION" in account.upper():
+        return grant
     return prefix if separator else grant
 
 

@@ -7,7 +7,11 @@ from importlib.resources import files
 import pytest
 
 from threvo_actions.models import LifecycleStatus
-from threvo_actions.mysql_migrations import _normalize_mysql_definition, render_mysql_grants
+from threvo_actions.mysql_migrations import (
+    _mysql_grant_prefix,
+    _normalize_mysql_definition,
+    render_mysql_grants,
+)
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 
 _VERSION_ONE_CHECKSUM = "0f05e6aaca717db1c103a082046c0a72bbb224d3297f0b4238699d1ab854762d"
@@ -124,3 +128,11 @@ def test_mysql_grants_reject_backslashes_in_account_parts(field: str, value: str
 
     with pytest.raises(ValueError, match="without NUL or backslash"):
         render_mysql_grants(**arguments)
+
+
+def test_mysql_grant_prefix_preserves_delegation_escalation() -> None:
+    ordinary = "GRANT SELECT ON `actions`.`ledger` TO `runtime`@`%`"
+    escalated = ordinary + " WITH GRANT OPTION"
+
+    assert _mysql_grant_prefix(ordinary) == "GRANT SELECT ON `actions`.`ledger`"
+    assert _mysql_grant_prefix(escalated) == escalated

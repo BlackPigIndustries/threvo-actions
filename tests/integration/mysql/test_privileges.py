@@ -130,6 +130,34 @@ def test_runtime_and_retention_credentials_have_separate_database_capabilities()
                         lane=DatabaseAccessLane.RUNTIME,
                     )
                 ).ready
+                async with owner_pool.acquire() as connection, connection.cursor() as cursor:
+                    await cursor.execute(
+                        f"GRANT SELECT ON `{database}`.threvo_actions_schema_migrations "
+                        f"TO `{runtime_user}`@'%' WITH GRANT OPTION"
+                    )
+                    await connection.commit()
+                delegating = await check_mysql_readiness(
+                    runtime_pool,
+                    lane=DatabaseAccessLane.RUNTIME,
+                )
+                assert not delegating.ready
+                assert delegating.issues == (
+                    "missing 1 required privilege statements",
+                    "found 1 unexpected privilege statements",
+                )
+                async with owner_pool.acquire() as connection, connection.cursor() as cursor:
+                    await cursor.execute(
+                        f"REVOKE GRANT OPTION ON "
+                        f"`{database}`.threvo_actions_schema_migrations "
+                        f"FROM `{runtime_user}`@'%'"
+                    )
+                    await connection.commit()
+                assert (
+                    await check_mysql_readiness(
+                        runtime_pool,
+                        lane=DatabaseAccessLane.RUNTIME,
+                    )
+                ).ready
                 runtime = MySQLActionStore(runtime_pool)
                 retention = MySQLRetentionStore(retention_pool)
                 original = proposal("proposal:roles")
