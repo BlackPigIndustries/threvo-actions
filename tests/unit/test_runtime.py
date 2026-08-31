@@ -233,6 +233,28 @@ class FailProtection(DeterministicSecrets):
         raise RuntimeError("simulated protection service outage")
 
 
+class FailPayloadDestruction(DeterministicSecrets):
+    def __init__(self) -> None:
+        super().__init__()
+        self.payload_destroy_attempts = 0
+        self.commitment_destroy_attempts = 0
+
+    async def destroy_payload(self, *, payload: ProtectedPayload) -> None:
+        del payload
+        self.payload_destroy_attempts += 1
+        raise RuntimeError("private payload cleanup diagnostic")
+
+    async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None:
+        self.commitment_destroy_attempts += 1
+        await super().destroy_commitment(commitment=commitment)
+
+
+class FailProposalCreateStore(MemoryActionStore):
+    async def create(self, proposal: StoredProposal) -> None:
+        del proposal
+        raise RuntimeError("simulated proposal persistence outage")
+
+
 class CapturingEvents:
     def __init__(self) -> None:
         self.events: list[RuntimeEvent] = []
@@ -632,6 +654,30 @@ def test_preparation_failure_destroys_the_orphaned_commitment() -> None:
 
         assert await store.get("tenant:a", "proposal:1") is None
         assert secrets.destroyed_commitments == {"commitment:proposal:1"}
+
+    asyncio.run(scenario())
+
+
+def test_preparation_cleanup_attempts_commitment_after_payload_cleanup_failure() -> None:
+    async def scenario() -> None:
+        store = FailProposalCreateStore()
+        secrets = FailPayloadDestruction()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+            runtime_revision=f"threvo-actions/commit:{'a' * 40}",
+        )
+
+        with pytest.raises(RuntimeError, match="simulated proposal persistence outage") as raised:
+            await prepare(runtime, definition(HostPorts(), secrets))
+
+        assert secrets.payload_destroy_attempts == 1
+        assert secrets.commitment_destroy_attempts == 1
+        assert secrets.destroyed_commitments == {"commitment:proposal:1"}
+        assert raised.value.__notes__ == ["preparation cleanup failures: payload=RuntimeError"]
+        assert "private payload cleanup diagnostic" not in raised.value.__notes__[0]
 
     asyncio.run(scenario())
 

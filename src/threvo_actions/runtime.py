@@ -820,10 +820,22 @@ class ActionRuntime:
             )
             await self._store.create(record)
             return record
-        except BaseException:
+        except BaseException as failure:
+            cleanup_failures: list[tuple[str, str]] = []
             if protected is not None:
-                await definition.protection_codec.destroy_payload(payload=protected)
-            await definition.commitment_provider.destroy_commitment(commitment=commitment)
+                try:
+                    await definition.protection_codec.destroy_payload(payload=protected)
+                except BaseException as cleanup_failure:
+                    cleanup_failures.append(("payload", type(cleanup_failure).__name__))
+            try:
+                await definition.commitment_provider.destroy_commitment(commitment=commitment)
+            except BaseException as cleanup_failure:
+                cleanup_failures.append(("commitment", type(cleanup_failure).__name__))
+            if cleanup_failures:
+                summary = ", ".join(
+                    f"{resource}={exception_type}" for resource, exception_type in cleanup_failures
+                )
+                failure.add_note(f"preparation cleanup failures: {summary}")
             raise
 
     async def _load_private(
