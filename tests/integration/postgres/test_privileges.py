@@ -93,6 +93,77 @@ def test_runtime_and_retention_roles_have_distinct_database_powers() -> None:
                     lane=DatabaseAccessLane.RUNTIME,
                 )
             ).ready
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'REVOKE SELECT ON "{schema}".authority_evidence FROM "{runtime_role}"'
+                )
+            missing_evidence_read = await check_postgres_readiness(
+                runtime_pool,
+                schema=schema,
+                lane=DatabaseAccessLane.RUNTIME,
+            )
+            assert not missing_evidence_read.ready
+            assert "missing evidence select privilege" in missing_evidence_read.issues
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'GRANT SELECT ON "{schema}".authority_evidence TO "{runtime_role}"'
+                )
+                await connection.execute(
+                    f'GRANT UPDATE (created_at) ON "{schema}".proposals TO "{runtime_role}"'
+                )
+            unsafe_column = await check_postgres_readiness(
+                runtime_pool,
+                schema=schema,
+                lane=DatabaseAccessLane.RUNTIME,
+            )
+            assert not unsafe_column.ready
+            assert "proposal update privilege for created_at must be absent" in unsafe_column.issues
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'REVOKE UPDATE (created_at) ON "{schema}".proposals FROM "{runtime_role}"'
+                )
+                await connection.execute(
+                    f'GRANT UPDATE ON "{schema}".authority_evidence TO "{runtime_role}"'
+                )
+            mutable_evidence = await check_postgres_readiness(
+                runtime_pool,
+                schema=schema,
+                lane=DatabaseAccessLane.RUNTIME,
+            )
+            assert not mutable_evidence.ready
+            assert "evidence update privilege must be absent" in mutable_evidence.issues
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'REVOKE UPDATE ON "{schema}".authority_evidence FROM "{runtime_role}"'
+                )
+                await connection.execute(
+                    f'GRANT SELECT ON "{schema}".effect_claims TO "{retention_role}"'
+                )
+            retention_cross_lane = await check_postgres_readiness(
+                retention_pool,
+                schema=schema,
+                lane=DatabaseAccessLane.RETENTION,
+            )
+            assert not retention_cross_lane.ready
+            assert "effect-claim select privilege must be absent" in retention_cross_lane.issues
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'REVOKE SELECT ON "{schema}".effect_claims FROM "{retention_role}"'
+                )
+            assert (
+                await check_postgres_readiness(
+                    runtime_pool,
+                    schema=schema,
+                    lane=DatabaseAccessLane.RUNTIME,
+                )
+            ).ready
+            assert (
+                await check_postgres_readiness(
+                    retention_pool,
+                    schema=schema,
+                    lane=DatabaseAccessLane.RETENTION,
+                )
+            ).ready
             await runtime_store.create(proposal("proposal:roles"))
 
             first = proposal("proposal:first")

@@ -12,6 +12,7 @@ from threvo_actions.migrations import (
     InvalidSchemaNameError,
     MigrationStateError,
     _postgres_lifecycle_transition_predicate,
+    _postgres_privilege_checks,
     _render_migration_sql,
     migrate_postgres,
     plan_postgres_migrations,
@@ -20,6 +21,7 @@ from threvo_actions.migrations import (
     render_postgres_migration_script,
 )
 from threvo_actions.models import LifecycleStatus
+from threvo_actions.readiness import DatabaseAccessLane
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 
 _APPLIED_MIGRATION_CHECKSUMS = {
@@ -134,6 +136,75 @@ def test_postgres_grants_quote_roles_and_keep_lanes_distinct() -> None:
             runtime_role="same",
             retention_role="same",
         )
+
+
+def test_postgres_readiness_checks_the_exact_runtime_table_and_column_profile() -> None:
+    checks = _postgres_privilege_checks(
+        schema="actions",
+        lane=DatabaseAccessLane.RUNTIME,
+    )
+    expectations = {(arguments, query): expected for _, expected, query, arguments in checks}
+    table_query = "SELECT has_table_privilege(current_user, $1, $2)"
+    column_query = "SELECT has_column_privilege(current_user, $1, $2, $3)"
+
+    table_permissions = {
+        '"actions".schema_migrations': {"SELECT"},
+        '"actions".proposals': {"SELECT", "INSERT"},
+        '"actions".authority_evidence': {"SELECT", "INSERT"},
+        '"actions".receipts': {"SELECT", "INSERT"},
+        '"actions".effect_claims': {"SELECT", "INSERT"},
+    }
+    all_table_permissions = {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "TRUNCATE",
+        "REFERENCES",
+        "TRIGGER",
+    }
+    for table, allowed in table_permissions.items():
+        for privilege in all_table_permissions:
+            assert expectations[((table, privilege), table_query)] is (privilege in allowed)
+
+    allowed_updates = {
+        "lifecycle_status",
+        "revision",
+        "expires_at",
+        "status_changed_at",
+        "next_verification_at",
+        "proposal_data",
+    }
+    proposal_columns = {arguments[1] for _, _, query, arguments in checks if query == column_query}
+    assert allowed_updates < proposal_columns
+    for column in proposal_columns:
+        assert expectations[(('"actions".proposals', column, "UPDATE"), column_query)] is (
+            column in allowed_updates
+        )
+
+
+def test_postgres_readiness_checks_the_exact_retention_table_and_column_profile() -> None:
+    checks = _postgres_privilege_checks(
+        schema="actions",
+        lane=DatabaseAccessLane.RETENTION,
+    )
+    expectations = {(arguments, query): expected for _, expected, query, arguments in checks}
+    table_query = "SELECT has_table_privilege(current_user, $1, $2)"
+    column_query = "SELECT has_column_privilege(current_user, $1, $2, $3)"
+
+    for table in (
+        '"actions".schema_migrations',
+        '"actions".proposals',
+        '"actions".authority_evidence',
+        '"actions".receipts',
+    ):
+        assert expectations[((table, "SELECT"), table_query)] is True
+    assert expectations[(('"actions".effect_claims', "SELECT"), table_query)] is False
+    assert all(
+        not expected
+        for (arguments, query), expected in expectations.items()
+        if query == column_query and arguments[2] == "UPDATE"
+    )
 
 
 def test_forward_migration_renders_transitions_from_the_python_contract() -> None:

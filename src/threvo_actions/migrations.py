@@ -413,8 +413,7 @@ async def check_postgres_readiness(
             issues=tuple(issues),
         )
 
-    quoted_schema = quote_schema_name(schema)
-    checks = _postgres_privilege_checks(quoted_schema=quoted_schema, lane=lane)
+    checks = _postgres_privilege_checks(schema=schema, lane=lane)
     async with pool.acquire() as connection:
         for description, expected, query, arguments in checks:
             actual = await connection.fetchval(query, *arguments)
@@ -433,9 +432,11 @@ async def check_postgres_readiness(
 
 def _postgres_privilege_checks(
     *,
-    quoted_schema: str,
+    schema: str,
     lane: DatabaseAccessLane,
 ) -> tuple[tuple[str, bool, str, tuple[object, ...]], ...]:
+    quoted_schema = quote_schema_name(schema)
+    schema_query = "SELECT has_schema_privilege(current_user, $1, $2)"
     table_query = "SELECT has_table_privilege(current_user, $1, $2)"
     column_query = "SELECT has_column_privilege(current_user, $1, $2, $3)"
     function_query = "SELECT has_function_privilege(current_user, $1, 'EXECUTE')"
@@ -450,49 +451,107 @@ def _postgres_privilege_checks(
     )
     mark_erasure = f"{quoted_schema}.mark_erasure_pending(text,text,bigint,timestamptz)"
     complete_erasure = f"{quoted_schema}.complete_erasure(text,text,bigint,timestamptz)"
-    common = (
-        ("missing migration-ledger read privilege", True, table_query, (ledger, "SELECT")),
-        ("proposal delete privilege must be absent", False, table_query, (proposals, "DELETE")),
-        (
-            "proposal table-wide update privilege must be absent",
-            False,
-            table_query,
-            (proposals, "UPDATE"),
-        ),
-        ("migration-ledger write privilege must be absent", False, table_query, (ledger, "INSERT")),
+    table_names = {
+        "migration-ledger": ledger,
+        "proposal": proposals,
+        "evidence": evidence,
+        "receipt": receipts,
+        "effect-claim": claims,
+    }
+    table_privileges = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
+    proposal_columns = (
+        "tenant_reference",
+        "proposal_reference",
+        "action_namespace",
+        "action_name",
+        "action_version",
+        "semantic_effect_reference",
+        "effect_kind",
+        "lifecycle_status",
+        "revision",
+        "commitment_digest",
+        "created_at",
+        "expires_at",
+        "status_changed_at",
+        "next_verification_at",
+        "proposal_data",
     )
-    if lane is DatabaseAccessLane.RUNTIME:
-        return common + (
-            ("missing proposal read privilege", True, table_query, (proposals, "SELECT")),
-            ("missing proposal insert privilege", True, table_query, (proposals, "INSERT")),
-            ("missing evidence insert privilege", True, table_query, (evidence, "INSERT")),
-            ("missing receipt insert privilege", True, table_query, (receipts, "INSERT")),
-            ("missing effect-claim insert privilege", True, table_query, (claims, "INSERT")),
-            (
-                "missing guarded proposal update privilege",
-                True,
-                column_query,
-                (proposals, "revision", "UPDATE"),
-            ),
-            ("missing claim-transfer privilege", True, function_query, (transfer,)),
-            ("runtime must not execute retention erasure", False, function_query, (mark_erasure,)),
-            (
-                "runtime must not complete retention erasure",
-                False,
-                function_query,
-                (complete_erasure,),
-            ),
+    allowed_tables = {
+        DatabaseAccessLane.RUNTIME: {
+            "migration-ledger": frozenset({"SELECT"}),
+            "proposal": frozenset({"SELECT", "INSERT"}),
+            "evidence": frozenset({"SELECT", "INSERT"}),
+            "receipt": frozenset({"SELECT", "INSERT"}),
+            "effect-claim": frozenset({"SELECT", "INSERT"}),
+        },
+        DatabaseAccessLane.RETENTION: {
+            "migration-ledger": frozenset({"SELECT"}),
+            "proposal": frozenset({"SELECT"}),
+            "evidence": frozenset({"SELECT"}),
+            "receipt": frozenset({"SELECT"}),
+            "effect-claim": frozenset(),
+        },
+    }[lane]
+    allowed_proposal_updates = (
+        frozenset(
+            {
+                "lifecycle_status",
+                "revision",
+                "expires_at",
+                "status_changed_at",
+                "next_verification_at",
+                "proposal_data",
+            }
         )
-    return common + (
-        ("missing proposal read privilege", True, table_query, (proposals, "SELECT")),
-        ("missing evidence read privilege", True, table_query, (evidence, "SELECT")),
-        ("missing receipt read privilege", True, table_query, (receipts, "SELECT")),
-        ("retention must not insert proposals", False, table_query, (proposals, "INSERT")),
-        ("retention must not insert effect claims", False, table_query, (claims, "INSERT")),
-        ("retention must not transfer claims", False, function_query, (transfer,)),
-        ("missing mark-erasure privilege", True, function_query, (mark_erasure,)),
-        ("missing complete-erasure privilege", True, function_query, (complete_erasure,)),
+        if lane is DatabaseAccessLane.RUNTIME
+        else frozenset()
     )
+    checks: list[tuple[str, bool, str, tuple[object, ...]]] = [
+        ("missing schema usage privilege", True, schema_query, (schema, "USAGE")),
+        ("schema create privilege must be absent", False, schema_query, (schema, "CREATE")),
+    ]
+    for table_name, qualified_table in table_names.items():
+        for privilege in table_privileges:
+            expected = privilege in allowed_tables[table_name]
+            if expected:
+                description = f"missing {table_name} {privilege.lower()} privilege"
+            else:
+                description = f"{table_name} {privilege.lower()} privilege must be absent"
+            checks.append((description, expected, table_query, (qualified_table, privilege)))
+    for column in proposal_columns:
+        expected = column in allowed_proposal_updates
+        if expected:
+            description = f"missing proposal update privilege for {column}"
+        else:
+            description = f"proposal update privilege for {column} must be absent"
+        checks.append((description, expected, column_query, (proposals, column, "UPDATE")))
+    if lane is DatabaseAccessLane.RUNTIME:
+        checks.extend(
+            (
+                ("missing claim-transfer privilege", True, function_query, (transfer,)),
+                (
+                    "runtime must not execute retention erasure",
+                    False,
+                    function_query,
+                    (mark_erasure,),
+                ),
+                (
+                    "runtime must not complete retention erasure",
+                    False,
+                    function_query,
+                    (complete_erasure,),
+                ),
+            )
+        )
+    else:
+        checks.extend(
+            (
+                ("retention must not transfer claims", False, function_query, (transfer,)),
+                ("missing mark-erasure privilege", True, function_query, (mark_erasure,)),
+                ("missing complete-erasure privilege", True, function_query, (complete_erasure,)),
+            )
+        )
+    return tuple(checks)
 
 
 async def inspect_postgres(
