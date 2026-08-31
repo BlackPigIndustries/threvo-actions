@@ -10,6 +10,10 @@ and uses Semantic Versioning for the supported surface described in
 
 - Every packaged database migration now publishes an expand/contract phase,
   previous-runtime compatibility, and writer-quiescence requirement.
+- `postgres plan` emits the exact rendered SQL and compatibility metadata for
+  the target's pending migrations without mutating it. PostgreSQL and MySQL
+  grant renderers emit the tested runtime/retention least-privilege baseline
+  without requiring database credentials.
 
 ### Changed
 

@@ -201,10 +201,13 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "InvalidSchemaNameError",
             "MigrationStateError",
             "MigrationStatus",
+            "PostgresMigrationSQL",
             "inspect_postgres",
             "migrate_postgres",
+            "plan_postgres_migrations",
             "postgres_migration_compatibility",
             "quote_schema_name",
+            "render_postgres_grants",
         },
         "threvo_actions.migration_compatibility": {
             "MigrationCompatibility",
@@ -218,6 +221,7 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "inspect_mysql",
             "migrate_mysql",
             "mysql_migration_compatibility",
+            "render_mysql_grants",
         },
         "threvo_actions.sqlite_migrations": {
             "SQLiteMigrationStateError",

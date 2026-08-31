@@ -4,8 +4,10 @@ import hashlib
 import re
 from importlib.resources import files
 
+import pytest
+
 from threvo_actions.models import LifecycleStatus
-from threvo_actions.mysql_migrations import _normalize_mysql_definition
+from threvo_actions.mysql_migrations import _normalize_mysql_definition, render_mysql_grants
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 
 _VERSION_ONE_CHECKSUM = "0f05e6aaca717db1c103a082046c0a72bbb224d3297f0b4238699d1ab854762d"
@@ -74,3 +76,28 @@ def test_mysql_version_two_is_immutable_and_matches_python_contract() -> None:
     assert all(f"'{status.value}'" in sql for status in LifecycleStatus)
     assert "lifecycle_status = 'prepared'" not in sql
     assert "lifecycle_status = 'compensated'" not in sql
+
+
+def test_mysql_grants_quote_accounts_and_keep_lanes_distinct() -> None:
+    sql = render_mysql_grants(
+        database="actions-db",
+        runtime_user="runtime'user",
+        runtime_host="10.%",
+        retention_user="retention",
+        retention_host="localhost",
+    )
+
+    assert "`actions-db`.`threvo_actions_proposals`" in sql
+    assert "TO 'runtime''user'@'10.%'" in sql
+    assert "TO 'retention'@'localhost'" in sql
+    assert sql.count("GRANT EXECUTE ON PROCEDURE") == 6
+    assert "threvo_actions_complete_erasure` TO 'runtime''user'@'10.%'" not in sql
+
+    with pytest.raises(ValueError, match="distinct"):
+        render_mysql_grants(
+            database="actions",
+            runtime_user="same",
+            runtime_host="localhost",
+            retention_user="same",
+            retention_host="localhost",
+        )

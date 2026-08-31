@@ -6,7 +6,7 @@ import uuid
 import asyncpg
 import pytest
 
-from threvo_actions.migrations import migrate_postgres
+from threvo_actions.migrations import migrate_postgres, render_postgres_grants
 from threvo_actions.models import LifecycleStatus
 from threvo_actions.stores.base import EffectClaimResult
 from threvo_actions.stores.postgres import PostgresActionStore, PostgresRetentionStore
@@ -30,43 +30,12 @@ def test_runtime_and_retention_roles_have_distinct_database_powers() -> None:
             async with owner_pool.acquire() as connection:
                 await connection.execute(f'CREATE ROLE "{runtime_role}" NOLOGIN')
                 await connection.execute(f'CREATE ROLE "{retention_role}" NOLOGIN')
-                await connection.execute(f'REVOKE ALL ON SCHEMA "{schema}" FROM PUBLIC')
                 await connection.execute(
-                    f'REVOKE ALL ON ALL TABLES IN SCHEMA "{schema}" FROM PUBLIC'
-                )
-                await connection.execute(
-                    f'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA "{schema}" FROM PUBLIC'
-                )
-                await connection.execute(
-                    f'GRANT USAGE ON SCHEMA "{schema}" TO "{runtime_role}", "{retention_role}"'
-                )
-                await connection.execute(
-                    f'GRANT SELECT, INSERT ON "{schema}".proposals, '
-                    f'"{schema}".authority_evidence, "{schema}".receipts, '
-                    f'"{schema}".effect_claims TO "{runtime_role}"'
-                )
-                await connection.execute(
-                    f"GRANT UPDATE (lifecycle_status, revision, expires_at, "
-                    f"status_changed_at, next_verification_at, proposal_data) "
-                    f'ON "{schema}".proposals TO "{runtime_role}"'
-                )
-                await connection.execute(
-                    f'GRANT EXECUTE ON FUNCTION "{schema}".'
-                    "transfer_failed_known_effect_claim(text, text, text, integer, text, "
-                    f'text, text, timestamptz) TO "{runtime_role}"'
-                )
-                await connection.execute(
-                    f'GRANT SELECT ON "{schema}".proposals, '
-                    f'"{schema}".authority_evidence, "{schema}".receipts '
-                    f'TO "{retention_role}"'
-                )
-                await connection.execute(
-                    f'GRANT EXECUTE ON FUNCTION "{schema}".'
-                    f'mark_erasure_pending(text, text, bigint, timestamptz) TO "{retention_role}"'
-                )
-                await connection.execute(
-                    f'GRANT EXECUTE ON FUNCTION "{schema}".'
-                    f'complete_erasure(text, text, bigint, timestamptz) TO "{retention_role}"'
+                    render_postgres_grants(
+                        schema=schema,
+                        runtime_role=runtime_role,
+                        retention_role=retention_role,
+                    )
                 )
 
             async def set_runtime_role(connection: asyncpg.Connection[asyncpg.Record]) -> None:

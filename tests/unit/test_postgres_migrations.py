@@ -10,10 +10,13 @@ import pytest
 
 from threvo_actions.migrations import (
     InvalidSchemaNameError,
+    MigrationStateError,
     _postgres_lifecycle_transition_predicate,
     _render_migration_sql,
     migrate_postgres,
+    plan_postgres_migrations,
     quote_schema_name,
+    render_postgres_grants,
 )
 from threvo_actions.models import LifecycleStatus
 from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
@@ -39,6 +42,51 @@ def test_all_applied_migrations_are_immutable() -> None:
         )
 
         assert hashlib.sha256(sql.encode()).hexdigest() == expected_checksum
+
+
+def test_postgres_plan_emits_exact_rendered_pending_sql_and_metadata() -> None:
+    plan = plan_postgres_migrations(schema="actions", pending_versions=(2, 4))
+
+    assert tuple(item.version for item in plan) == (2, 4)
+    assert tuple(item.filename for item in plan) == (
+        "002_stale_no_effect.sql",
+        "004_active_lifecycle_guard.sql",
+    )
+    assert plan[0].checksum == _APPLIED_MIGRATION_CHECKSUMS[plan[0].filename]
+    assert plan[0].phase == "expand"
+    assert plan[0].compatible_with_previous_runtime
+    assert not plan[0].requires_writer_quiescence
+    assert plan[1].phase == "contract"
+    assert not plan[1].compatible_with_previous_runtime
+    assert plan[1].requires_writer_quiescence
+    assert all("__THREVO_ACTIONS_" not in item.sql for item in plan)
+    assert all('"actions"' in item.sql for item in plan)
+
+
+def test_postgres_plan_rejects_unknown_versions() -> None:
+    with pytest.raises(MigrationStateError, match="unknown version"):
+        plan_postgres_migrations(schema="actions", pending_versions=(5,))
+
+
+def test_postgres_grants_quote_roles_and_keep_lanes_distinct() -> None:
+    sql = render_postgres_grants(
+        schema="actions",
+        runtime_role='runtime"role',
+        retention_role="retention-role",
+    )
+
+    assert 'TO "runtime""role"' in sql
+    assert 'TO "retention-role"' in sql
+    assert "GRANT UPDATE (\n    lifecycle_status," in sql
+    assert 'complete_erasure(\n    text, text, bigint, timestamptz\n) TO "retention-role"' in sql
+    assert 'complete_erasure(\n    text, text, bigint, timestamptz\n) TO "runtime""role"' not in sql
+
+    with pytest.raises(ValueError, match="distinct"):
+        render_postgres_grants(
+            schema="actions",
+            runtime_role="same",
+            retention_role="same",
+        )
 
 
 def test_forward_migration_renders_transitions_from_the_python_contract() -> None:

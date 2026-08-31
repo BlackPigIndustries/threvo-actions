@@ -64,6 +64,19 @@ class MigrationStatus:
 
 
 @dataclass(frozen=True)
+class PostgresMigrationSQL:
+    """One pending PostgreSQL migration rendered exactly for a schema."""
+
+    version: int
+    filename: str
+    checksum: str
+    phase: MigrationPhase
+    compatible_with_previous_runtime: bool
+    requires_writer_quiescence: bool
+    sql: str
+
+
+@dataclass(frozen=True)
 class _Migration:
     version: int
     filename: str
@@ -107,6 +120,12 @@ def quote_schema_name(schema: str) -> str:
     return f'"{schema}"'
 
 
+def _quote_postgres_role(role: str) -> str:
+    if not role or "\x00" in role or len(role.encode()) > 63:
+        raise ValueError("PostgreSQL role must be 1 to 63 UTF-8 bytes without NUL")
+    return '"' + role.replace('"', '""') + '"'
+
+
 @cache
 def _packaged_migrations() -> tuple[_Migration, ...]:
     migrations: list[_Migration] = []
@@ -126,6 +145,94 @@ def _packaged_migrations() -> tuple[_Migration, ...]:
             )
         )
     return tuple(migrations)
+
+
+def plan_postgres_migrations(
+    *,
+    schema: str,
+    pending_versions: tuple[int, ...] | None = None,
+) -> tuple[PostgresMigrationSQL, ...]:
+    """Render exact packaged SQL for review without connecting or mutating."""
+
+    quoted_schema = quote_schema_name(schema)
+    migrations = _packaged_migrations()
+    selected = (
+        frozenset(migration.version for migration in migrations)
+        if pending_versions is None
+        else frozenset(pending_versions)
+    )
+    known = {migration.version for migration in migrations}
+    if not selected <= known:
+        raise MigrationStateError("PostgreSQL migration plan contains an unknown version")
+    compatibility = {
+        migration.version: migration for migration in postgres_migration_compatibility()
+    }
+    return tuple(
+        PostgresMigrationSQL(
+            version=migration.version,
+            filename=migration.filename,
+            checksum=migration.checksum,
+            phase=compatibility[migration.version].phase,
+            compatible_with_previous_runtime=compatibility[
+                migration.version
+            ].compatible_with_previous_runtime,
+            requires_writer_quiescence=compatibility[migration.version].requires_writer_quiescence,
+            sql=_render_migration_sql(migration.sql, quoted_schema=quoted_schema),
+        )
+        for migration in migrations
+        if migration.version in selected
+    )
+
+
+def render_postgres_grants(
+    *,
+    schema: str,
+    runtime_role: str,
+    retention_role: str,
+) -> str:
+    """Render the official least-privilege runtime and retention grants."""
+
+    quoted_schema = quote_schema_name(schema)
+    runtime = _quote_postgres_role(runtime_role)
+    retention = _quote_postgres_role(retention_role)
+    if runtime == retention:
+        raise ValueError("PostgreSQL runtime and retention roles must be distinct")
+    return f"""REVOKE ALL ON SCHEMA {quoted_schema} FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA {quoted_schema} FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {quoted_schema} FROM PUBLIC;
+
+GRANT USAGE ON SCHEMA {quoted_schema} TO {runtime}, {retention};
+
+GRANT SELECT, INSERT ON
+    {quoted_schema}.proposals,
+    {quoted_schema}.authority_evidence,
+    {quoted_schema}.receipts,
+    {quoted_schema}.effect_claims
+TO {runtime};
+GRANT UPDATE (
+    lifecycle_status,
+    revision,
+    expires_at,
+    status_changed_at,
+    next_verification_at,
+    proposal_data
+) ON {quoted_schema}.proposals TO {runtime};
+GRANT EXECUTE ON FUNCTION {quoted_schema}.transfer_failed_known_effect_claim(
+    text, text, text, integer, text, text, text, timestamptz
+) TO {runtime};
+
+GRANT SELECT ON
+    {quoted_schema}.proposals,
+    {quoted_schema}.authority_evidence,
+    {quoted_schema}.receipts
+TO {retention};
+GRANT EXECUTE ON FUNCTION {quoted_schema}.mark_erasure_pending(
+    text, text, bigint, timestamptz
+) TO {retention};
+GRANT EXECUTE ON FUNCTION {quoted_schema}.complete_erasure(
+    text, text, bigint, timestamptz
+) TO {retention};
+"""
 
 
 async def inspect_postgres(

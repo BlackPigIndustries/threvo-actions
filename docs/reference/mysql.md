@@ -23,6 +23,7 @@
         - inspect_mysql
         - migrate_mysql
         - mysql_migration_compatibility
+        - render_mysql_grants
       show_source: false
 
 See [Migration compatibility](migration-compatibility.md) before automating an

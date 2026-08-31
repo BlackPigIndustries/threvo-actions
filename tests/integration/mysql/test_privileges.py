@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from threvo_actions.models import GovernedExecutor, LifecycleStatus, RequestingPrincipal
-from threvo_actions.mysql_migrations import migrate_mysql
+from threvo_actions.mysql_migrations import migrate_mysql, render_mysql_grants
 from threvo_actions.receipts import (
     ExecutionReceipt,
     ExecutionReceiptStatus,
@@ -59,43 +59,16 @@ def test_runtime_and_retention_credentials_have_separate_database_capabilities()
                     await cursor.execute(
                         f"CREATE USER `{user}`@%s IDENTIFIED BY %s", ("%", password)
                     )
-                await cursor.execute(
-                    f"GRANT SELECT ON `{database}`.threvo_actions_proposals TO `{runtime_user}`@'%'"
+                grants = render_mysql_grants(
+                    database=database,
+                    runtime_user=runtime_user,
+                    runtime_host="%",
+                    retention_user=retention_user,
+                    retention_host="%",
                 )
-                await cursor.execute(
-                    f"GRANT SELECT ON `{database}`.threvo_actions_effect_claims "
-                    f"TO `{runtime_user}`@'%'"
-                )
-                await cursor.execute(
-                    f"GRANT UPDATE (lifecycle_status) ON "
-                    f"`{database}`.threvo_actions_proposals TO `{runtime_user}`@'%'"
-                )
-                for procedure in (
-                    "threvo_actions_create_proposal",
-                    "threvo_actions_claim_effect",
-                    "threvo_actions_runtime_update_proposal",
-                    "threvo_actions_transfer_effect_claim",
-                ):
-                    await cursor.execute(
-                        f"GRANT EXECUTE ON PROCEDURE `{database}`.`{procedure}` "
-                        f"TO `{runtime_user}`@'%'"
-                    )
-                await cursor.execute(
-                    f"GRANT SELECT ON `{database}`.threvo_actions_proposals "
-                    f"TO `{retention_user}`@'%'"
-                )
-                await cursor.execute(
-                    f"GRANT UPDATE (lifecycle_status) ON "
-                    f"`{database}`.threvo_actions_proposals TO `{retention_user}`@'%'"
-                )
-                for procedure in (
-                    "threvo_actions_mark_erasure_pending",
-                    "threvo_actions_complete_erasure",
-                ):
-                    await cursor.execute(
-                        f"GRANT EXECUTE ON PROCEDURE `{database}`.`{procedure}` "
-                        f"TO `{retention_user}`@'%'"
-                    )
+                for statement in grants.split(";\n"):
+                    if statement:
+                        await cursor.execute(statement)
                 await cursor.execute(
                     "SELECT user, host FROM mysql.user WHERE user IN (%s, %s) ORDER BY user",
                     (retention_user, runtime_user),

@@ -127,6 +127,96 @@ def test_postgres_command_reports_missing_optional_driver(
     assert "threvo-actions[postgres]" in capsys.readouterr().out
 
 
+def test_postgres_plan_is_read_only_and_emits_pending_exact_sql(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pool = FakePool()
+    asyncpg = ModuleType("asyncpg")
+
+    async def create_pool(dsn: str, *, min_size: int, max_size: int) -> FakePool:
+        assert dsn == "postgresql://secret"
+        assert (min_size, max_size) == (1, 2)
+        return pool
+
+    async def inspect_postgres(unused_pool: object, *, schema: str) -> MigrationStatus:
+        assert unused_pool is pool
+        assert schema == "actions_test"
+        return MigrationStatus((1, 2, 3), (4,))
+
+    asyncpg.__dict__["create_pool"] = create_pool
+    monkeypatch.setitem(sys.modules, "asyncpg", asyncpg)
+    monkeypatch.setattr("threvo_actions.migrations.inspect_postgres", inspect_postgres)
+    monkeypatch.setenv("ACTIONS_TEST_DATABASE_URL", "postgresql://secret")
+
+    assert (
+        cli.main(
+            [
+                "postgres",
+                "plan",
+                "--dsn-env",
+                "ACTIONS_TEST_DATABASE_URL",
+                "--schema",
+                "actions_test",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["applied_versions"] == [1, 2, 3]
+    assert output["pending_versions"] == [4]
+    assert output["migrations"][0]["phase"] == "contract"
+    assert output["migrations"][0]["requires_writer_quiescence"] is True
+    assert "__THREVO_ACTIONS_" not in output["migrations"][0]["sql"]
+    assert pool.closed
+
+
+def test_grant_commands_render_without_database_credentials_or_drivers(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        cli.main(
+            [
+                "postgres",
+                "grants",
+                "--schema",
+                "actions",
+                "--runtime-role",
+                "runtime",
+                "--retention-role",
+                "retention",
+            ]
+        )
+        == 0
+    )
+    postgres_sql = capsys.readouterr().out
+    assert 'GRANT USAGE ON SCHEMA "actions" TO "runtime", "retention"' in postgres_sql
+
+    assert (
+        cli.main(
+            [
+                "mysql",
+                "grants",
+                "--database",
+                "actions",
+                "--runtime-user",
+                "runtime",
+                "--runtime-host",
+                "10.%",
+                "--retention-user",
+                "retention",
+                "--retention-host",
+                "10.%",
+            ]
+        )
+        == 0
+    )
+    mysql_sql = capsys.readouterr().out
+    assert "GRANT EXECUTE ON PROCEDURE `actions`.`threvo_actions_create_proposal`" in mysql_sql
+    assert "TO 'runtime'@'10.%'" in mysql_sql
+
+
 @pytest.mark.parametrize(("owns_proposals", "expected_exit"), [(True, 3), (False, 0)])
 def test_postgres_inspect_checks_runtime_role_separation(
     owns_proposals: bool,

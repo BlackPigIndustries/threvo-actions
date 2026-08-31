@@ -16,11 +16,15 @@ in an environment variable and name that variable on the command line:
 export ACTIONS_MIGRATOR_DATABASE_URL='postgresql://migrator@localhost/actions'
 threvo-actions postgres inspect \
   --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
+threvo-actions postgres plan \
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
 ```
 
-`inspect` is read-only and reports applied and pending versions. Confirm that
-the named environment variable points to the intended target before allowing
-an operator or deployment workflow to mutate it. Then run:
+Both commands are read-only. `inspect` reports applied and pending versions;
+`plan` adds the exact rendered SQL and compatibility metadata for each pending
+migration. Confirm that the named environment variable points to the intended
+target and review the plan before allowing an operator or deployment workflow
+to mutate it. Then run:
 
 ```bash
 threvo-actions postgres migrate \
@@ -120,6 +124,18 @@ The application creates and owns both pools. Use different database roles:
 - **runtime** creates proposals and advances ordinary lifecycle state;
 - **retention** can run constrained erasure functions but cannot execute
   actions.
+
+Generate the tested grant baseline without exposing a DSN:
+
+```bash
+threvo-actions postgres grants \
+  --schema threvo_actions \
+  --runtime-role actions_runtime \
+  --retention-role actions_retention > actions-grants.sql
+```
+
+The command does not create roles or apply SQL. Review the file and apply it
+with the migrator after the schema is current.
 
 After grants are applied, verify both application DSNs independently:
 

@@ -62,6 +62,68 @@ def mysql_migration_compatibility() -> tuple[MigrationCompatibility, ...]:
     return _MYSQL_MIGRATION_COMPATIBILITY
 
 
+def _quote_mysql_identifier(value: str, *, label: str) -> str:
+    if not value or "\x00" in value or len(value) > 64:
+        raise ValueError(f"MySQL {label} must be 1 to 64 characters without NUL")
+    return f"`{value.replace('`', '``')}`"
+
+
+def _quote_mysql_account_part(value: str, *, label: str, maximum: int) -> str:
+    if not value or "\x00" in value or len(value) > maximum:
+        raise ValueError(f"MySQL {label} must be 1 to {maximum} characters without NUL")
+    return "'" + value.replace("'", "''") + "'"
+
+
+def render_mysql_grants(
+    *,
+    database: str,
+    runtime_user: str,
+    runtime_host: str,
+    retention_user: str,
+    retention_host: str,
+) -> str:
+    """Render the official least-privilege runtime and retention grants."""
+
+    db = _quote_mysql_identifier(database, label="database")
+    runtime = (
+        f"{_quote_mysql_account_part(runtime_user, label='user', maximum=32)}@"
+        f"{_quote_mysql_account_part(runtime_host, label='host', maximum=255)}"
+    )
+    retention = (
+        f"{_quote_mysql_account_part(retention_user, label='user', maximum=32)}@"
+        f"{_quote_mysql_account_part(retention_host, label='host', maximum=255)}"
+    )
+    if runtime == retention:
+        raise ValueError("MySQL runtime and retention accounts must be distinct")
+    runtime_procedures = (
+        "threvo_actions_create_proposal",
+        "threvo_actions_claim_effect",
+        "threvo_actions_runtime_update_proposal",
+        "threvo_actions_transfer_effect_claim",
+    )
+    retention_procedures = (
+        "threvo_actions_mark_erasure_pending",
+        "threvo_actions_complete_erasure",
+    )
+    statements = [
+        f"GRANT SELECT ON {db}.`threvo_actions_proposals` TO {runtime};",
+        f"GRANT SELECT ON {db}.`threvo_actions_effect_claims` TO {runtime};",
+        f"GRANT UPDATE (`lifecycle_status`) ON {db}.`threvo_actions_proposals` TO {runtime};",
+        *(
+            f"GRANT EXECUTE ON PROCEDURE {db}.`{procedure}` TO {runtime};"
+            for procedure in runtime_procedures
+        ),
+        "",
+        f"GRANT SELECT ON {db}.`threvo_actions_proposals` TO {retention};",
+        f"GRANT UPDATE (`lifecycle_status`) ON {db}.`threvo_actions_proposals` TO {retention};",
+        *(
+            f"GRANT EXECUTE ON PROCEDURE {db}.`{procedure}` TO {retention};"
+            for procedure in retention_procedures
+        ),
+    ]
+    return "\n".join(statements) + "\n"
+
+
 class _Cursor(Protocol):
     async def execute(self, query: str, args: tuple[object, ...] | None = None) -> int: ...
 

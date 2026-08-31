@@ -38,14 +38,18 @@ the target and pending versions without mutation:
 
 ```console
 threvo-actions postgres inspect --dsn-env ACTIONS_MIGRATION_DATABASE_URL
+threvo-actions postgres plan --dsn-env ACTIONS_MIGRATION_DATABASE_URL
 ```
 
-Run `postgres migrate` only after the operator or deployment workflow has
+`postgres plan` is read-only and emits the exact rendered SQL plus compatibility
+metadata for pending versions. Run `postgres migrate` only after the operator or deployment workflow has
 explicitly authorized that target, using the same `--dsn-env` form. If pending
 compatibility metadata requires writer quiescence, drain runtime and retention
 writers and pass `--writers-quiesced`; the flag only acknowledges the drain.
 Then inspect again with the runtime and retention roles, adding
 `--require-separated-role` where the role must not own proposal tables.
+Render the tested role grants with `postgres grants`; review and apply them with
+the migrator. The renderer never connects, creates roles, or applies SQL.
 
 Do not use `MemoryActionStore`, `EphemeralProtection`, sequential identifiers,
 or a fixed clock in a production process. Do not give the runtime store the
@@ -101,6 +105,8 @@ application user table-wide `UPDATE`, routine alteration, trigger, or migration
 permissions. The runtime user receives `SELECT` on proposals and `EXECUTE` on
 `threvo_actions_create_proposal`; it does not receive direct proposal `INSERT`.
 The creation routine validates the exact stored Pydantic shape before writing.
+Render that tested account split with `mysql grants`; the offline renderer does
+not create accounts or apply its output.
 
 Before a MySQL upgrade, verify backups and replication health, quiesce runtime
 and retention writers, run `mysql inspect`, and apply the immutable package to

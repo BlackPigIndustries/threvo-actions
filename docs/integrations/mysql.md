@@ -106,7 +106,18 @@ step. Do not call it from application import code or every worker startup.
 
 Run migrations with an owner account that can create tables, triggers, and
 `SQL SECURITY DEFINER` procedures. Then grant the application users only their
-lane. Replace `app`, usernames, and host patterns below:
+lane. Generate the tested baseline without exposing a DSN:
+
+```bash
+threvo-actions mysql grants \
+  --database app \
+  --runtime-user actions_runtime --runtime-host '10.%' \
+  --retention-user actions_retention --retention-host '10.%' \
+  > actions-grants.sql
+```
+
+The command does not create accounts or apply SQL. Review the file and apply it
+with the migrator after the schema is current. Its output is equivalent to:
 
 ```sql
 GRANT SELECT ON app.threvo_actions_proposals

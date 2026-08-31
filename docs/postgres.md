@@ -60,6 +60,15 @@ transfer only to the runtime role and the two erasure functions only to the rete
 After replacing the example role names with deployment-owned roles, the migrator can apply this
 least-privilege baseline:
 
+```bash
+threvo-actions postgres grants --schema threvo_actions \
+  --runtime-role actions_runtime --retention-role actions_retention \
+  > actions-grants.sql
+```
+
+The offline command creates no roles and applies no SQL. Review its output,
+then apply it with the migrator. It renders the following baseline:
+
 ```sql
 REVOKE ALL ON SCHEMA threvo_actions FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA threvo_actions FROM PUBLIC;

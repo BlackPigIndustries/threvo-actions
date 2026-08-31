@@ -17,13 +17,16 @@
     options:
       members:
         - MigrationStatus
+        - PostgresMigrationSQL
         - ConnectionSource
         - InvalidSchemaNameError
         - MigrationStateError
         - inspect_postgres
         - migrate_postgres
+        - plan_postgres_migrations
         - postgres_migration_compatibility
         - quote_schema_name
+        - render_postgres_grants
       show_source: false
 
 See [Migration compatibility](migration-compatibility.md) before automating an

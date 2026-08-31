@@ -33,7 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     skill_commands.add_parser("path", help="print the bundled Agent Skill directory")
     postgres = commands.add_parser("postgres", help="manage the PostgreSQL adapter schema")
     postgres_commands = postgres.add_subparsers(dest="postgres_command", required=True)
-    for name in ("inspect", "migrate"):
+    for name in ("inspect", "plan", "migrate"):
         command = postgres_commands.add_parser(name)
         command.add_argument("--dsn-env", required=True, metavar="NAME")
         command.add_argument("--schema", default="threvo_actions")
@@ -46,6 +46,10 @@ def _parser() -> argparse.ArgumentParser:
                 type=_positive_seconds,
                 default=30.0,
             )
+    postgres_grants = postgres_commands.add_parser("grants")
+    postgres_grants.add_argument("--schema", default="threvo_actions")
+    postgres_grants.add_argument("--runtime-role", required=True)
+    postgres_grants.add_argument("--retention-role", required=True)
     sqlite = commands.add_parser(
         "sqlite",
         help="manage a bounded-use SQLite adapter database",
@@ -72,6 +76,12 @@ def _parser() -> argparse.ArgumentParser:
                 type=_positive_seconds,
                 default=30.0,
             )
+    mysql_grants = mysql_commands.add_parser("grants")
+    mysql_grants.add_argument("--database", required=True)
+    mysql_grants.add_argument("--runtime-user", required=True)
+    mysql_grants.add_argument("--runtime-host", required=True)
+    mysql_grants.add_argument("--retention-user", required=True)
+    mysql_grants.add_argument("--retention-host", required=True)
     return parser
 
 
@@ -102,10 +112,44 @@ async def _postgres(
         print("PostgreSQL commands require: pip install 'threvo-actions[postgres]'")
         return 2
 
-    from .migrations import inspect_postgres, migrate_postgres
+    from .migrations import inspect_postgres, migrate_postgres, plan_postgres_migrations
 
     pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
     try:
+        if command == "plan":
+            status = await inspect_postgres(pool, schema=schema)
+            plan = plan_postgres_migrations(
+                schema=schema,
+                pending_versions=status.pending_versions,
+            )
+            print(
+                json.dumps(
+                    {
+                        "applied_versions": status.applied_versions,
+                        "migrations": [
+                            {
+                                "checksum": migration.checksum,
+                                "compatible_with_previous_runtime": (
+                                    migration.compatible_with_previous_runtime
+                                ),
+                                "filename": migration.filename,
+                                "phase": migration.phase,
+                                "requires_writer_quiescence": (
+                                    migration.requires_writer_quiescence
+                                ),
+                                "sql": migration.sql,
+                                "version": migration.version,
+                            }
+                            for migration in plan
+                        ],
+                        "pending_versions": status.pending_versions,
+                        "schema": schema,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            )
+            return 0
         status = (
             await migrate_postgres(
                 pool,
@@ -264,6 +308,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
         return 0
     if args.command == "postgres":
+        if args.postgres_command == "grants":
+            from .migrations import render_postgres_grants
+
+            try:
+                grants = render_postgres_grants(
+                    schema=args.schema,
+                    runtime_role=args.runtime_role,
+                    retention_role=args.retention_role,
+                )
+            except ValueError as exc:
+                parser.error(str(exc))
+            print(grants, end="")
+            return 0
         dsn = os.environ.get(args.dsn_env)
         if dsn is None:
             parser.error(f"environment variable {args.dsn_env!r} is not set")
@@ -286,6 +343,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
     if args.command == "mysql":
+        if args.mysql_command == "grants":
+            from .mysql_migrations import render_mysql_grants
+
+            try:
+                grants = render_mysql_grants(
+                    database=args.database,
+                    runtime_user=args.runtime_user,
+                    runtime_host=args.runtime_host,
+                    retention_user=args.retention_user,
+                    retention_host=args.retention_host,
+                )
+            except ValueError as exc:
+                parser.error(str(exc))
+            print(grants, end="")
+            return 0
         dsn = os.environ.get(args.dsn_env)
         if dsn is None:
             parser.error(f"environment variable {args.dsn_env!r} is not set")
