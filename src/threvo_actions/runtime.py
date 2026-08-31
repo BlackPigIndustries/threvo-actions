@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol, TypeVar
@@ -62,6 +63,7 @@ PreviewT = TypeVar("PreviewT", bound=BaseModel)
 ResultT = TypeVar("ResultT", bound=BaseModel)
 
 JsonObject = dict[str, JsonValue]
+_LOGGER = logging.getLogger(__name__)
 
 
 class Clock(Protocol):
@@ -1314,15 +1316,25 @@ class ActionRuntime:
         observed_at: datetime,
         reason_code: str | None = None,
     ) -> None:
-        await self._event_sink.emit(
-            RuntimeEvent(
-                event_type=event_type,
-                tenant_reference=record.tenant_reference,
-                proposal_reference=record.proposal_reference,
-                action_type=record.action_type,
-                lifecycle_status=record.lifecycle_status,
-                correlation_reference=record.proposal_reference,
-                observed_at=observed_at,
-                reason_code=reason_code,
-            )
+        event = RuntimeEvent(
+            event_type=event_type,
+            tenant_reference=record.tenant_reference,
+            proposal_reference=record.proposal_reference,
+            action_type=record.action_type,
+            lifecycle_status=record.lifecycle_status,
+            correlation_reference=record.proposal_reference,
+            observed_at=observed_at,
+            reason_code=reason_code,
         )
+        try:
+            await self._event_sink.emit(event)
+        except Exception:
+            _LOGGER.warning(
+                "runtime event projection failed",
+                extra={
+                    "threvo_actions_event_type": event.event_type.value,
+                    "threvo_actions_tenant_reference": event.tenant_reference,
+                    "threvo_actions_proposal_reference": event.proposal_reference,
+                    "threvo_actions_lifecycle_status": event.lifecycle_status.value,
+                },
+            )

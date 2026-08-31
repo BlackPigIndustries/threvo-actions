@@ -59,6 +59,11 @@ administration, target-side history, and application policy decisions may live
 elsewhere. Erasure intentionally removes receipt content from the active
 proposal record.
 
+`EventSink` is a best-effort, at-most-once projection after action-store
+persistence. Delivery errors are reduced to a safe warning and do not replace
+the committed operation result. The runtime provides no event retry or durable
+outbox; hosts that need durable delivery must project from persisted state.
+
 An execution receipt identifies the configured governed executor, not the
 authenticated caller that triggered an HTTP execution endpoint. The proposal
 retains its requesting principal, but a host that permits interactive execution

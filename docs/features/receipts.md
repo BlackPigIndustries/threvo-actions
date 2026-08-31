@@ -78,6 +78,14 @@ runtime = ActionRuntime(
 )
 ```
 
+`EventSink` is a best-effort, at-most-once projection invoked after the action
+store has committed. A sink exception does not change the operation result or
+roll back its durable receipts; the runtime emits a minimized warning without
+the exception message. The runtime does not retry or durably queue the event.
+If delivery must survive process failure, project from the durable proposal and
+receipt state with host-owned polling or an outbox and make consumers
+idempotent. Do not use this callback as the source of audit truth.
+
 The library's receipts are unsigned host assertions. They are not a complete
 audit log or independent non-repudiation proof. Authentication records,
 triggering actors, policy decisions, external target history, privileged

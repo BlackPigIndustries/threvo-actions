@@ -4,6 +4,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import logging
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -238,6 +239,12 @@ class CapturingEvents:
 
     async def emit(self, event: RuntimeEvent) -> None:
         self.events.append(event)
+
+
+class FailingEvents:
+    async def emit(self, event: RuntimeEvent) -> None:
+        del event
+        raise RuntimeError("private sink diagnostic")
 
 
 class HostPorts:
@@ -579,6 +586,36 @@ def test_preparation_persists_protected_private_state_and_never_executes() -> No
         assert "private-account-value" not in "".join(
             event.model_dump_json() for event in events.events
         )
+
+    asyncio.run(scenario())
+
+
+def test_event_projection_failure_does_not_mask_committed_preparation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def scenario() -> None:
+        store = MemoryActionStore()
+        clock = MutableClock()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=clock,
+            identifiers=SequenceIdentifiers(),
+            event_sink=FailingEvents(),
+            runtime_revision=f"threvo-actions/commit:{'a' * 40}",
+        )
+        caplog.set_level(logging.WARNING, logger="threvo_actions.runtime")
+
+        result = await prepare(runtime, definition(HostPorts(), DeterministicSecrets()))
+        persisted = await store.get("tenant:a", result.proposal_reference)
+
+        assert result.outcome is OperationOutcome.PREPARED
+        assert persisted is not None
+        assert "runtime event projection failed" in caplog.text
+        assert "private sink diagnostic" not in caplog.text
+        record = caplog.records[-1]
+        assert record.threvo_actions_event_type == "proposal_prepared"
+        assert record.threvo_actions_proposal_reference == result.proposal_reference
 
     asyncio.run(scenario())
 

@@ -140,6 +140,8 @@ class RuntimeEvent(ExperimentalModel):
 
 
 class EventSink(Protocol):
+    """Best-effort, at-most-once projection called after durable state changes."""
+
     async def emit(self, event: RuntimeEvent) -> None: ...
 
 

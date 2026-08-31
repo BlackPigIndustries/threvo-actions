@@ -12,6 +12,12 @@ key custody, retention, localization, and application audit projections.
 The library coordinates these seams and records minimized lifecycle evidence.
 Do not move domain policy into generic ports merely to make an adapter smaller.
 
+Treat `EventSink` as a best-effort, at-most-once projection after persistence.
+Its failure is safely warned and does not reverse a committed result. For
+durable delivery, project from persisted proposal and receipt state through a
+host-owned poller or outbox with idempotent consumers; do not use the callback
+as the audit source of truth.
+
 ## Migration order
 
 1. Characterize the existing prepare, approve, execute, result, and failure
