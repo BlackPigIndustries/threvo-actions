@@ -74,8 +74,11 @@ Implement `RuntimeConformanceDriver` with one action stack and run
 from threvo_actions.conformance import assert_no_sensitive_data
 
 assert_no_sensitive_data(
-    corpus={"preview": preview, "receipt": receipts, "error": error},
-    forbidden_values={"canary-card-number", "canary-private-account"},
+    value={"preview": preview, "receipt": receipts, "error": error},
+    forbidden_literals={
+        "card_number": "canary-card-number",
+        "private_account": "canary-private-account",
+    },
     forbidden_key_fragments={"password", "secret", "raw_iban"},
 )
 ```

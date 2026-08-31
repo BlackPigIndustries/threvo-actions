@@ -32,3 +32,12 @@ def test_explicit_reference_members_exist_in_the_declared_module() -> None:
             checked.append(f"{module_name}.{member_name}")
 
     assert checked
+
+
+def test_leakage_example_uses_the_public_safe_argument_contract() -> None:
+    guide = (ROOT / "docs" / "testing" / "conformance.md").read_text()
+
+    assert "assert_no_sensitive_data(\n    value=" in guide
+    assert "forbidden_literals={" in guide
+    assert "corpus=" not in guide
+    assert "forbidden_values=" not in guide
