@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import time
-from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence, Set
 from dataclasses import dataclass, fields, is_dataclass
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
@@ -180,6 +180,10 @@ def find_sensitive_data(
         if isinstance(current, Sequence):
             for index, item in enumerate(current):
                 inspect_value(item, f"{path}[{index}]")
+            return
+        if isinstance(current, Set):
+            for item in current:
+                inspect_value(item, f"{path}[set-item]")
 
     def inspect_key(key: object, path: str) -> None:
         if not isinstance(key, str):
@@ -190,7 +194,7 @@ def find_sensitive_data(
                 findings.append(LeakageFinding(path=path, label=f"key:{fragment}", kind="key"))
 
     inspect_value(value, "$")
-    return tuple(findings)
+    return tuple(sorted(findings, key=lambda finding: (finding.path, finding.label, finding.kind)))
 
 
 def assert_no_sensitive_data(

@@ -104,6 +104,8 @@ def test_internal_v0_receipt_golden_vector_round_trips_without_canaries() -> Non
     ("surface", "expected_label"),
     [
         ({"summary": FORBIDDEN["iban"]}, "iban"),
+        ({FORBIDDEN["iban"]}, "iban"),
+        (frozenset({FORBIDDEN["credential"]}), "credential"),
         (RuntimeError(FORBIDDEN["credential"]), "credential"),
         ({"private_snapshot": "redacted"}, "key:private_snapshot"),
         (json.dumps({"result": FORBIDDEN["internal_id"]}), "internal_id"),
@@ -129,3 +131,16 @@ def test_seeded_leaky_adapter_is_caught_without_echoing_the_secret(
     message = str(raised.value)
     assert expected_label in message
     assert all(secret not in message for secret in FORBIDDEN.values())
+
+
+def test_unordered_collection_findings_use_stable_secret_free_paths() -> None:
+    findings = find_sensitive_data(
+        {FORBIDDEN["iban"], FORBIDDEN["credential"]},
+        forbidden_literals=FORBIDDEN,
+    )
+
+    assert [(finding.path, finding.label) for finding in findings] == [
+        ("$[set-item]", "credential"),
+        ("$[set-item]", "iban"),
+    ]
+    assert all(secret not in finding.path for finding in findings for secret in FORBIDDEN.values())
