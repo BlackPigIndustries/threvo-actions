@@ -120,6 +120,8 @@ The command does not create accounts or apply SQL. Review the file and apply it
 with the migrator after the schema is current. Its output is equivalent to:
 
 ```sql
+GRANT SELECT ON app.threvo_actions_schema_migrations
+    TO 'actions_runtime'@'10.%';
 GRANT SELECT ON app.threvo_actions_proposals
     TO 'actions_runtime'@'10.%';
 GRANT SELECT ON app.threvo_actions_effect_claims
@@ -135,6 +137,8 @@ GRANT EXECUTE ON PROCEDURE app.threvo_actions_runtime_update_proposal
 GRANT EXECUTE ON PROCEDURE app.threvo_actions_transfer_effect_claim
     TO 'actions_runtime'@'10.%';
 
+GRANT SELECT ON app.threvo_actions_schema_migrations
+    TO 'actions_retention'@'10.%';
 GRANT SELECT ON app.threvo_actions_proposals
     TO 'actions_retention'@'10.%';
 GRANT UPDATE (lifecycle_status) ON app.threvo_actions_proposals
@@ -159,7 +163,19 @@ owner from the authorized proposal.
 
 Review routine definers after restoring or cloning a database. Do not grant
 application users `ALTER ROUTINE`, table-wide `UPDATE`, `TRIGGER`, or migration
-table access.
+table writes.
+
+The migration ledger contains only version, filename, checksum, and application
+time. Its read-only grant lets each application credential run the startup gate:
+
+```bash
+threvo-actions mysql ready --dsn-env ACTIONS_RUNTIME_DATABASE_URL --lane runtime
+threvo-actions mysql ready --dsn-env ACTIONS_RETENTION_DATABASE_URL --lane retention
+```
+
+The official MySQL posture is exact: extra grants and assigned roles fail
+readiness. Call `check_mysql_readiness()` directly when startup already owns an
+aiomysql pool.
 
 ## Deploy migrations safely
 

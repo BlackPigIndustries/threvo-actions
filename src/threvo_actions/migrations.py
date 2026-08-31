@@ -17,6 +17,7 @@ from .migration_compatibility import (
     migrations_requiring_writer_quiescence,
 )
 from .models import LifecycleStatus
+from .readiness import DatabaseAccessLane, DatabaseAdapter, DatabaseReadiness
 from .stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 
 if TYPE_CHECKING:
@@ -202,6 +203,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA {quoted_schema} FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {quoted_schema} FROM PUBLIC;
 
 GRANT USAGE ON SCHEMA {quoted_schema} TO {runtime}, {retention};
+GRANT SELECT ON {quoted_schema}.schema_migrations TO {runtime}, {retention};
 
 GRANT SELECT, INSERT ON
     {quoted_schema}.proposals,
@@ -233,6 +235,126 @@ GRANT EXECUTE ON FUNCTION {quoted_schema}.complete_erasure(
     text, text, bigint, timestamptz
 ) TO {retention};
 """
+
+
+async def check_postgres_readiness(
+    pool: ConnectionSource,
+    *,
+    schema: str,
+    lane: DatabaseAccessLane,
+) -> DatabaseReadiness:
+    """Check current migrations and effective lane privileges without writes."""
+
+    try:
+        status = await inspect_postgres(pool, schema=schema)
+    except Exception as exc:
+        if getattr(exc, "sqlstate", None) != "42501":
+            raise
+        return DatabaseReadiness(
+            adapter=DatabaseAdapter.POSTGRESQL,
+            lane=lane,
+            applied_versions=(),
+            pending_versions=(),
+            schema_current=False,
+            privilege_boundary_valid=False,
+            issues=("migration ledger is not readable by the connected role",),
+        )
+    issues: list[str] = []
+    if status.pending_versions:
+        issues.append("database migrations are pending")
+    if status.connected_role_owns_proposals is not False:
+        issues.append("connected role must not own proposal tables")
+    if issues:
+        return DatabaseReadiness(
+            adapter=DatabaseAdapter.POSTGRESQL,
+            lane=lane,
+            applied_versions=status.applied_versions,
+            pending_versions=status.pending_versions,
+            schema_current=not status.pending_versions,
+            privilege_boundary_valid=False,
+            issues=tuple(issues),
+        )
+
+    quoted_schema = quote_schema_name(schema)
+    checks = _postgres_privilege_checks(quoted_schema=quoted_schema, lane=lane)
+    async with pool.acquire() as connection:
+        for description, expected, query, arguments in checks:
+            actual = await connection.fetchval(query, *arguments)
+            if actual is not expected:
+                issues.append(description)
+    return DatabaseReadiness(
+        adapter=DatabaseAdapter.POSTGRESQL,
+        lane=lane,
+        applied_versions=status.applied_versions,
+        pending_versions=status.pending_versions,
+        schema_current=True,
+        privilege_boundary_valid=not issues,
+        issues=tuple(issues),
+    )
+
+
+def _postgres_privilege_checks(
+    *,
+    quoted_schema: str,
+    lane: DatabaseAccessLane,
+) -> tuple[tuple[str, bool, str, tuple[object, ...]], ...]:
+    table_query = "SELECT has_table_privilege(current_user, $1, $2)"
+    column_query = "SELECT has_column_privilege(current_user, $1, $2, $3)"
+    function_query = "SELECT has_function_privilege(current_user, $1, 'EXECUTE')"
+    proposals = f"{quoted_schema}.proposals"
+    evidence = f"{quoted_schema}.authority_evidence"
+    receipts = f"{quoted_schema}.receipts"
+    claims = f"{quoted_schema}.effect_claims"
+    ledger = f"{quoted_schema}.schema_migrations"
+    transfer = (
+        f"{quoted_schema}.transfer_failed_known_effect_claim("
+        "text,text,text,integer,text,text,text,timestamptz)"
+    )
+    mark_erasure = f"{quoted_schema}.mark_erasure_pending(text,text,bigint,timestamptz)"
+    complete_erasure = f"{quoted_schema}.complete_erasure(text,text,bigint,timestamptz)"
+    common = (
+        ("missing migration-ledger read privilege", True, table_query, (ledger, "SELECT")),
+        ("proposal delete privilege must be absent", False, table_query, (proposals, "DELETE")),
+        (
+            "proposal table-wide update privilege must be absent",
+            False,
+            table_query,
+            (proposals, "UPDATE"),
+        ),
+        ("migration-ledger write privilege must be absent", False, table_query, (ledger, "INSERT")),
+    )
+    if lane is DatabaseAccessLane.RUNTIME:
+        return common + (
+            ("missing proposal read privilege", True, table_query, (proposals, "SELECT")),
+            ("missing proposal insert privilege", True, table_query, (proposals, "INSERT")),
+            ("missing evidence insert privilege", True, table_query, (evidence, "INSERT")),
+            ("missing receipt insert privilege", True, table_query, (receipts, "INSERT")),
+            ("missing effect-claim insert privilege", True, table_query, (claims, "INSERT")),
+            (
+                "missing guarded proposal update privilege",
+                True,
+                column_query,
+                (proposals, "revision", "UPDATE"),
+            ),
+            ("missing claim-transfer privilege", True, function_query, (transfer,)),
+            ("runtime must not execute retention erasure", False, function_query, (mark_erasure,)),
+            (
+                "runtime must not complete retention erasure",
+                False,
+                function_query,
+                (complete_erasure,),
+            ),
+        )
+    return common + (
+        ("missing proposal read privilege", True, table_query, (proposals, "SELECT")),
+        ("missing evidence read privilege", True, table_query, (evidence, "SELECT")),
+        ("missing receipt read privilege", True, table_query, (receipts, "SELECT")),
+        ("retention must not insert proposals", False, table_query, (proposals, "INSERT")),
+        ("retention must not insert effect claims", False, table_query, (claims, "INSERT")),
+        ("retention must not transfer claims", False, function_query, (transfer,)),
+        ("missing mark-erasure privilege", True, function_query, (mark_erasure,)),
+        ("missing complete-erasure privilege", True, function_query, (complete_erasure,)),
+    )
 
 
 async def inspect_postgres(

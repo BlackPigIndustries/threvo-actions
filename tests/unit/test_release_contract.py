@@ -197,6 +197,7 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "SequentialIdentifiers",
         },
         "threvo_actions.migrations": {
+            "check_postgres_readiness",
             "ConnectionSource",
             "InvalidSchemaNameError",
             "MigrationStateError",
@@ -215,6 +216,7 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "migrations_requiring_writer_quiescence",
         },
         "threvo_actions.mysql_migrations": {
+            "check_mysql_readiness",
             "MySQLConnectionSource",
             "MySQLMigrationStateError",
             "MySQLMigrationStatus",
@@ -229,6 +231,11 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "inspect_sqlite",
             "migrate_sqlite",
             "sqlite_migration_compatibility",
+        },
+        "threvo_actions.readiness": {
+            "DatabaseAccessLane",
+            "DatabaseAdapter",
+            "DatabaseReadiness",
         },
         "threvo_actions.stores.postgres": {
             "ConnectionSource",

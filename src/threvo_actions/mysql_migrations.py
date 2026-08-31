@@ -17,6 +17,7 @@ from .migration_compatibility import (
     migrations_requiring_writer_quiescence,
 )
 from .models import LifecycleStatus
+from .readiness import DatabaseAccessLane, DatabaseAdapter, DatabaseReadiness
 
 if TYPE_CHECKING:
     from contextlib import AbstractAsyncContextManager
@@ -106,6 +107,7 @@ def render_mysql_grants(
         "threvo_actions_complete_erasure",
     )
     statements = [
+        f"GRANT SELECT ON {db}.`threvo_actions_schema_migrations` TO {runtime};",
         f"GRANT SELECT ON {db}.`threvo_actions_proposals` TO {runtime};",
         f"GRANT SELECT ON {db}.`threvo_actions_effect_claims` TO {runtime};",
         f"GRANT UPDATE (`lifecycle_status`) ON {db}.`threvo_actions_proposals` TO {runtime};",
@@ -114,6 +116,7 @@ def render_mysql_grants(
             for procedure in runtime_procedures
         ),
         "",
+        f"GRANT SELECT ON {db}.`threvo_actions_schema_migrations` TO {retention};",
         f"GRANT SELECT ON {db}.`threvo_actions_proposals` TO {retention};",
         f"GRANT UPDATE (`lifecycle_status`) ON {db}.`threvo_actions_proposals` TO {retention};",
         *(
@@ -122,6 +125,128 @@ def render_mysql_grants(
         ),
     ]
     return "\n".join(statements) + "\n"
+
+
+async def check_mysql_readiness(
+    pool: MySQLConnectionSource,
+    *,
+    lane: DatabaseAccessLane,
+) -> DatabaseReadiness:
+    """Check migration history and exact direct grants without writes."""
+
+    migrations = _packaged_mysql_migrations()
+    async with pool.acquire() as connection, connection.cursor() as cursor:
+        try:
+            return await _check_mysql_readiness_cursor(
+                cursor,
+                migrations=migrations,
+                lane=lane,
+            )
+        finally:
+            await connection.rollback()
+
+
+async def _check_mysql_readiness_cursor(
+    cursor: _Cursor,
+    *,
+    migrations: tuple[_MySQLMigration, ...],
+    lane: DatabaseAccessLane,
+) -> DatabaseReadiness:
+    version = await _server_version(cursor)
+    try:
+        status = _migration_status(await _history(cursor), migrations, server_version=version)
+    except Exception as exc:
+        code = exc.args[0] if exc.args else None
+        if code != 1142:
+            raise
+        return DatabaseReadiness(
+            adapter=DatabaseAdapter.MYSQL,
+            lane=lane,
+            applied_versions=(),
+            pending_versions=(),
+            schema_current=False,
+            privilege_boundary_valid=False,
+            issues=("migration ledger is not readable by the connected account",),
+        )
+    if status.pending_versions:
+        return DatabaseReadiness(
+            adapter=DatabaseAdapter.MYSQL,
+            lane=lane,
+            applied_versions=status.applied_versions,
+            pending_versions=status.pending_versions,
+            schema_current=False,
+            privilege_boundary_valid=False,
+            issues=("database migrations are pending",),
+        )
+    await cursor.execute("SHOW GRANTS FOR CURRENT_USER()")
+    rows = await cursor.fetchall()
+    await cursor.execute("SELECT DATABASE()")
+    database_row = await cursor.fetchone()
+    if database_row is None or len(database_row) != 1 or not isinstance(database_row[0], str):
+        raise MySQLMigrationStateError("MySQL current database is unavailable")
+    grants = tuple(row[0] for row in rows if len(row) == 1 and isinstance(row[0], str))
+    expected = _expected_mysql_grant_prefixes(database=database_row[0], lane=lane)
+    actual = frozenset(_mysql_grant_prefix(grant) for grant in grants)
+    issues: list[str] = []
+    missing = expected - actual
+    unexpected = actual - expected
+    if missing:
+        issues.append(f"missing {len(missing)} required privilege statements")
+    if unexpected:
+        issues.append(f"found {len(unexpected)} unexpected privilege statements")
+    return DatabaseReadiness(
+        adapter=DatabaseAdapter.MYSQL,
+        lane=lane,
+        applied_versions=status.applied_versions,
+        pending_versions=status.pending_versions,
+        schema_current=True,
+        privilege_boundary_valid=not issues,
+        issues=tuple(issues),
+    )
+
+
+def _mysql_grant_prefix(grant: str) -> str:
+    prefix, separator, _account = grant.rpartition(" TO ")
+    return prefix if separator else grant
+
+
+def _expected_mysql_grant_prefixes(
+    *,
+    database: str,
+    lane: DatabaseAccessLane,
+) -> frozenset[str]:
+    quoted_database = _quote_mysql_identifier(database, label="database")
+    common = {
+        "GRANT USAGE ON *.*",
+        f"GRANT SELECT ON {quoted_database}.`threvo_actions_schema_migrations`",
+    }
+    if lane is DatabaseAccessLane.RUNTIME:
+        return frozenset(
+            common
+            | {
+                f"GRANT SELECT ON {quoted_database}.`threvo_actions_effect_claims`",
+                "GRANT SELECT, UPDATE (`lifecycle_status`) ON "
+                f"{quoted_database}.`threvo_actions_proposals`",
+                *(
+                    f"GRANT EXECUTE ON PROCEDURE {quoted_database}.`{procedure}`"
+                    for procedure in (
+                        "threvo_actions_create_proposal",
+                        "threvo_actions_claim_effect",
+                        "threvo_actions_runtime_update_proposal",
+                        "threvo_actions_transfer_effect_claim",
+                    )
+                ),
+            }
+        )
+    return frozenset(
+        common
+        | {
+            "GRANT SELECT, UPDATE (`lifecycle_status`) ON "
+            f"{quoted_database}.`threvo_actions_proposals`",
+            f"GRANT EXECUTE ON PROCEDURE {quoted_database}.`threvo_actions_mark_erasure_pending`",
+            f"GRANT EXECUTE ON PROCEDURE {quoted_database}.`threvo_actions_complete_erasure`",
+        }
+    )
 
 
 class _Cursor(Protocol):

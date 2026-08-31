@@ -11,6 +11,11 @@ import pytest
 from threvo_actions import cli
 from threvo_actions.migrations import MigrationStatus
 from threvo_actions.mysql_migrations import MySQLMigrationStatus
+from threvo_actions.readiness import (
+    DatabaseAccessLane,
+    DatabaseAdapter,
+    DatabaseReadiness,
+)
 
 if TYPE_CHECKING:
     from datetime import timedelta
@@ -215,6 +220,116 @@ def test_grant_commands_render_without_database_credentials_or_drivers(
     mysql_sql = capsys.readouterr().out
     assert "GRANT EXECUTE ON PROCEDURE `actions`.`threvo_actions_create_proposal`" in mysql_sql
     assert "TO 'runtime'@'10.%'" in mysql_sql
+
+
+def test_ready_commands_emit_machine_readable_status_and_exit_nonzero_when_unsafe(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    postgres_pool = FakePool()
+    asyncpg = ModuleType("asyncpg")
+
+    async def create_postgres_pool(dsn: str, *, min_size: int, max_size: int) -> FakePool:
+        del dsn, min_size, max_size
+        return postgres_pool
+
+    async def check_postgres_readiness(
+        unused_pool: object,
+        *,
+        schema: str,
+        lane: DatabaseAccessLane,
+    ) -> DatabaseReadiness:
+        assert unused_pool is postgres_pool
+        assert schema == "actions"
+        assert lane is DatabaseAccessLane.RUNTIME
+        return DatabaseReadiness(
+            DatabaseAdapter.POSTGRESQL,
+            lane,
+            (1, 2, 3, 4),
+            (),
+            True,
+            True,
+            (),
+        )
+
+    asyncpg.__dict__["create_pool"] = create_postgres_pool
+    monkeypatch.setitem(sys.modules, "asyncpg", asyncpg)
+    monkeypatch.setattr(
+        "threvo_actions.migrations.check_postgres_readiness",
+        check_postgres_readiness,
+    )
+    monkeypatch.setenv("ACTIONS_RUNTIME_DATABASE_URL", "postgresql://secret")
+
+    assert (
+        cli.main(
+            [
+                "postgres",
+                "ready",
+                "--dsn-env",
+                "ACTIONS_RUNTIME_DATABASE_URL",
+                "--schema",
+                "actions",
+                "--lane",
+                "runtime",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["ready"] is True
+    assert postgres_pool.closed
+
+    mysql_pool = FakeMySQLPool()
+    aiomysql = ModuleType("aiomysql")
+
+    async def create_mysql_pool(**kwargs: object) -> FakeMySQLPool:
+        del kwargs
+        return mysql_pool
+
+    async def check_mysql_readiness(
+        unused_pool: object,
+        *,
+        lane: DatabaseAccessLane,
+    ) -> DatabaseReadiness:
+        assert unused_pool is mysql_pool
+        assert lane is DatabaseAccessLane.RETENTION
+        return DatabaseReadiness(
+            DatabaseAdapter.MYSQL,
+            lane,
+            (1, 2),
+            (),
+            True,
+            False,
+            ("found 1 unexpected privilege statements",),
+        )
+
+    aiomysql.__dict__["create_pool"] = create_mysql_pool
+    monkeypatch.setitem(sys.modules, "aiomysql", aiomysql)
+    monkeypatch.setattr(
+        "threvo_actions.mysql_migrations.check_mysql_readiness",
+        check_mysql_readiness,
+    )
+    monkeypatch.setenv(
+        "ACTIONS_RETENTION_MYSQL_URL",
+        "mysql://retention:secret@localhost/actions",
+    )
+
+    assert (
+        cli.main(
+            [
+                "mysql",
+                "ready",
+                "--dsn-env",
+                "ACTIONS_RETENTION_MYSQL_URL",
+                "--lane",
+                "retention",
+            ]
+        )
+        == 3
+    )
+    output = json.loads(capsys.readouterr().out)
+    assert output["ready"] is False
+    assert output["issues"] == ["found 1 unexpected privilege statements"]
+    assert mysql_pool.closed and mysql_pool.waited
 
 
 @pytest.mark.parametrize(("owns_proposals", "expected_exit"), [(True, 3), (False, 0)])

@@ -50,6 +50,9 @@ Then inspect again with the runtime and retention roles, adding
 `--require-separated-role` where the role must not own proposal tables.
 Render the tested role grants with `postgres grants`; review and apply them with
 the migrator. The renderer never connects, creates roles, or applies SQL.
+Before accepting work, call `check_postgres_readiness()` with the existing pool
+or run `postgres ready --lane runtime|retention` with each application DSN.
+Treat a false result or exit code `3` as a startup failure.
 
 Do not use `MemoryActionStore`, `EphemeralProtection`, sequential identifiers,
 or a fixed clock in a production process. Do not give the runtime store the
@@ -107,6 +110,9 @@ permissions. The runtime user receives `SELECT` on proposals and `EXECUTE` on
 The creation routine validates the exact stored Pydantic shape before writing.
 Render that tested account split with `mysql grants`; the offline renderer does
 not create accounts or apply its output.
+Run `check_mysql_readiness()` or `mysql ready --lane runtime|retention` before
+accepting work. The official MySQL profile uses direct grants; extra grants or
+assigned roles fail closed and require a separately qualified custom profile.
 
 Before a MySQL upgrade, verify backups and replication health, quiesce runtime
 and retention writers, run `mysql inspect`, and apply the immutable package to

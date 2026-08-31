@@ -14,6 +14,10 @@ and uses Semantic Versioning for the supported surface described in
   the target's pending migrations without mutating it. PostgreSQL and MySQL
   grant renderers emit the tested runtime/retention least-privilege baseline
   without requiring database credentials.
+- PostgreSQL and MySQL expose read-only runtime/retention readiness checks and
+  `ready --lane ...` commands. They fail closed on pending migrations, owner or
+  excess privilege drift, missing required grants, or an unreadable migration
+  ledger.
 
 ### Changed
 
@@ -21,6 +25,9 @@ and uses Semantic Versioning for the supported surface described in
   against an existing schema until the deploy explicitly acknowledges that
   runtime and retention writers are stopped. Fresh schema bootstrap remains
   non-interactive.
+- Generated application grants now include read-only access to the non-secret
+  migration ledger so startup checks can verify the installed schema without
+  giving application accounts migration authority.
 
 ## [0.1.2] - 2026-08-31
 

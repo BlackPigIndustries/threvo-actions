@@ -75,6 +75,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA threvo_actions FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA threvo_actions FROM PUBLIC;
 
 GRANT USAGE ON SCHEMA threvo_actions TO actions_runtime, actions_retention;
+GRANT SELECT ON threvo_actions.schema_migrations TO actions_runtime, actions_retention;
 
 GRANT SELECT, INSERT ON
     threvo_actions.proposals,

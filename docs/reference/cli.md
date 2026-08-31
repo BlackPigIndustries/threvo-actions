@@ -4,9 +4,11 @@
 threvo-actions skill path
 threvo-actions postgres inspect --dsn-env DATABASE_URL [--schema threvo_actions]
 threvo-actions postgres plan --dsn-env DATABASE_URL [--schema threvo_actions]
+threvo-actions postgres ready --dsn-env DATABASE_URL [--schema threvo_actions] --lane runtime|retention
 threvo-actions postgres migrate --dsn-env DATABASE_URL [--schema threvo_actions] [--writers-quiesced]
 threvo-actions postgres grants --schema threvo_actions --runtime-role ROLE --retention-role ROLE
 threvo-actions mysql inspect --dsn-env DATABASE_URL
+threvo-actions mysql ready --dsn-env DATABASE_URL --lane runtime|retention
 threvo-actions mysql migrate --dsn-env DATABASE_URL [--writers-quiesced]
 threvo-actions mysql grants --database NAME --runtime-user USER --runtime-host HOST --retention-user USER --retention-host HOST
 threvo-actions sqlite inspect --database PATH
@@ -39,6 +41,11 @@ database connection. They quote deployment-owned names and emit the privilege
 set exercised by the native separated-credential tests. They do not create
 users or roles, revoke privileges from named application accounts, or apply the
 SQL. Use dedicated accounts, review the output, and apply it with the migrator.
+
+`ready` is the application startup check. Run it with the actual runtime or
+retention DSN and matching lane. It prints a bounded JSON result and exits `0`
+only when migrations are current and the credential has the expected privilege
+boundary; an unsafe result exits `3`. It never repairs the schema or grants.
 
 SQLite commands require no optional dependency. `inspect` does not create a
 missing database. `migrate` applies the packaged SQLite schema explicitly;

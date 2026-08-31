@@ -21,6 +21,7 @@
         - ConnectionSource
         - InvalidSchemaNameError
         - MigrationStateError
+        - check_postgres_readiness
         - inspect_postgres
         - migrate_postgres
         - plan_postgres_migrations
@@ -32,3 +33,5 @@
 See [Migration compatibility](migration-compatibility.md) before automating an
 upgrade. Contract migrations on an existing schema require an explicit writer
 quiescence acknowledgement.
+
+See [Database readiness](readiness.md) for the read-only startup gate.

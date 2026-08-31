@@ -10,7 +10,12 @@ import pytest
 from pydantic import ValidationError
 
 from threvo_actions.models import GovernedExecutor, LifecycleStatus, RequestingPrincipal
-from threvo_actions.mysql_migrations import migrate_mysql, render_mysql_grants
+from threvo_actions.mysql_migrations import (
+    check_mysql_readiness,
+    migrate_mysql,
+    render_mysql_grants,
+)
+from threvo_actions.readiness import DatabaseAccessLane
 from threvo_actions.receipts import (
     ExecutionReceipt,
     ExecutionReceiptStatus,
@@ -86,6 +91,45 @@ def test_runtime_and_retention_credentials_have_separate_database_capabilities()
             runtime_pool = await aiomysql.create_pool(minsize=1, maxsize=2, **runtime_config)
             retention_pool = await aiomysql.create_pool(minsize=1, maxsize=2, **retention_config)
             try:
+                assert (
+                    await check_mysql_readiness(
+                        runtime_pool,
+                        lane=DatabaseAccessLane.RUNTIME,
+                    )
+                ).ready
+                assert (
+                    await check_mysql_readiness(
+                        retention_pool,
+                        lane=DatabaseAccessLane.RETENTION,
+                    )
+                ).ready
+                async with owner_pool.acquire() as connection, connection.cursor() as cursor:
+                    await cursor.execute(
+                        f"GRANT DELETE ON `{database}`.threvo_actions_proposals "
+                        f"TO `{runtime_user}`@'%'"
+                    )
+                    await connection.commit()
+                unsafe = await check_mysql_readiness(
+                    runtime_pool,
+                    lane=DatabaseAccessLane.RUNTIME,
+                )
+                assert not unsafe.ready
+                assert unsafe.issues == (
+                    "missing 1 required privilege statements",
+                    "found 1 unexpected privilege statements",
+                )
+                async with owner_pool.acquire() as connection, connection.cursor() as cursor:
+                    await cursor.execute(
+                        f"REVOKE DELETE ON `{database}`.threvo_actions_proposals "
+                        f"FROM `{runtime_user}`@'%'"
+                    )
+                    await connection.commit()
+                assert (
+                    await check_mysql_readiness(
+                        runtime_pool,
+                        lane=DatabaseAccessLane.RUNTIME,
+                    )
+                ).ready
                 runtime = MySQLActionStore(runtime_pool)
                 retention = MySQLRetentionStore(retention_pool)
                 original = proposal("proposal:roles")

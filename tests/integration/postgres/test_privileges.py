@@ -6,8 +6,13 @@ import uuid
 import asyncpg
 import pytest
 
-from threvo_actions.migrations import migrate_postgres, render_postgres_grants
+from threvo_actions.migrations import (
+    check_postgres_readiness,
+    migrate_postgres,
+    render_postgres_grants,
+)
 from threvo_actions.models import LifecycleStatus
+from threvo_actions.readiness import DatabaseAccessLane
 from threvo_actions.stores.base import EffectClaimResult
 from threvo_actions.stores.postgres import PostgresActionStore, PostgresRetentionStore
 
@@ -52,6 +57,42 @@ def test_runtime_and_retention_roles_have_distinct_database_powers() -> None:
             )
             runtime_store = PostgresActionStore(runtime_pool, schema=schema)
             retention_store = PostgresRetentionStore(retention_pool, schema=schema)
+            assert (
+                await check_postgres_readiness(
+                    runtime_pool,
+                    schema=schema,
+                    lane=DatabaseAccessLane.RUNTIME,
+                )
+            ).ready
+            assert (
+                await check_postgres_readiness(
+                    retention_pool,
+                    schema=schema,
+                    lane=DatabaseAccessLane.RETENTION,
+                )
+            ).ready
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'GRANT DELETE ON "{schema}".proposals TO "{runtime_role}"'
+                )
+            unsafe = await check_postgres_readiness(
+                runtime_pool,
+                schema=schema,
+                lane=DatabaseAccessLane.RUNTIME,
+            )
+            assert not unsafe.ready
+            assert "proposal delete privilege must be absent" in unsafe.issues
+            async with owner_pool.acquire() as connection:
+                await connection.execute(
+                    f'REVOKE DELETE ON "{schema}".proposals FROM "{runtime_role}"'
+                )
+            assert (
+                await check_postgres_readiness(
+                    runtime_pool,
+                    schema=schema,
+                    lane=DatabaseAccessLane.RUNTIME,
+                )
+            ).ready
             await runtime_store.create(proposal("proposal:roles"))
 
             first = proposal("proposal:first")

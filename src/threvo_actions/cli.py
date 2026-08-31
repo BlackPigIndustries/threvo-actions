@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from .readiness import DatabaseAccessLane, DatabaseReadiness
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -33,12 +35,14 @@ def _parser() -> argparse.ArgumentParser:
     skill_commands.add_parser("path", help="print the bundled Agent Skill directory")
     postgres = commands.add_parser("postgres", help="manage the PostgreSQL adapter schema")
     postgres_commands = postgres.add_subparsers(dest="postgres_command", required=True)
-    for name in ("inspect", "plan", "migrate"):
+    for name in ("inspect", "plan", "ready", "migrate"):
         command = postgres_commands.add_parser(name)
         command.add_argument("--dsn-env", required=True, metavar="NAME")
         command.add_argument("--schema", default="threvo_actions")
         if name == "inspect":
             command.add_argument("--require-separated-role", action="store_true")
+        if name == "ready":
+            command.add_argument("--lane", choices=DatabaseAccessLane, required=True)
         if name == "migrate":
             command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
@@ -66,9 +70,11 @@ def _parser() -> argparse.ArgumentParser:
             )
     mysql = commands.add_parser("mysql", help="manage the MySQL 8 adapter schema")
     mysql_commands = mysql.add_subparsers(dest="mysql_command", required=True)
-    for name in ("inspect", "migrate"):
+    for name in ("inspect", "ready", "migrate"):
         command = mysql_commands.add_parser(name)
         command.add_argument("--dsn-env", required=True, metavar="NAME")
+        if name == "ready":
+            command.add_argument("--lane", choices=DatabaseAccessLane, required=True)
         if name == "migrate":
             command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
@@ -105,6 +111,7 @@ async def _postgres(
     lock_timeout_seconds: float,
     require_separated_role: bool,
     writers_quiesced: bool,
+    lane: DatabaseAccessLane | None,
 ) -> int:
     try:
         import asyncpg
@@ -112,7 +119,12 @@ async def _postgres(
         print("PostgreSQL commands require: pip install 'threvo-actions[postgres]'")
         return 2
 
-    from .migrations import inspect_postgres, migrate_postgres, plan_postgres_migrations
+    from .migrations import (
+        check_postgres_readiness,
+        inspect_postgres,
+        migrate_postgres,
+        plan_postgres_migrations,
+    )
 
     pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
     try:
@@ -150,6 +162,12 @@ async def _postgres(
                 )
             )
             return 0
+        if command == "ready":
+            if lane is None:
+                raise AssertionError("ready command requires an access lane")
+            readiness = await check_postgres_readiness(pool, schema=schema, lane=lane)
+            _print_readiness(readiness)
+            return 0 if readiness.ready else 3
         status = (
             await migrate_postgres(
                 pool,
@@ -256,6 +274,7 @@ async def _mysql(
     dsn: str,
     lock_timeout_seconds: float,
     writers_quiesced: bool,
+    lane: DatabaseAccessLane | None,
 ) -> int:
     try:
         import aiomysql
@@ -263,7 +282,7 @@ async def _mysql(
         print("MySQL commands require: pip install 'threvo-actions[mysql]'")
         return 2
 
-    from .mysql_migrations import inspect_mysql, migrate_mysql
+    from .mysql_migrations import check_mysql_readiness, inspect_mysql, migrate_mysql
 
     try:
         connection = _mysql_dsn(dsn)
@@ -272,6 +291,12 @@ async def _mysql(
         return 2
     pool = await aiomysql.create_pool(minsize=1, maxsize=2, **connection)
     try:
+        if command == "ready":
+            if lane is None:
+                raise AssertionError("ready command requires an access lane")
+            readiness = await check_mysql_readiness(pool, lane=lane)
+            _print_readiness(readiness)
+            return 0 if readiness.ready else 3
         status = (
             await migrate_mysql(
                 pool,
@@ -296,6 +321,25 @@ async def _mysql(
         )
     )
     return 0
+
+
+def _print_readiness(readiness: DatabaseReadiness) -> None:
+    print(
+        json.dumps(
+            {
+                "adapter": readiness.adapter,
+                "applied_versions": readiness.applied_versions,
+                "issues": readiness.issues,
+                "lane": readiness.lane,
+                "pending_versions": readiness.pending_versions,
+                "privilege_boundary_valid": readiness.privilege_boundary_valid,
+                "ready": readiness.ready,
+                "schema_current": readiness.schema_current,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -332,6 +376,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lock_timeout_seconds=getattr(args, "lock_timeout_seconds", 30.0),
                 require_separated_role=getattr(args, "require_separated_role", False),
                 writers_quiesced=getattr(args, "writers_quiesced", False),
+                lane=(
+                    DatabaseAccessLane(args.lane)
+                    if getattr(args, "lane", None) is not None
+                    else None
+                ),
             )
         )
     if args.command == "sqlite":
@@ -367,6 +416,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 dsn=dsn,
                 lock_timeout_seconds=getattr(args, "lock_timeout_seconds", 30.0),
                 writers_quiesced=getattr(args, "writers_quiesced", False),
+                lane=(
+                    DatabaseAccessLane(args.lane)
+                    if getattr(args, "lane", None) is not None
+                    else None
+                ),
             )
         )
     raise AssertionError("unreachable command")

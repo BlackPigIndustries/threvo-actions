@@ -8,6 +8,7 @@
         - MySQLActionStore
         - MySQLRetentionStore
         - MySQLConnectionSource
+        - check_mysql_readiness
         - MySQLAdapterLimitError
         - MySQLStoredDataCorruptionError
       show_source: false
@@ -29,3 +30,5 @@
 See [Migration compatibility](migration-compatibility.md) before automating an
 upgrade. Contract migrations on an existing schema require an explicit writer
 quiescence acknowledgement.
+
+See [Database readiness](readiness.md) for the read-only startup gate.

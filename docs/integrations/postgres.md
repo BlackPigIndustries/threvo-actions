@@ -149,6 +149,20 @@ threvo-actions postgres inspect --dsn-env ACTIONS_RETENTION_DATABASE_URL \
 Both commands must exit successfully before deployment. The migrator DSN owns
 the table by design and must not be used for either check or application process.
 
+Gate application startup with the same pools or credentials:
+
+```bash
+threvo-actions postgres ready --dsn-env ACTIONS_RUNTIME_DATABASE_URL \
+  --schema threvo_actions --lane runtime
+threvo-actions postgres ready --dsn-env ACTIONS_RETENTION_DATABASE_URL \
+  --schema threvo_actions --lane retention
+```
+
+The command is read-only and exits `3` for pending migrations, schema ownership,
+missing required privileges, or dangerous cross-lane privileges. Call
+`check_postgres_readiness()` directly when startup already owns an asyncpg
+pool.
+
 ## What PostgreSQL guarantees
 
 - tenant-scoped proposal lookup;
