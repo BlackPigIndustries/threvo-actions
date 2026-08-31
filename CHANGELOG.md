@@ -18,6 +18,9 @@ and uses Semantic Versioning for the supported surface described in
   `ready --lane ...` commands. They fail closed on pending migrations, owner or
   excess privilege drift, missing required grants, or an unreadable migration
   ledger.
+- A tested SQLAlchemy 2 and async Alembic hosting recipe keeps application and
+  action migration ledgers separate, gates startup through independent runtime
+  and retention pools, and documents the non-atomic transaction boundary.
 
 ### Changed
 

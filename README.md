@@ -7,8 +7,8 @@ policy.
 
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
 for the runnable quickstart, one guide per feature, complete runnable
-examples, Pydantic AI, PostgreSQL, MySQL, and SQLite integrations, and the full
-API reference.
+examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
+integrations, and the full API reference.
 
 > [!IMPORTANT]
 > Version `0.1.2` supports its documented Python API and CLI throughout the
@@ -28,12 +28,14 @@ Install only after the signed `v0.1.2` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
-PostgreSQL, MySQL, and Pydantic AI integrations are optional. SQLite uses the
-Python standard library and is included in the base installation:
+PostgreSQL, MySQL, SQLAlchemy/Alembic, and Pydantic AI integrations are
+optional. SQLite uses the Python standard library and is included in the base
+installation:
 
 ```bash
 python -m pip install "threvo-actions[postgres]==0.1.2"
 python -m pip install "threvo-actions[mysql]==0.1.2"
+python -m pip install "threvo-actions[sqlalchemy]==0.1.2"
 python -m pip install "threvo-actions[pydantic-ai]==0.1.2"
 ```
 
@@ -72,10 +74,13 @@ immutable explicit migrations, and security-definer runtime/retention lanes.
 The SQLite adapter supplies explicit migrations and durable storage for local
 development, evaluation, tests, and bounded single-writer deployments; it does
 not claim database-role separation or general multi-worker production safety.
+The SQLAlchemy/Alembic recipe keeps host business persistence and migrations
+separate from qualified asyncpg action stores and the library-owned ledger.
 The optional Pydantic AI Capability exposes typed command tools while treating
 framework approvals and message history as untrusted continuation material.
 See the [PostgreSQL guide](docs/postgres.md),
-[MySQL guide](docs/integrations/mysql.md), and
+[MySQL guide](docs/integrations/mysql.md),
+[SQLAlchemy/Alembic guide](docs/integrations/sqlalchemy-alembic.md), and
 [Pydantic AI guide](docs/integrations/pydantic-ai.md). The public conformance
 helpers and two local reference applications exercise the same runtime against a
 PSP refund and a cross-service supplier-destination change. Application code
@@ -158,9 +163,9 @@ The contract is deliberately small. Host-specific commands, results, business
 rules, authorization, and external-system clients stay outside the core. The
 included approval requirements count already authenticated and host-authorized
 evidence; they do not grant permission to approve.
-Optional PostgreSQL and Pydantic AI adapters depend inward on these contracts;
-the core does not import an adapter, database driver, web framework, agent
-framework, or hosted-service SDK.
+Optional persistence and agent adapters depend inward on these contracts; the
+core does not import an adapter, database driver, web framework, agent
+framework, ORM, or hosted-service SDK.
 
 ## Migration
 

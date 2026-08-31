@@ -28,6 +28,7 @@ Source: https://github.com/blackpigindustries/threvo-actions
 - Coding agents: https://blackpigindustries.github.io/threvo-actions/integrations/coding-agents/
 - Pydantic AI: https://blackpigindustries.github.io/threvo-actions/integrations/pydantic-ai/
 - PostgreSQL: https://blackpigindustries.github.io/threvo-actions/integrations/postgres/
+- SQLAlchemy and Alembic: https://blackpigindustries.github.io/threvo-actions/integrations/sqlalchemy-alembic/
 - MySQL: https://blackpigindustries.github.io/threvo-actions/integrations/mysql/
 - SQLite: https://blackpigindustries.github.io/threvo-actions/integrations/sqlite/
 - Custom stores: https://blackpigindustries.github.io/threvo-actions/integrations/custom-stores/

@@ -39,6 +39,16 @@ The core package depends only on Pydantic and the Python standard library.
     Use the official MySQL 8 adapter for production-oriented multi-worker
     evaluation. See the [MySQL guide](../integrations/mysql.md).
 
+=== "SQLAlchemy and Alembic"
+
+    ```bash
+    python -m pip install "threvo-actions[sqlalchemy]==0.1.2"
+    ```
+
+    The host-framework recipe uses SQLAlchemy for application business data,
+    the qualified asyncpg action stores, and Alembic as deployment
+    orchestration. See [SQLAlchemy and Alembic](../integrations/sqlalchemy-alembic.md).
+
 === "Pydantic AI"
 
     ```bash

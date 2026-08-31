@@ -54,6 +54,17 @@ Before accepting work, call `check_postgres_readiness()` with the existing pool
 or run `postgres ready --lane runtime|retention` with each application DSN.
 Treat a false result or exit code `3` as a startup failure.
 
+When a host uses SQLAlchemy and Alembic, keep the library's action schema and
+immutable migration ledger separate from the application's Alembic ledger.
+Call `migrate_postgres()` with a dedicated migrator asyncpg pool from the
+serialized deployment before Alembic opens its application-schema connection;
+do not copy packaged SQL into an Alembic revision or migrate in application
+startup. The two ledgers are not one transaction. At startup, keep SQLAlchemy
+on host business data, give `PostgresActionStore` and
+`PostgresRetentionStore` independent asyncpg pools, and gate both pools with
+`check_postgres_readiness()`. Never imply that a SQLAlchemy transaction and an
+action-store transaction commit atomically.
+
 Do not use `MemoryActionStore`, `EphemeralProtection`, sequential identifiers,
 or a fixed clock in a production process. Do not give the runtime store the
 retention role; production retention needs a separately privileged adapter.

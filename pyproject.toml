@@ -28,12 +28,18 @@ threvo-actions = "threvo_actions.cli:main"
 [project.optional-dependencies]
 mysql = ["aiomysql>=0.3.2,<1", "cryptography>=44.0.0"]
 postgres = ["asyncpg>=0.30.0,<1"]
+sqlalchemy = [
+    "alembic>=1.19.1,<2",
+    "asyncpg>=0.30.0,<1",
+    "sqlalchemy[asyncio]>=2.0.52,<3",
+]
 pydantic-ai = ["pydantic-ai-slim==2.33.0"]
 docs = [
     "mkdocs-material>=9.6.23,<10",
     "mkdocstrings[python]>=0.30.1,<1",
 ]
 dev = [
+    "alembic>=1.19.1,<2",
     "bandit>=1.9.4",
     "build>=1.3.0",
     "fastapi>=0.115.0,<1",
@@ -42,6 +48,7 @@ dev = [
     "pip-audit>=2.7.0",
     "pytest>=9.0.2",
     "ruff>=0.15.2",
+    "sqlalchemy[asyncio]>=2.0.52,<3",
 ]
 
 [build-system]

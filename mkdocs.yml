@@ -95,6 +95,7 @@ nav:
       - Pydantic AI: integrations/pydantic-ai.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
+      - SQLAlchemy and Alembic: integrations/sqlalchemy-alembic.md
       - MySQL: integrations/mysql.md
       - SQLite: integrations/sqlite.md
       - Custom stores: integrations/custom-stores.md
