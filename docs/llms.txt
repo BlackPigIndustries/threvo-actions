@@ -35,6 +35,7 @@ Source: https://github.com/blackpigindustries/threvo-actions
 - Examples: https://blackpigindustries.github.io/threvo-actions/examples/
 - Full API reference: https://blackpigindustries.github.io/threvo-actions/reference/
 - Conformance suite: https://blackpigindustries.github.io/threvo-actions/testing/conformance/
+- Store security profiles: https://blackpigindustries.github.io/threvo-actions/reference/store-security/
 - Clean-room adoption result: https://blackpigindustries.github.io/threvo-actions/testing/clean-room-adoption-2026-08-30/
 - Testing helpers: https://blackpigindustries.github.io/threvo-actions/testing/helpers/
 - Security guarantees: https://blackpigindustries.github.io/threvo-actions/guarantees-and-limitations/

@@ -6,9 +6,15 @@ import sqlite3
 import pytest
 from pydantic import ValidationError
 
-from threvo_actions.conformance import StoreConformanceCase, assert_action_store_conforms
+from threvo_actions.conformance import (
+    IndependentStoreConformanceCase,
+    StoreConformanceCase,
+    assert_action_store_conforms,
+    assert_independent_store_connections_conform,
+)
 from threvo_actions.models import LifecycleStatus
 from threvo_actions.sqlite_migrations import migrate_sqlite
+from threvo_actions.store_security import SQLITE_STORE_SECURITY_PROFILE
 from threvo_actions.stores.base import EffectClaimResult, ProposalAlreadyExistsError
 from threvo_actions.stores.sqlite import SQLiteActionStore, SQLiteRetentionStore
 
@@ -42,48 +48,23 @@ def test_sqlite_store_matches_shared_contract_and_survives_reopen(tmp_path) -> N
     asyncio.run(scenario())
 
 
-def test_separate_connections_admit_only_one_semantic_effect(tmp_path) -> None:
+def test_separate_connections_match_the_sqlite_security_profile(tmp_path) -> None:
     async def scenario() -> None:
         path = database_path(tmp_path)
         await migrate_sqlite(path)
-        first_store = SQLiteActionStore(path)
-        second_store = SQLiteActionStore(path)
-        authorized = []
-        for reference, store in (
-            ("proposal:one", first_store),
-            ("proposal:two", second_store),
-        ):
-            original = proposal(reference)
-            await store.create(original)
-            current = original.model_copy(
-                update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
-            )
-            assert await store.compare_and_set(
-                tenant_reference=original.tenant_reference,
-                proposal_reference=reference,
-                expected_revision=0,
-                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
-                updated=current,
-            )
-            authorized.append(current)
-
-        results = await asyncio.gather(
-            *(
-                store.admit_execution(
-                    tenant_reference=current.tenant_reference,
-                    proposal_reference=current.proposal_reference,
-                    expected_revision=current.revision,
-                    admitted_at=NOW,
-                    updated=current.model_copy(
-                        update={"lifecycle_status": LifecycleStatus.EXECUTING, "revision": 2}
-                    ),
-                )
-                for store, current in zip((first_store, second_store), authorized, strict=True)
+        original = proposal("proposal:independent")
+        report = await assert_independent_store_connections_conform(
+            IndependentStoreConformanceCase(
+                first_store=SQLiteActionStore(path),
+                second_store=SQLiteActionStore(path),
+                original=original,
+                evidence=authority(original),
+                observed_at=NOW,
+                security_profile_identifier=SQLITE_STORE_SECURITY_PROFILE.identifier,
             )
         )
-
-        assert results.count(EffectClaimResult.ACQUIRED) == 1
-        assert results.count(EffectClaimResult.CONFLICT) == 1
+        assert report.security_profile_identifier == "sqlite/v1"
+        assert "effect_owner_visibility" in report.checks
 
     asyncio.run(scenario())
 

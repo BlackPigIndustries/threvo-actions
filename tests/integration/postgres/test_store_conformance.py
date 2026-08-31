@@ -3,13 +3,20 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+import asyncpg
 import pytest
 
 from threvo_actions.authority import AuthorityDecision, AuthorityEvidence
 from threvo_actions.canonical import KeyedCommitment, ProtectedPayload
-from threvo_actions.conformance import StoreConformanceCase, assert_action_store_conforms
+from threvo_actions.conformance import (
+    IndependentStoreConformanceCase,
+    StoreConformanceCase,
+    assert_action_store_conforms,
+    assert_independent_store_connections_conform,
+)
 from threvo_actions.models import ActionType, ConfirmingAuthority, LifecycleStatus
 from threvo_actions.receipts import AuthorityReceipt, AuthorityReceiptStatus
+from threvo_actions.store_security import POSTGRESQL_STORE_SECURITY_PROFILE
 from threvo_actions.stores.base import (
     EffectClaimResult,
     ProposalAlreadyExistsError,
@@ -17,7 +24,7 @@ from threvo_actions.stores.base import (
 )
 from threvo_actions.stores.postgres import PostgresActionStore, PostgresRetentionStore
 
-from .conftest import migrated_pool
+from .conftest import migrated_pool, require_test_dsn
 
 NOW = datetime.now(UTC).replace(microsecond=0)
 ACTION_TYPE = ActionType(namespace="example.billing", name="refund", version=1)
@@ -117,51 +124,26 @@ def test_round_trip_guarded_cas_and_sanitized_duplicate_error() -> None:
     asyncio.run(scenario())
 
 
-def test_two_physical_connections_admit_only_one_semantic_effect() -> None:
+def test_independent_pools_match_the_postgresql_security_profile() -> None:
     async def scenario() -> None:
-        async with migrated_pool() as (pool, schema):
-            store = PostgresActionStore(pool, schema=schema)
-            authorized_records: list[StoredProposal] = []
-            for reference in ("proposal:one", "proposal:two"):
-                original = proposal(reference)
-                await store.create(original)
-                authorized = original.model_copy(
-                    update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
-                )
-                assert await store.compare_and_set(
-                    tenant_reference="tenant:a",
-                    proposal_reference=reference,
-                    expected_revision=0,
-                    expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
-                    updated=authorized,
-                )
-                authorized_records.append(authorized)
-
-            async with pool.acquire() as first, pool.acquire() as second:
-                assert await first.fetchval("SELECT pg_backend_pid()") != await second.fetchval(
-                    "SELECT pg_backend_pid()"
-                )
-
-            results = await asyncio.gather(
-                *(
-                    store.admit_execution(
-                        tenant_reference="tenant:a",
-                        proposal_reference=record.proposal_reference,
-                        expected_revision=1,
-                        admitted_at=NOW,
-                        updated=record.model_copy(
-                            update={
-                                "lifecycle_status": LifecycleStatus.EXECUTING,
-                                "revision": 2,
-                            }
-                        ),
+        async with migrated_pool() as (first_pool, schema):
+            second_pool = await asyncpg.create_pool(require_test_dsn(), min_size=1, max_size=2)
+            try:
+                original = proposal("proposal:independent")
+                report = await assert_independent_store_connections_conform(
+                    IndependentStoreConformanceCase(
+                        first_store=PostgresActionStore(first_pool, schema=schema),
+                        second_store=PostgresActionStore(second_pool, schema=schema),
+                        original=original,
+                        evidence=authority(original),
+                        observed_at=NOW,
+                        security_profile_identifier=(POSTGRESQL_STORE_SECURITY_PROFILE.identifier),
                     )
-                    for record in authorized_records
                 )
-            )
-
-            assert results.count(EffectClaimResult.ACQUIRED) == 1
-            assert results.count(EffectClaimResult.CONFLICT) == 1
+                assert report.security_profile_identifier == "postgresql/v1"
+                assert "atomic_effect_admission" in report.checks
+            finally:
+                await second_pool.close()
 
     asyncio.run(scenario())
 

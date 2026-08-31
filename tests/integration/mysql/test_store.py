@@ -8,9 +8,15 @@ import aiomysql
 import pytest
 from pydantic import ValidationError
 
-from threvo_actions.conformance import StoreConformanceCase, assert_action_store_conforms
+from threvo_actions.conformance import (
+    IndependentStoreConformanceCase,
+    StoreConformanceCase,
+    assert_action_store_conforms,
+    assert_independent_store_connections_conform,
+)
 from threvo_actions.models import ActionType, LifecycleStatus
-from threvo_actions.stores.base import EffectClaimResult, ProposalAlreadyExistsError
+from threvo_actions.store_security import MYSQL_STORE_SECURITY_PROFILE
+from threvo_actions.stores.base import ProposalAlreadyExistsError
 from threvo_actions.stores.mysql import (
     MySQLActionStore,
     MySQLAdapterLimitError,
@@ -60,7 +66,7 @@ def test_mysql_store_matches_shared_contract_and_survives_new_pool() -> None:
     asyncio.run(scenario())
 
 
-def test_independent_pools_admit_only_one_semantic_effect() -> None:
+def test_independent_pools_match_the_mysql_security_profile() -> None:
     async def scenario() -> None:
         async with migrated_pool() as (first_pool, database):
             second_pool = await aiomysql.create_pool(
@@ -69,41 +75,19 @@ def test_independent_pools_admit_only_one_semantic_effect() -> None:
                 **_connection(require_test_dsn(), database=database),
             )
             try:
-                stores = (MySQLActionStore(first_pool), MySQLActionStore(second_pool))
-                authorized = []
-                for reference, store in zip(("proposal:one", "proposal:two"), stores, strict=True):
-                    original = proposal(reference)
-                    await store.create(original)
-                    current = original.model_copy(
-                        update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
-                    )
-                    assert await store.compare_and_set(
-                        tenant_reference=original.tenant_reference,
-                        proposal_reference=reference,
-                        expected_revision=0,
-                        expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
-                        updated=current,
-                    )
-                    authorized.append(current)
-                results = await asyncio.gather(
-                    *(
-                        store.admit_execution(
-                            tenant_reference=current.tenant_reference,
-                            proposal_reference=current.proposal_reference,
-                            expected_revision=1,
-                            admitted_at=NOW,
-                            updated=current.model_copy(
-                                update={
-                                    "lifecycle_status": LifecycleStatus.EXECUTING,
-                                    "revision": 2,
-                                }
-                            ),
-                        )
-                        for store, current in zip(stores, authorized, strict=True)
+                original = proposal("proposal:independent")
+                report = await assert_independent_store_connections_conform(
+                    IndependentStoreConformanceCase(
+                        first_store=MySQLActionStore(first_pool),
+                        second_store=MySQLActionStore(second_pool),
+                        original=original,
+                        evidence=authority(original),
+                        observed_at=NOW,
+                        security_profile_identifier=MYSQL_STORE_SECURITY_PROFILE.identifier,
                     )
                 )
-                assert results.count(EffectClaimResult.ACQUIRED) == 1
-                assert results.count(EffectClaimResult.CONFLICT) == 1
+                assert report.security_profile_identifier == "mysql/v1"
+                assert "atomic_compare_and_set" in report.checks
             finally:
                 second_pool.close()
                 await second_pool.wait_closed()
@@ -143,47 +127,6 @@ def test_stale_cas_and_tenant_scope_do_not_mutate() -> None:
             )
             stored = await store.get(original.tenant_reference, original.proposal_reference)
             assert stored == authorized
-
-    asyncio.run(scenario())
-
-
-def test_independent_pools_allow_only_one_cas_for_the_same_proposal() -> None:
-    async def scenario() -> None:
-        async with migrated_pool() as (first_pool, database):
-            second_pool = await aiomysql.create_pool(
-                minsize=1,
-                maxsize=2,
-                **_connection(require_test_dsn(), database=database),
-            )
-            try:
-                original = proposal("proposal:same-cas")
-                await MySQLActionStore(first_pool).create(original)
-                authorized = original.model_copy(
-                    update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
-                )
-                results = await asyncio.gather(
-                    *(
-                        MySQLActionStore(pool).compare_and_set(
-                            tenant_reference=original.tenant_reference,
-                            proposal_reference=original.proposal_reference,
-                            expected_revision=0,
-                            expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
-                            updated=authorized,
-                        )
-                        for pool in (first_pool, second_pool)
-                    )
-                )
-                assert results.count(True) == 1
-                assert results.count(False) == 1
-                assert (
-                    await MySQLActionStore(first_pool).get(
-                        original.tenant_reference, original.proposal_reference
-                    )
-                    == authorized
-                )
-            finally:
-                second_pool.close()
-                await second_pool.wait_closed()
 
     asyncio.run(scenario())
 

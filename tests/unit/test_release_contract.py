@@ -237,6 +237,16 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
             "DatabaseAdapter",
             "DatabaseReadiness",
         },
+        "threvo_actions.store_security": {
+            "MYSQL_STORE_SECURITY_PROFILE",
+            "POSTGRESQL_STORE_SECURITY_PROFILE",
+            "SQLITE_STORE_SECURITY_PROFILE",
+            "StorePrivilegeBoundary",
+            "StoreSecurityProfile",
+            "StoreSupportTier",
+            "StoreWriterTopology",
+            "official_store_security_profiles",
+        },
         "threvo_actions.stores.postgres": {
             "ConnectionSource",
             "PostgresActionStore",

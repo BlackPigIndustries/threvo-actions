@@ -28,9 +28,14 @@ uv run python -m examples.docs.custom_store_conformance
 ```
 
 When authoring another backend, replace the SQLite stores with instances backed
-by a fresh isolated database and keep the conformance call. Then add independent
-connection, transaction rollback, crash/retry, migration, and database-version
-tests. See [Build a custom action store](../integrations/custom-stores.md).
+by a fresh isolated database and keep the conformance call. Then run
+`assert_independent_store_connections_conform()` with two adapters created from
+separate connection sources. It checks shared visibility, one-winner guarded
+updates, one-winner semantic-effect admission, and consistent effect ownership.
+The returned report is deterministic test evidence, not a signed or compliance
+certificate. Add transaction rollback, crash/retry, migration, and
+database-version tests. See [Build a custom action store](../integrations/custom-stores.md)
+and [Store security profiles](../reference/store-security.md).
 
 ## Protection and commitment providers
 

@@ -31,6 +31,7 @@ def test_documented_conformance_helpers_are_importable() -> None:
 
     for name in (
         "assert_action_store_conforms",
+        "assert_independent_store_connections_conform",
         "assert_providers_conform",
         "assert_runtime_conforms",
         "assert_no_sensitive_data",

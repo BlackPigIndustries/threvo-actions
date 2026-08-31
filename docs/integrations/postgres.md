@@ -3,6 +3,10 @@
 Use PostgreSQL when proposals must survive process restarts or multiple workers
 need concurrency-correct lifecycle transitions.
 
+The official `postgresql/v1` [store security profile](../reference/store-security.md)
+requires host-protected private state and separate runtime and retention roles;
+it does not claim storage encryption or deletion from external copies.
+
 ```bash
 python -m pip install "threvo-actions[postgres]==0.1.2"
 ```

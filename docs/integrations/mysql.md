@@ -5,6 +5,10 @@ for multi-worker production evaluation. It supports MySQL Community 8.0.16 or
 newer, including MySQL 8.4 LTS. MariaDB is not supported because its JSON,
 constraint, trigger, and routine behavior is a different compatibility target.
 
+The official `mysql/v1` [store security profile](../reference/store-security.md)
+requires host-protected private state and direct, separated application grants;
+it does not claim storage encryption or deletion from external copies.
+
 ## Install and migrate explicitly
 
 ```bash

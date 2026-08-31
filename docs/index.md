@@ -39,6 +39,7 @@ typed ports.
 | [SQLite adapter](integrations/sqlite.md) | Serverless durable storage for local, evaluation, test, and bounded single-writer use. |
 | [Custom-store guide](integrations/custom-stores.md) | Behavioral, schema, transaction, and conformance requirements for another database. |
 | [Conformance kit](testing/conformance.md) | Custom stores and providers can be tested against the runtime contract. |
+| [Store security profiles](reference/store-security.md) | Machine-readable topology, privilege, qualification, and data-handling boundaries for official adapters. |
 | [Testing helpers](testing/helpers.md) | Deterministic clocks, identifiers, event capture, and process-local protection replace copied fakes. |
 
 ## The lifecycle in one picture

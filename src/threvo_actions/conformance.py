@@ -58,6 +58,30 @@ class StoreConformanceCase:
 
 
 @dataclass(frozen=True)
+class IndependentStoreConformanceCase:
+    """Two adapters backed by independently created connections to one store."""
+
+    first_store: ActionStore
+    second_store: ActionStore
+    original: StoredProposal
+    evidence: AuthorityEvidence
+    observed_at: datetime
+    security_profile_identifier: str
+
+    def __post_init__(self) -> None:
+        if not self.security_profile_identifier.strip():
+            raise ValueError("security_profile_identifier must not be empty")
+
+
+@dataclass(frozen=True)
+class IndependentStoreConformanceReport:
+    """Deterministic evidence emitted after all independent-store checks pass."""
+
+    security_profile_identifier: str
+    checks: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BenchmarkResult:
     profile: str
     iterations: int
@@ -536,6 +560,146 @@ async def assert_action_store_conforms(case: StoreConformanceCase) -> None:
     )
 
 
+async def assert_independent_store_connections_conform(
+    case: IndependentStoreConformanceCase,
+) -> IndependentStoreConformanceReport:
+    """Prove shared visibility, guarded revisions, and effect admission across stores."""
+
+    cas_proposal = _independent_proposal(case.original, "cas")
+    cas_evidence = _independent_evidence(case.evidence, cas_proposal)
+    await case.first_store.create(cas_proposal)
+    _require(
+        await case.second_store.get(
+            cas_proposal.tenant_reference,
+            cas_proposal.proposal_reference,
+        )
+        == cas_proposal,
+        "independent_store_shared_visibility",
+    )
+    cas_authorized = cas_proposal.model_copy(
+        update={
+            "authority_evidence": (cas_evidence,),
+            "lifecycle_status": LifecycleStatus.AUTHORIZED,
+            "revision": cas_proposal.revision + 1,
+        }
+    )
+    cas_results = await asyncio.gather(
+        *(
+            store.compare_and_set(
+                tenant_reference=cas_proposal.tenant_reference,
+                proposal_reference=cas_proposal.proposal_reference,
+                expected_revision=cas_proposal.revision,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=cas_authorized,
+            )
+            for store in (case.first_store, case.second_store)
+        )
+    )
+    _require(
+        cas_results.count(True) == 1 and cas_results.count(False) == 1,
+        "independent_store_atomic_compare_and_set",
+    )
+    _require(
+        await case.first_store.get(
+            cas_proposal.tenant_reference,
+            cas_proposal.proposal_reference,
+        )
+        == cas_authorized
+        and await case.second_store.get(
+            cas_proposal.tenant_reference,
+            cas_proposal.proposal_reference,
+        )
+        == cas_authorized,
+        "independent_store_revision_visibility",
+    )
+
+    first_proposal = _independent_proposal(case.original, "effect:first")
+    second_proposal = _independent_proposal(case.original, "effect:second")
+    authorized: list[StoredProposal] = []
+    for store, proposal in zip(
+        (case.first_store, case.second_store),
+        (first_proposal, second_proposal),
+        strict=True,
+    ):
+        evidence = _independent_evidence(case.evidence, proposal)
+        await store.create(proposal)
+        current = proposal.model_copy(
+            update={
+                "authority_evidence": (evidence,),
+                "lifecycle_status": LifecycleStatus.AUTHORIZED,
+                "revision": proposal.revision + 1,
+            }
+        )
+        _require(
+            await store.compare_and_set(
+                tenant_reference=proposal.tenant_reference,
+                proposal_reference=proposal.proposal_reference,
+                expected_revision=proposal.revision,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=current,
+            ),
+            "independent_store_effect_setup",
+        )
+        authorized.append(current)
+
+    executing = tuple(
+        current.model_copy(
+            update={
+                "lifecycle_status": LifecycleStatus.EXECUTING,
+                "revision": current.revision + 1,
+            }
+        )
+        for current in authorized
+    )
+    admission_results = await asyncio.gather(
+        *(
+            store.admit_execution(
+                tenant_reference=current.tenant_reference,
+                proposal_reference=current.proposal_reference,
+                expected_revision=current.revision,
+                admitted_at=case.observed_at,
+                updated=updated,
+            )
+            for store, current, updated in zip(
+                (case.first_store, case.second_store),
+                authorized,
+                executing,
+                strict=True,
+            )
+        )
+    )
+    _require(
+        admission_results.count(EffectClaimResult.ACQUIRED) == 1
+        and admission_results.count(EffectClaimResult.CONFLICT) == 1,
+        "independent_store_atomic_effect_admission",
+    )
+    winner = executing[admission_results.index(EffectClaimResult.ACQUIRED)]
+    owner_results = await asyncio.gather(
+        *(
+            store.get_effect_claim_owner(
+                tenant_reference=winner.tenant_reference,
+                action_type=winner.action_type,
+                semantic_effect_reference=winner.semantic_effect_reference,
+            )
+            for store in (case.first_store, case.second_store)
+        )
+    )
+    _require(
+        owner_results == [winner.proposal_reference, winner.proposal_reference],
+        "independent_store_effect_owner_visibility",
+    )
+    return IndependentStoreConformanceReport(
+        security_profile_identifier=case.security_profile_identifier,
+        checks=(
+            "shared_visibility",
+            "atomic_compare_and_set",
+            "revision_visibility",
+            "atomic_effect_admission",
+            "effect_owner_visibility",
+        ),
+    )
+
+
 async def _assert_store_update_invariants(case: StoreConformanceCase) -> None:
     await _assert_lifecycle_transition_guards(case)
 
@@ -773,6 +937,50 @@ def _conformance_evidence(
         update={
             "proposal_instance_reference": proposal.proposal_reference,
             "semantic_effect_reference": proposal.semantic_effect_reference,
+            "proposal_commitment": (
+                proposal.commitment.digest if proposal.commitment is not None else "missing"
+            ),
+        }
+    )
+
+
+def _independent_proposal(original: StoredProposal, suffix: str) -> StoredProposal:
+    proposal_reference = f"{original.proposal_reference}:independent:{suffix}"
+    return original.model_copy(
+        update={
+            "proposal_reference": proposal_reference,
+            "protected_private_snapshot": (
+                original.protected_private_snapshot.model_copy(
+                    update={
+                        "key_handle": (
+                            f"{original.protected_private_snapshot.key_handle}:independent:{suffix}"
+                        )
+                    }
+                )
+                if original.protected_private_snapshot is not None
+                else None
+            ),
+            "commitment": (
+                original.commitment.model_copy(
+                    update={
+                        "key_handle": f"{original.commitment.key_handle}:independent:{suffix}",
+                        "digest": f"{original.commitment.digest}:independent:{suffix}",
+                    }
+                )
+                if original.commitment is not None
+                else None
+            ),
+        }
+    )
+
+
+def _independent_evidence(
+    original: AuthorityEvidence,
+    proposal: StoredProposal,
+) -> AuthorityEvidence:
+    return original.model_copy(
+        update={
+            "proposal_instance_reference": proposal.proposal_reference,
             "proposal_commitment": (
                 proposal.commitment.digest if proposal.commitment is not None else "missing"
             ),

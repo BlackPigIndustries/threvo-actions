@@ -118,6 +118,12 @@ seeded-canary leakage, and deterministic performance profiles. Passing these
 generic checks is a baseline; every host action and external connector still
 needs domain-specific adversarial tests.
 
+Official store security profiles make the tested writer topology, privilege
+boundary, and data-handling exclusions inspectable. The independent-connection
+scenario exercises one-winner revisions and semantic-effect admission through
+separately created connection sources. Its report is reproducible test evidence,
+not a signed, deployment, or compliance certificate.
+
 The [refund example](examples/refund/app.py) proves stable per-intent PSP
 idempotency, atomic live-balance reservation, timeout-after-acceptance recovery,
 provisional versus final absence, exact returned-effect binding, and

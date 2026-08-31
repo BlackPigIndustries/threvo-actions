@@ -119,6 +119,13 @@ For your adapter, replace `SQLiteActionStore` and `SQLiteRetentionStore` with
 fresh instances backed by an isolated test database. Keep the fixture and
 `assert_action_store_conforms()` call unchanged.
 
+Next, construct two store adapters from separately created physical connection
+sources and run `assert_independent_store_connections_conform()`. Publish the
+returned check codes together with the exact database version, isolation
+level, writer topology, and fixture design. The helper cannot prove that two
+caller-supplied objects really use independent connections, so that fact must
+be established by the fixture. See [Store security profiles](../reference/store-security.md).
+
 ## Add database-native evidence
 
 Generic conformance is necessary, not sufficient. Also test:

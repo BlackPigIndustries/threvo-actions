@@ -16,7 +16,9 @@ line:
   `threvo_actions.stores.sqlite`, `threvo_actions.migrations`,
   `threvo_actions.mysql_migrations`, and
   `threvo_actions.sqlite_migrations`, plus compatibility metadata in
-  `threvo_actions.migration_compatibility`;
+  `threvo_actions.migration_compatibility`, readiness results in
+  `threvo_actions.readiness`, and official profiles in
+  `threvo_actions.store_security`;
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`; and
 - the documented `threvo-actions` CLI commands and exit behavior.

@@ -60,6 +60,7 @@ Use the checks that match the extension point:
 ```python
 from threvo_actions.conformance import (
     assert_action_store_conforms,
+    assert_independent_store_connections_conform,
     assert_no_sensitive_data,
     assert_providers_conform,
     assert_runtime_conforms,
@@ -67,6 +68,8 @@ from threvo_actions.conformance import (
 ```
 
 - `assert_action_store_conforms` for custom stores and tenant isolation;
+- `assert_independent_store_connections_conform` for guarded revision and
+  semantic-effect races through two separately created connection sources;
 - `assert_providers_conform` for commitment/protection destruction behavior;
 - `assert_runtime_conforms` for a host action's lifecycle driver; and
 - `assert_no_sensitive_data` for seeded-canary leakage checks.
@@ -75,15 +78,16 @@ Run focused host tests first, then supported Python-version, strict type-check,
 lint, security, artifact-build, and clean-wheel smoke gates. Custom adapters
 still need domain-specific tests; generic conformance is only a baseline.
 
-Store authors must also test two physical connections racing one effect, stale
-revision refusal, transaction rollback, tenant isolation, migration upgrades,
+Store authors must supply two physical connection sources to the independent
+store check; the helper cannot prove independence from the adapter objects.
+They must also test transaction rollback, tenant isolation, migration upgrades,
 stored-data corruption, and exact acceptance of current lifecycle states with
 rejection of retired or unknown states. The SQLite conformance example is the
 safe copy/paste fixture; do not teach an in-memory dictionary as a durable
 custom-store implementation.
 
 The official MySQL suite additionally runs against native MySQL 8.0 and 8.4,
-uses independent pools for effect races, exhausts the lifecycle transition
+uses the shared independent-pool check for revision and effect races, exhausts the lifecycle transition
 matrix, checks immutable migration history/schema parity, and proves separated
 runtime and retention grants. It must also attack the security-definer routines
 with the runtime credential: try protected-snapshot changes, evidence/receipt
@@ -91,3 +95,8 @@ rewrites and binding mismatches, direct effect-claim inserts, and cross-effect
 claim transfers. Test same-proposal compare-and-set and runtime-versus-retention
 races through separate pools. Do not substitute SQLite or a mocked cursor when
 changing MySQL transaction, trigger, routine, or migration behavior.
+
+Read `threvo_actions.store_security` before choosing an adapter. Every official
+profile requires host-protected private state and states that storage
+encryption, evidence-issuer authentication, and deletion from logs, snapshots,
+exports, replicas, and backups remain outside the adapter.

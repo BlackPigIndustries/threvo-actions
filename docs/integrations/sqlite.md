@@ -10,6 +10,9 @@ its write concurrency is database-wide.
 The application must make the two adapter classes the only ordinary writers;
 any process that can modify the file directly can bypass the Python retention
 boundary.
+The `sqlite/v1` [store security profile](../reference/store-security.md) makes
+that bounded topology and the host-owned encryption and copy-erasure boundary
+machine-readable.
 
 ## Apply migrations explicitly
 
