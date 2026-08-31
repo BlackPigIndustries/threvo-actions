@@ -1094,7 +1094,19 @@ async def assert_runtime_conforms(
     _require(valid.executor_calls == before_unapproved, "runtime_unapproved_execution")
     authorized = await valid.record_approval(prepared.proposal_reference)
     _require(authorized.outcome is OperationOutcome.AUTHORIZED, "runtime_authority")
-    executed = await valid.execute(prepared.proposal_reference)
+    before_concurrent = valid.executor_calls
+    concurrent = await asyncio.gather(
+        valid.execute(prepared.proposal_reference),
+        valid.execute(prepared.proposal_reference),
+    )
+    _require(
+        valid.executor_calls == before_concurrent + 1,
+        "runtime_concurrent_execution",
+    )
+    executed = next(
+        (result for result in concurrent if result.outcome is not OperationOutcome.IN_PROGRESS),
+        concurrent[0],
+    )
     for _ in range(4):
         if executed.outcome not in {
             OperationOutcome.VERIFICATION_PENDING,

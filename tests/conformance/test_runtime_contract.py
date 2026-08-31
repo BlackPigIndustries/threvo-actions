@@ -268,6 +268,29 @@ def test_runtime_contract_allows_provisional_authoritative_queries_without_resen
     asyncio.run(assert_runtime_conforms(provisionally_consistent_driver))
 
 
+class ConcurrentUnsafeDriver(Driver):
+    concurrent_execute_calls = 0
+
+    async def execute(self, proposal_reference: str) -> ActionOperationResult:
+        self.concurrent_execute_calls += 1
+        try:
+            await asyncio.sleep(0)
+            if self.concurrent_execute_calls > 1:
+                self.host.executor_calls += 1
+            return await super().execute(proposal_reference)
+        finally:
+            self.concurrent_execute_calls -= 1
+
+
+def test_seeded_host_that_double_executes_only_under_race_fails_conformance() -> None:
+    def broken_driver() -> ConcurrentUnsafeDriver:
+        valid = driver()
+        return ConcurrentUnsafeDriver(**vars(valid))
+
+    with pytest.raises(ConformanceError, match="runtime_concurrent_execution"):
+        asyncio.run(assert_runtime_conforms(broken_driver))
+
+
 class BrokenLiveAuthorizationDriver(Driver):
     async def revoke_execution_authorization(self) -> None:
         return None
