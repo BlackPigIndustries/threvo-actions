@@ -14,6 +14,7 @@ from threvo_actions.models import (
     ExperimentalModel,
     GovernedExecutor,
 )
+from threvo_actions.receipts import ItemOutcome, ItemOutcomeStatus
 from threvo_actions.registry import (
     ActionDefinition,
     ActionRegistry,
@@ -26,6 +27,8 @@ from threvo_actions.registry import (
     PreparationPort,
     RetentionPort,
     StateResolverPort,
+    VerificationResult,
+    VerificationStatus,
     VerifierPort,
 )
 
@@ -218,3 +221,53 @@ def test_definition_accepts_conforming_experimental_models() -> None:
     assert registered.private_snapshot_model is ExperimentalPrivateSnapshot
     assert registered.display_preview_model is ExperimentalPreview
     assert registered.result_model is ExperimentalResult
+
+
+@pytest.mark.parametrize(
+    "status",
+    (
+        VerificationStatus.PROVISIONAL_ABSENCE,
+        VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE,
+    ),
+)
+def test_absence_verification_rejects_effect_results(status: VerificationStatus) -> None:
+    with pytest.raises(ValueError, match="absence verification cannot carry effect outcomes"):
+        VerificationResult[Result](
+            status=status,
+            result=Result(refund_reference="refund:already-exists"),
+            settling_boundary_passed=(status is VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE),
+        )
+
+
+def test_absence_verification_rejects_item_effect_outcomes() -> None:
+    with pytest.raises(ValueError, match="absence verification cannot carry effect outcomes"):
+        VerificationResult[Result](
+            status=VerificationStatus.PROVISIONAL_ABSENCE,
+            item_outcomes=(
+                ItemOutcome(
+                    item_reference="item:one",
+                    status=ItemOutcomeStatus.SUCCEEDED,
+                ),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("status", "settling_boundary_passed"),
+    (
+        (VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE, False),
+        (VerificationStatus.PROVISIONAL_ABSENCE, True),
+        (VerificationStatus.VERIFIED_COMPLETION, True),
+        (VerificationStatus.VERIFIED_TERMINAL_FAILURE, True),
+        (VerificationStatus.TARGET_UNAVAILABLE, True),
+    ),
+)
+def test_settling_boundary_is_exclusive_to_final_absence(
+    status: VerificationStatus,
+    settling_boundary_passed: bool,
+) -> None:
+    with pytest.raises(ValueError, match="settling_boundary_passed must be true only"):
+        VerificationResult[Result](
+            status=status,
+            settling_boundary_passed=settling_boundary_passed,
+        )

@@ -140,4 +140,6 @@ Map facts, not optimism:
   proves absence.
 - `TARGET_UNAVAILABLE`: the authoritative query could not run.
 
-Do not use `AUTHORITATIVE_FINAL_ABSENCE` without an actual settling boundary.
+Absence cannot carry a result or per-item outcomes. The model requires
+`settling_boundary_passed=True` for `AUTHORITATIVE_FINAL_ABSENCE` and rejects
+that flag for every other status.

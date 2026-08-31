@@ -146,6 +146,22 @@ class VerificationResult(ExperimentalModel, Generic[ResultT]):
     settling_boundary_passed: bool = False
     target_idempotency_guaranteed: bool = False
 
+    @model_validator(mode="after")
+    def absence_requires_consistent_evidence(self) -> "VerificationResult[ResultT]":
+        absence_statuses = {
+            VerificationStatus.PROVISIONAL_ABSENCE,
+            VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE,
+        }
+        if self.status in absence_statuses and (self.result is not None or self.item_outcomes):
+            raise ValueError("absence verification cannot carry effect outcomes")
+        if (
+            self.status is VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE
+        ) is not self.settling_boundary_passed:
+            raise ValueError(
+                "settling_boundary_passed must be true only for authoritative final absence"
+            )
+        return self
+
 
 class PreparationPort(Protocol[CommandContraT, PrivateSnapshotT, PreviewT]):
     async def prepare(
