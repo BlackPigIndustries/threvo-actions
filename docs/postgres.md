@@ -9,14 +9,14 @@ Install the optional driver and apply the packaged, forward-only migration expli
 ```bash
 python -m pip install "threvo-actions[postgres]==0.1.2"
 threvo-actions postgres inspect --dsn-env DATABASE_URL --schema threvo_actions
-threvo-actions postgres migrate --dsn-env DATABASE_URL --schema threvo_actions \
-  --writers-quiesced
+threvo-actions postgres migrate --dsn-env DATABASE_URL --schema threvo_actions
 ```
 
 Migration lock waits fail after 30 seconds by default. Use `--lock-timeout-seconds` to set a
 different positive bound for the explicit migration command.
-For an existing schema, pass `--writers-quiesced` only after draining runtime
-and retention writers. Fresh bootstrap does not require the acknowledgement.
+If the plan reports that an existing schema needs a contract migration, drain
+runtime and retention writers and rerun `postgres migrate` with
+`--writers-quiesced`. Fresh bootstrap does not require the acknowledgement.
 
 The three action credentials may point to a dedicated actions database rather
 than the database that holds application tables. The adapter never joins host

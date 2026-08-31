@@ -39,8 +39,7 @@ to mutate it. Then run:
 
 ```bash
 threvo-actions postgres migrate \
-  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions \
-  --writers-quiesced
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
 threvo-actions postgres inspect \
   --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
 ```
@@ -78,9 +77,11 @@ Configure the SQL client to propagate failures to the deployment runner; for
 `psql`, include `--set ON_ERROR_STOP=1` when applying the file.
 
 For an existing schema, the current lifecycle contract migrations require
-runtime and retention writers to be drained. `--writers-quiesced` is an
-explicit acknowledgement of that external deployment step; the command does
-not stop workers itself. A fresh database bootstrap does not require the flag.
+runtime and retention writers to be drained. When the plan reports that
+requirement, stop both writer lanes and rerun `postgres migrate` with
+`--writers-quiesced`. The flag is an explicit acknowledgement of that external
+deployment step; the command does not stop workers itself. A fresh database
+bootstrap does not require the flag.
 
 Lifecycle migrations replace the database status constraint and transition
 trigger from the same closed Python contract used by the runtime. Before an

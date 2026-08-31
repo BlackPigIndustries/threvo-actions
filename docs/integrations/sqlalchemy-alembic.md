@@ -33,23 +33,37 @@ arguments or source code.
 ## Run migrations in deployment order
 
 Keep Alembic's generated `env.py` concerned only with the application schema.
-In one serialized deployment job, run:
+In one serialized deployment job, inspect the plan first:
 
 ```bash
 threvo-actions postgres plan \
   --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
+```
+
+For a fresh schema or a plan that does not require writer quiescence, run:
+
+```bash
+threvo-actions postgres migrate \
+  --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions
+alembic upgrade head
+```
+
+If the plan reports a migration that requires writer quiescence, drain both
+action writer lanes first and run the alternate path:
+
+```bash
 threvo-actions postgres migrate \
   --dsn-env ACTIONS_MIGRATOR_DATABASE_URL --schema threvo_actions \
   --writers-quiesced
 alembic upgrade head
 ```
 
-Pass `--writers-quiesced` only after the deployment has actually drained both
-action writer lanes. Fresh action-schema bootstrap does not require it. If the
-action migration fails, do not start Alembic. If a later Alembic migration
-fails, leave the completed action migration in place, correct the application
-migration, and rerun the deployment. The ledgers and transactions are
-intentionally independent; never reverse or edit the library ledger.
+The flag only records that completed operational step; it does not stop
+writers. Fresh action-schema bootstrap does not require it. If the action
+migration fails, do not start Alembic. If a later Alembic
+migration fails, leave the completed action migration in place, correct the
+application migration, and rerun the deployment. The ledgers and transactions
+are intentionally independent; never reverse or edit the library ledger.
 
 For environments where a DBA must approve immutable SQL, render and pin a
 complete library-owned script as a release artifact:
