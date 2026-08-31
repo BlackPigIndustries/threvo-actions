@@ -8,7 +8,7 @@ requires host-protected private state and separate runtime and retention roles;
 it does not claim storage encryption or deletion from external copies.
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.2"
+python -m pip install "threvo-actions[postgres]==0.1.3"
 ```
 
 The action schema can live beside the application's tables or in a dedicated

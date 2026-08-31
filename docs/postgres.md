@@ -7,7 +7,7 @@ once. The governed executor still needs target-side idempotency and authoritativ
 Install the optional driver and apply the packaged, forward-only migration explicitly:
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.2"
+python -m pip install "threvo-actions[postgres]==0.1.3"
 threvo-actions postgres inspect --dsn-env DATABASE_URL --schema threvo_actions
 threvo-actions postgres migrate --dsn-env DATABASE_URL --schema threvo_actions
 ```

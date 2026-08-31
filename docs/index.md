@@ -9,7 +9,7 @@ is not enough: refunds, supplier bank-detail changes, payment releases, ledger
 postings, credit-limit changes, and similar financial effects.
 
 ```bash
-python -m pip install "threvo-actions==0.1.2"
+python -m pip install "threvo-actions==0.1.3"
 ```
 
 Install an exact patch version so runtime attribution and compatibility are

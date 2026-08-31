@@ -6,7 +6,7 @@ database or agent framework.
 
 !!! info "Versioned support"
 
-    Version `0.1.2` freezes the documented Python imports and CLI for the
+    Version `0.1.3` freezes the documented Python imports and CLI for the
     `0.1.x` line. Serialized interoperability forms remain experimental. See
     [Versioning](../versioning.md).
 

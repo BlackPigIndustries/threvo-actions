@@ -11,7 +11,7 @@ examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
 integrations, and the full API reference.
 
 > [!IMPORTANT]
-> Version `0.1.2` supports its documented Python API and CLI throughout the
+> Version `0.1.3` supports its documented Python API and CLI throughout the
 > `0.1.x` line. Receipt serialization, canonicalization, database schemas, and
 > the example cross-service envelope remain experimental interoperability
 > surfaces. Read the [versioning policy](docs/versioning.md) before upgrading.
@@ -21,10 +21,10 @@ integrations, and the full API reference.
 Python 3.11 through 3.13 is supported.
 
 ```bash
-python -m pip install "threvo-actions==0.1.2"
+python -m pip install "threvo-actions==0.1.3"
 ```
 
-Install only after the signed `v0.1.2` tag completes the TestPyPI and PyPI
+Install only after the signed `v0.1.3` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
@@ -33,10 +33,10 @@ optional. SQLite uses the Python standard library and is included in the base
 installation:
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.2"
-python -m pip install "threvo-actions[mysql]==0.1.2"
-python -m pip install "threvo-actions[sqlalchemy]==0.1.2"
-python -m pip install "threvo-actions[pydantic-ai]==0.1.2"
+python -m pip install "threvo-actions[postgres]==0.1.3"
+python -m pip install "threvo-actions[mysql]==0.1.3"
+python -m pip install "threvo-actions[sqlalchemy]==0.1.3"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.3"
 ```
 
 The distribution also bundles an Agent Skills-compatible guide for coding
