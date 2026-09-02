@@ -11,6 +11,8 @@ from .application import (
     ActionIssueCode,
     ActionRecipe,
     ActionSpec,
+    BoundAction,
+    DependencyScopeFactory,
     RegisteredAction,
 )
 
@@ -21,5 +23,7 @@ __all__ = [
     "ActionIssueCode",
     "ActionRecipe",
     "ActionSpec",
+    "BoundAction",
+    "DependencyScopeFactory",
     "RegisteredAction",
 ]

@@ -11,6 +11,7 @@ from threvo_actions.experimental import (
     ActionComponents,
     ActionRecipe,
     ActionSpec,
+    BoundAction,
     RegisteredAction,
 )
 from threvo_actions.models import ActionType, AuthoritativeTarget, GovernedExecutor
@@ -67,3 +68,8 @@ assert_type(
     registered,
     RegisteredAction[Command, PrivateSnapshot, Preview, Result],
 )
+application.freeze()
+with application.bind(
+    registered, dependencies=Dependencies(tenant_reference="tenant:test")
+) as bound:
+    assert_type(bound, BoundAction[Command, PrivateSnapshot, Preview, Result])

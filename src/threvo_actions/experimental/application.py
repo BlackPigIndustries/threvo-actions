@@ -5,34 +5,47 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import StrEnum
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Generic, Literal, Protocol, TypeVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..authority import AuthorityEvidence
 from ..canonical import CommitmentProvider, ProtectionCodec
 from ..models import (
     ActionType,
     AuthoritativeTarget,
+    ConfirmingAuthority,
     EffectKind,
     GovernedExecutor,
+    ProposingAgent,
+    RequestingPrincipal,
     SafeReference,
 )
 from ..receipts import EventSink
 from ..registry import (
+    ActionDefinition,
     AuthorityEvaluatorPort,
     AuthorizationPort,
     GovernedExecutorPort,
     PreparationPort,
+    ReadContext,
     RetentionPort,
     StateResolverPort,
     VerifierPort,
     assert_boundary_models_conform,
 )
-from ..runtime import Clock, IdentifierProvider
+from ..runtime import (
+    ActionOperationResult,
+    ActionRuntime,
+    Clock,
+    IdentifierProvider,
+    ProposalView,
+)
 from ..stores import ActionStore, RetentionStore
 
 CommandT = TypeVar("CommandT", bound=BaseModel)
@@ -40,6 +53,8 @@ PrivateSnapshotT = TypeVar("PrivateSnapshotT", bound=BaseModel)
 PreviewT = TypeVar("PreviewT", bound=BaseModel)
 ResultT = TypeVar("ResultT", bound=BaseModel)
 DepsT = TypeVar("DepsT")
+RunDepsT_contra = TypeVar("RunDepsT_contra", contravariant=True)
+ScopedDepsT_co = TypeVar("ScopedDepsT_co", covariant=True)
 
 PositiveTimedelta = Annotated[timedelta, Field(gt=timedelta(0))]
 NonNegativeTimedelta = Annotated[timedelta, Field(ge=timedelta(0))]
@@ -140,6 +155,14 @@ class ActionRecipe(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]
     ]
 
 
+class DependencyScopeFactory(Protocol[RunDepsT_contra, ScopedDepsT_co]):
+    """Host-owned async dependency scope entered once per operation."""
+
+    def __call__(
+        self, run_dependencies: RunDepsT_contra
+    ) -> AbstractAsyncContextManager[ScopedDepsT_co]: ...
+
+
 @dataclass(frozen=True)
 class RegisteredAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     """Typed static handle returned by explicit registration."""
@@ -153,6 +176,139 @@ class RegisteredAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
 class _Registration:
     specification: object
     recipe: object
+
+
+class _BindingState(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
+    def __init__(
+        self,
+        *,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        runtime: ActionRuntime,
+    ) -> None:
+        self._definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None = (
+            definition
+        )
+        self._runtime: ActionRuntime | None = runtime
+
+    def parts(
+        self,
+    ) -> tuple[
+        ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        ActionRuntime,
+    ]:
+        if self._definition is None or self._runtime is None:
+            raise ActionApplicationError(ActionIssueCode.BINDING_INACTIVE)
+        return self._definition, self._runtime
+
+    def release(self) -> None:
+        self._definition = None
+        self._runtime = None
+
+
+@dataclass(frozen=True)
+class BoundAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
+    """Operation facade whose borrowed internals exist only inside ``bind``."""
+
+    _state: _BindingState[CommandT, PrivateSnapshotT, PreviewT, ResultT] = field(
+        repr=False, compare=False
+    )
+
+    async def prepare(
+        self,
+        *,
+        tenant_reference: str,
+        command: CommandT,
+        requesting_principal: RequestingPrincipal,
+        proposing_agent: ProposingAgent | None = None,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.prepare(
+            definition,
+            tenant_reference=tenant_reference,
+            command=command,
+            requesting_principal=requesting_principal,
+            proposing_agent=proposing_agent,
+        )
+
+    async def record_authority(
+        self,
+        *,
+        evidence: AuthorityEvidence,
+        authenticated_authority: ConfirmingAuthority,
+        proposal_reference: str | None = None,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.record_authority(
+            definition,
+            evidence=evidence,
+            authenticated_authority=authenticated_authority,
+            proposal_reference=proposal_reference,
+        )
+
+    async def expire_due(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.expire_due(
+            definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
+    async def execute(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.execute(
+            definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
+    async def reconcile(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.reconcile(
+            definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
+    async def read(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ProposalView:
+        definition, runtime = self._state.parts()
+        return await runtime.read(
+            definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+
+    async def erase(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionOperationResult:
+        definition, runtime = self._state.parts()
+        return await runtime.erase(
+            definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
 
 
 def _action_key(action_type: ActionType) -> tuple[str, str, int]:
@@ -203,3 +359,88 @@ class ActionApplication(Generic[DepsT]):
 
     def freeze(self) -> None:
         self._frozen = True
+
+    @contextmanager
+    def bind(
+        self,
+        action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        dependencies: DepsT,
+    ) -> Iterator[BoundAction[CommandT, PrivateSnapshotT, PreviewT, ResultT]]:
+        if not self._frozen or action._application_token is not self._application_token:
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+        registration = self._registrations.get(action._registration_id)
+        if registration is None:
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+
+        specification = cast(
+            "ActionSpec[CommandT, PrivateSnapshotT, PreviewT, ResultT]",
+            registration.specification,
+        )  # why: the opaque handle is verified against this application's typed registration
+        recipe = cast(
+            "ActionRecipe[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]",
+            registration.recipe,
+        )  # why: register stored this recipe with the same verified opaque handle
+
+        components: ActionComponents[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
+        try:
+            components = recipe.bind(dependencies)
+        except Exception:
+            components = None
+        if not isinstance(components, ActionComponents):
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
+        try:
+            definition = ActionDefinition(
+                action_type=specification.action_type,
+                command_model=specification.command_model,
+                private_snapshot_model=specification.private_snapshot_model,
+                display_preview_model=specification.display_preview_model,
+                result_model=specification.result_model,
+                preparation=components.preparation,
+                authorization=components.authorization,
+                authority_evaluator=components.authority_evaluator,
+                state_resolver=components.state_resolver,
+                executor=components.executor,
+                verifier=components.verifier,
+                commitment_provider=components.commitment_provider,
+                protection_codec=components.protection_codec,
+                retention=components.retention,
+                proposal_ttl=specification.proposal_ttl,
+                executor_identity=specification.executor_identity,
+                target_identity=specification.target_identity,
+                authority_audience=specification.authority_audience,
+                authority_channel_assurance=specification.authority_channel_assurance,
+                verification_delay=specification.verification_delay,
+                max_verification_attempts=specification.max_verification_attempts,
+                effect_kind=specification.effect_kind,
+                allow_resend_after_final_absence=(specification.allow_resend_after_final_absence),
+                verification_lease_duration=specification.verification_lease_duration,
+                semantic_idempotency_strategy=(specification.semantic_idempotency_strategy),
+            )
+        except Exception:
+            definition = None
+        if definition is None:
+            raise ActionApplicationError(ActionIssueCode.DEFINITION_NONCONFORMING)
+
+        runtime: ActionRuntime | None
+        try:
+            runtime = ActionRuntime(
+                store=components.store,
+                retention_store=components.retention_store,
+                clock=components.clock,
+                identifiers=components.identifiers,
+                event_sink=components.event_sink,
+                runtime_revision=components.runtime_revision,
+            )
+        except Exception:
+            runtime = None
+        if runtime is None:
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+
+        state = _BindingState(definition=definition, runtime=runtime)
+        try:
+            yield BoundAction(_state=state)
+        finally:
+            state.release()

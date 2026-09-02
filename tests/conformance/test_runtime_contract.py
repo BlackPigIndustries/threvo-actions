@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 import pytest
 from tests.unit.test_memory_store import NOW, authority, proposal
 from tests.unit.test_runtime import (
+    ACTION_TYPE,
+    CapturingEvents,
     Command,
     DeterministicSecrets,
     HostPorts,
@@ -15,6 +17,7 @@ from tests.unit.test_runtime import (
     Preview,
     PrivateSnapshot,
     Result,
+    SequenceIdentifiers,
     authority_for,
     definition,
     prepare,
@@ -31,7 +34,20 @@ from threvo_actions.conformance import (
     assert_providers_conform,
     assert_runtime_conforms,
 )
-from threvo_actions.models import LifecycleStatus
+from threvo_actions.experimental import (
+    ActionApplication,
+    ActionComponents,
+    ActionRecipe,
+    ActionSpec,
+    RegisteredAction,
+)
+from threvo_actions.models import (
+    AuthoritativeTarget,
+    GovernedExecutor,
+    LifecycleStatus,
+    ProposingAgent,
+    RequestingPrincipal,
+)
 from threvo_actions.registry import VerificationResult, VerificationStatus
 from threvo_actions.stores.memory import MemoryActionStore
 
@@ -295,6 +311,129 @@ def test_provider_contract_catches_no_op_destruction(
 
 def test_host_passes_the_public_runtime_contract() -> None:
     asyncio.run(assert_runtime_conforms(driver))
+
+
+@dataclass
+class ExperimentalDependencies:
+    store: MemoryActionStore
+    clock: MutableClock
+    events: CapturingEvents
+    identifiers: SequenceIdentifiers
+    host: HostPorts
+    secrets: DeterministicSecrets
+
+
+def experimental_components(
+    dependencies: ExperimentalDependencies,
+) -> ActionComponents[Command, PrivateSnapshot, Preview, Result]:
+    return ActionComponents(
+        preparation=dependencies.host,
+        authorization=dependencies.host,
+        authority_evaluator=dependencies.host,
+        state_resolver=dependencies.host,
+        executor=dependencies.host,
+        verifier=dependencies.host,
+        commitment_provider=dependencies.secrets,
+        protection_codec=dependencies.secrets,
+        retention=dependencies.host,
+        store=dependencies.store,
+        retention_store=dependencies.store,
+        clock=dependencies.clock,
+        identifiers=dependencies.identifiers,
+        event_sink=dependencies.events,
+        runtime_revision=f"threvo-actions/commit:{'a' * 40}",
+    )
+
+
+@dataclass
+class ExperimentalDriver(RuntimeConformanceDriver):
+    application: ActionApplication[ExperimentalDependencies]
+    action: RegisteredAction[Command, PrivateSnapshot, Preview, Result]
+    dependencies: ExperimentalDependencies
+
+    @property
+    def executor_calls(self) -> int:
+        return self.dependencies.host.executor_calls
+
+    async def prepare(self) -> ActionOperationResult:
+        with self.application.bind(self.action, dependencies=self.dependencies) as bound:
+            return await bound.prepare(
+                tenant_reference="tenant:a",
+                command=Command(order_reference="ORD-42"),
+                requesting_principal=RequestingPrincipal(reference="user:requester"),
+                proposing_agent=ProposingAgent(reference="agent:finance-assistant"),
+            )
+
+    async def record_approval(self, proposal_reference: str) -> ActionOperationResult:
+        evidence = await authority_for(self.dependencies.store, proposal_reference)
+        with self.application.bind(self.action, dependencies=self.dependencies) as bound:
+            return await bound.record_authority(
+                evidence=evidence,
+                authenticated_authority=evidence.authority,
+            )
+
+    async def execute(self, proposal_reference: str) -> ActionOperationResult:
+        with self.application.bind(self.action, dependencies=self.dependencies) as bound:
+            return await bound.execute(
+                tenant_reference="tenant:a",
+                proposal_reference=proposal_reference,
+            )
+
+    async def reconcile(self, proposal_reference: str) -> ActionOperationResult:
+        with self.application.bind(self.action, dependencies=self.dependencies) as bound:
+            return await bound.reconcile(
+                tenant_reference="tenant:a",
+                proposal_reference=proposal_reference,
+            )
+
+    async def make_verification_due(self) -> None:
+        self.dependencies.clock.advance(timedelta(seconds=30))
+
+    async def revoke_execution_authorization(self) -> None:
+        self.dependencies.host.execute_allowed = False
+
+    async def introduce_material_drift(self) -> None:
+        self.dependencies.host.target_version += 1
+
+
+def experimental_driver() -> ExperimentalDriver:
+    store = MemoryActionStore()
+    dependencies = ExperimentalDependencies(
+        store=store,
+        clock=MutableClock(),
+        events=CapturingEvents(),
+        identifiers=SequenceIdentifiers(),
+        host=HostPorts(),
+        secrets=DeterministicSecrets(),
+    )
+    specification = ActionSpec[Command, PrivateSnapshot, Preview, Result](
+        action_type=ACTION_TYPE,
+        command_model=Command,
+        private_snapshot_model=PrivateSnapshot,
+        display_preview_model=Preview,
+        result_model=Result,
+        proposal_ttl=timedelta(minutes=10),
+        verification_delay=timedelta(seconds=30),
+        executor_identity=GovernedExecutor(reference="service:refunds"),
+        target_identity=AuthoritativeTarget(reference="psp:refunds"),
+        authority_audience="service:refunds",
+        authority_channel_assurance="authenticated_session",
+    )
+    application = ActionApplication[ExperimentalDependencies]()
+    registered = application.register(
+        specification,
+        ActionRecipe(bind=experimental_components),
+    )
+    application.freeze()
+    return ExperimentalDriver(
+        application=application,
+        action=registered,
+        dependencies=dependencies,
+    )
+
+
+def test_experimental_binding_passes_the_same_public_runtime_contract() -> None:
+    asyncio.run(assert_runtime_conforms(experimental_driver))
 
 
 def test_runtime_contract_allows_provisional_authoritative_queries_without_resending() -> None:
