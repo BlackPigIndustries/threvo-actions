@@ -202,28 +202,45 @@ def test_specification_is_frozen_and_contains_only_immutable_safety_semantics() 
 
 
 @pytest.mark.parametrize(
-    ("updates", "message"),
+    "updates",
     (
-        ({"proposal_ttl": timedelta(0)}, "proposal_ttl"),
-        ({"verification_delay": timedelta(seconds=-1)}, "verification_delay"),
-        ({"max_verification_attempts": 0}, "max_verification_attempts"),
-        ({"verification_lease_duration": timedelta(0)}, "verification_lease_duration"),
-        ({"authority_audience": " unsafe"}, "authority_audience"),
+        {"proposal_ttl": timedelta(0)},
+        {"verification_delay": timedelta(seconds=-1)},
+        {"max_verification_attempts": 0},
+        {"verification_lease_duration": timedelta(0)},
+        {"authority_audience": " unsafe"},
     ),
 )
-def test_specification_rejects_invalid_static_semantics(
-    updates: dict[str, object], message: str
-) -> None:
-    with pytest.raises(ValidationError, match=message):
+def test_specification_rejects_invalid_static_semantics(updates: dict[str, object]) -> None:
+    with pytest.raises(ActionApplicationError) as captured:
         specification(**updates)
+
+    assert captured.value.code is ActionIssueCode.INVALID_SPECIFICATION
 
 
 def test_specification_rejects_nonconforming_boundary_models() -> None:
-    with pytest.raises(ValidationError, match="command model.*frozen=True"):
+    with pytest.raises(ActionApplicationError) as mutable_error:
         specification(command_model=MutableCommand)
 
-    with pytest.raises(ValidationError, match="floating-point values at amount"):
+    with pytest.raises(ActionApplicationError) as float_error:
         specification(private_snapshot_model=FloatSnapshot)
+
+    assert mutable_error.value.code is ActionIssueCode.INVALID_SPECIFICATION
+    assert float_error.value.code is ActionIssueCode.INVALID_SPECIFICATION
+
+
+def test_specification_failure_does_not_retain_rejected_input() -> None:
+    rejected_input = " SENTINEL_TENANT_SECRET_123"
+
+    with pytest.raises(ActionApplicationError) as captured:
+        specification(authority_audience=rejected_input)
+
+    error = captured.value
+    assert error.code is ActionIssueCode.INVALID_SPECIFICATION
+    assert str(error) == "action specification is invalid"
+    assert rejected_input not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
 
 
 def test_duplicate_registration_is_atomic_and_uses_a_stable_issue_code() -> None:

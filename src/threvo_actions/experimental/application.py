@@ -10,9 +10,16 @@ from contextlib import AbstractAsyncContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import StrEnum
-from typing import Annotated, Generic, Literal, Protocol, TypeVar, cast
+from typing import Annotated, Generic, Literal, Protocol, Self, TypeVar, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ModelWrapValidatorHandler,
+    ValidationError,
+    model_validator,
+)
 
 from ..authority import AuthorityEvidence
 from ..canonical import CommitmentProvider, ProtectionCodec
@@ -31,6 +38,7 @@ from ..registry import (
     ActionDefinition,
     AuthorityEvaluatorPort,
     AuthorizationPort,
+    DefinitionConformanceError,
     GovernedExecutorPort,
     PreparationPort,
     ReadContext,
@@ -99,7 +107,12 @@ class ActionApplicationError(RuntimeError):
 class ActionSpec(BaseModel, Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     """Immutable action semantics that are safe to retain application-wide."""
 
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        frozen=True,
+        hide_input_in_errors=True,
+    )
 
     action_type: ActionType
     command_model: type[CommandT]
@@ -118,15 +131,25 @@ class ActionSpec(BaseModel, Generic[CommandT, PrivateSnapshotT, PreviewT, Result
     verification_lease_duration: PositiveTimedelta = timedelta(minutes=1)
     semantic_idempotency_strategy: Literal["host_defined"] = "host_defined"
 
-    @model_validator(mode="after")
-    def boundary_models_conform(self) -> ActionSpec[CommandT, PrivateSnapshotT, PreviewT, ResultT]:
-        assert_boundary_models_conform(
-            command_model=self.command_model,
-            private_snapshot_model=self.private_snapshot_model,
-            display_preview_model=self.display_preview_model,
-            result_model=self.result_model,
-        )
-        return self
+    @model_validator(mode="wrap")
+    @classmethod
+    def translate_validation_failure(
+        cls,
+        value: object,
+        handler: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        try:
+            validated = handler(value)
+            assert_boundary_models_conform(
+                command_model=validated.command_model,
+                private_snapshot_model=validated.private_snapshot_model,
+                display_preview_model=validated.display_preview_model,
+                result_model=validated.result_model,
+            )
+            return validated
+        except (DefinitionConformanceError, ValidationError):
+            pass
+        raise ActionApplicationError(ActionIssueCode.INVALID_SPECIFICATION) from None
 
 
 @dataclass(frozen=True)
