@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
 from datetime import timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
@@ -32,6 +34,25 @@ from threvo_actions.registry import (
 
 if TYPE_CHECKING:
     from threvo_actions.authority import AuthorityEvidence
+
+
+def test_root_import_does_not_load_or_export_experimental_authoring() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import threvo_actions; "
+                "assert 'threvo_actions.experimental' not in sys.modules; "
+                "assert 'ActionSpec' not in threvo_actions.__all__"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 class Command(ExperimentalModel):

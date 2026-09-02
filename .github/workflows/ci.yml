@@ -70,7 +70,7 @@ jobs:
           python-version: "3.11"
       - run: uv sync --extra dev --locked
       - run: uv pip install --python .venv/bin/python --upgrade "${{ matrix.pydantic-spec }}"
-      - run: uv run --no-sync pytest -q tests/typing/test_experimental_application.py
+      - run: uv run --no-sync pytest -q tests/typing/test_experimental_application_typing.py
 
   pydantic-ai:
     runs-on: ubuntu-latest
