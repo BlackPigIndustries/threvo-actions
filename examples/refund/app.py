@@ -175,6 +175,7 @@ class RefundHost:
         self._intents: dict[str, tuple[str, Money]] = {}
         self._target_bindings: dict[str, tuple[str, str, Money]] = {}
 
+    # --8<-- [start:host-prepare]
     async def prepare(
         self, command: RefundCommand, *, context: PreparationContext
     ) -> PreparedAction[RefundSnapshot, RefundPreview]:
@@ -198,6 +199,8 @@ class RefundHost:
             order_version=order.version,
         )
         return self._prepared(snapshot)
+
+    # --8<-- [end:host-prepare]
 
     async def can_prepare(
         self, command: RefundCommand, *, context: PreparationContext
@@ -251,6 +254,7 @@ class RefundHost:
             reason_code=None if approved else "finance_manager_required",
         )
 
+    # --8<-- [start:host-resolve]
     async def resolve(
         self, snapshot: RefundSnapshot, *, context: ExecutionContext
     ) -> ResolvedState[RefundSnapshot, RefundPreview]:
@@ -282,6 +286,8 @@ class RefundHost:
             materially_drifted=drifted,
             replacement=replacement,
         )
+
+    # --8<-- [end:host-resolve]
 
     async def execute(
         self,
@@ -545,6 +551,7 @@ def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication
     target = psp or FakePSP()
     host = RefundHost(ledger=ledger, psp=target, tenant_reference=TENANT)
     protection = InMemoryProtection()
+    # --8<-- [start:action-specification]
     specification = ActionSpec[RefundCommand, RefundSnapshot, RefundPreview, RefundResult](
         action_type=ACTION_TYPE,
         command_model=RefundCommand,
@@ -561,6 +568,7 @@ def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication
         authority_audience=AUTHORITY_AUDIENCE,
         authority_channel_assurance=CHANNEL_ASSURANCE,
     )
+    # --8<-- [end:action-specification]
     store = MemoryActionStore()
     clock = MutableClock()
     events = CapturingEvents()
@@ -574,9 +582,11 @@ def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication
         protection_codec=protection,
         events=events,
     )
+    # --8<-- [start:action-registration]
     actions = ActionApplication[RefundDependencies]()
     refund = actions.register(specification, ActionRecipe(bind=refund_components))
     actions.freeze()
+    # --8<-- [end:action-registration]
     return RefundApplication(
         actions=actions,
         refund=refund,

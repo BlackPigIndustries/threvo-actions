@@ -16,8 +16,9 @@ verification: verification_pending -> verified
 erasure: erased, content hidden: True
 ```
 
-The program imports the complete [quickstart action](../getting-started/first-action.md)
-and changes only the state necessary for each scenario.
+The program imports the complete
+[refund reference application](refund.md) and changes only the state necessary
+for each scenario.
 
 ```python
 --8<-- "examples/docs/lifecycle_scenarios.py"

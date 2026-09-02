@@ -180,6 +180,25 @@ Publish one worksheet per attempt with:
 | Participant blockers and documentation gaps | |
 | Pass/fail against the time limit | |
 
+For the gradual-reveal evaluation, record the expert baseline first under this
+same fixture and acceptance command. Candidate attempts must use a wheel built
+by the release workflow, not an editable checkout. Add the candidate source
+commit, wheel and source-distribution SHA-256 digests, eligible expert wiring,
+eligible candidate wiring, absolute LOC delta, and percentage reduction.
+
+Entries are append-only and hash linked: canonicalize each completed worksheet
+as JSON, record its SHA-256, and include the previous entry digest (`genesis`
+for the first entry). Never replace a failed or assisted attempt. Any source,
+fixture, documentation, acceptance-test, or methodology change creates a new
+entry and may require a new independent participant.
+
+A passing candidate must satisfy the time limits, all nine safety conditions,
+fifth-action eligible host code of at most 500 lines, and at least 30% less
+eligible definition/composition wiring than the expert baseline. Report shared
+first-integration infrastructure separately from marginal additional-action
+code; moved safety code remains eligible rather than disappearing from the
+count.
+
 Retain the failing worksheet as well as successful attempts. Changing the
 fixture, documentation, acceptance tests, or scoring rules creates a new
 methodology revision and must not be silently compared with earlier results.

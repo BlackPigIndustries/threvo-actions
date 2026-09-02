@@ -11,6 +11,7 @@ from threvo_actions import Money
 from threvo_actions.models import ExperimentalModel, SafeReference
 
 
+# --8<-- [start:boundary-models]
 class RefundCommand(ExperimentalModel):
     """One durable business intent, independent of transport retries."""
 
@@ -43,6 +44,9 @@ class RefundResult(ExperimentalModel):
 
     provider_refund_reference: SafeReference
     refunded: Money
+
+
+# --8<-- [end:boundary-models]
 
 
 class PaymentOrder(ExperimentalModel):

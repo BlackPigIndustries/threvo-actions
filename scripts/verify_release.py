@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).parents[1]
 VERSION_PATTERN = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
+COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 FORBIDDEN_PARTS = {
     ".env",
     ".git",
@@ -37,6 +38,9 @@ FORBIDDEN_PARTS = {
 }
 REQUIRED_PACKAGE_FILES = {
     "threvo_actions/.agents/skills/threvo-actions/SKILL.md",
+    "threvo_actions/experimental/__init__.py",
+    "threvo_actions/experimental/application.py",
+    "threvo_actions/experimental/inspection.py",
     "threvo_actions/_migrations/mysql/001_action_runtime.sql",
     "threvo_actions/_migrations/mysql/002_harden_database_boundaries.sql",
     "threvo_actions/_migrations/postgres/001_action_runtime.sql",
@@ -55,6 +59,9 @@ REQUIRED_SDIST_FILES = {
     "README.md",
     "SECURITY.md",
     "docs/versioning.md",
+    "docs/releases/0.1.4.md",
+    "docs/testing/gradual-reveal-adoption.md",
+    "examples/docs/quickstart.py",
     "examples/refund/app.py",
     "examples/supplier_destination/app.py",
     "tests/golden/canonical-v1.json",
@@ -160,6 +167,75 @@ def verify_distributions(dist: Path) -> None:
     manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def record_candidate(
+    release: Path,
+    *,
+    source_commit: str,
+    release_tag: str,
+) -> None:
+    """Record immutable candidate identity next to already verified packages."""
+    _require(COMMIT_PATTERN.fullmatch(source_commit) is not None, "invalid source commit")
+    version = project_version()
+    _require(release_tag == f"v{version}", "candidate tag does not match package version")
+    artifacts = _verified_release_artifacts(release)
+    record = {
+        "schema_version": 1,
+        "version": version,
+        "release_tag": release_tag,
+        "source_commit": source_commit,
+        "artifacts": artifacts,
+    }
+    (release / "CANDIDATE.json").write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def verify_candidate(
+    release: Path,
+    *,
+    source_commit: str,
+    release_tag: str,
+) -> None:
+    """Refuse promotion when candidate identity or package bytes have changed."""
+    record_path = release / "CANDIDATE.json"
+    _require(record_path.is_file(), "candidate record is missing")
+    record: object = json.loads(record_path.read_text(encoding="utf-8"))
+    _require(isinstance(record, dict), "candidate record must be an object")
+    expected = {
+        "schema_version": 1,
+        "version": project_version(),
+        "release_tag": release_tag,
+        "source_commit": source_commit,
+        "artifacts": _verified_release_artifacts(release),
+    }
+    _require(record == expected, "candidate identity or artifact digests differ")
+
+
+def _verified_release_artifacts(release: Path) -> dict[str, str]:
+    manifest = release / "SHA256SUMS"
+    packages = release / "packages"
+    _require(manifest.is_file(), "candidate manifest is missing")
+    _require(packages.is_dir(), "candidate packages are missing")
+    artifacts: dict[str, str] = {}
+    for line_number, line in enumerate(manifest.read_text(encoding="utf-8").splitlines(), 1):
+        digest, separator, filename = line.partition("  ")
+        _require(separator == "  ", f"invalid manifest entry on line {line_number}")
+        _require(re.fullmatch(r"[0-9a-f]{64}", digest) is not None, "invalid artifact digest")
+        _require(Path(filename).name == filename and filename, "unsafe artifact filename")
+        _require(filename not in artifacts, "duplicate artifact filename")
+        artifact = packages / filename
+        _require(artifact.is_file(), f"candidate artifact is missing: {filename}")
+        _require(_sha256(artifact) == digest, f"candidate artifact digest differs: {filename}")
+        artifacts[filename] = digest
+    _require(len(artifacts) == 2, "candidate must contain one wheel and one source distribution")
+    _require(
+        {path.name for path in packages.iterdir() if path.is_file()} == set(artifacts),
+        "candidate package files differ from the manifest",
+    )
+    return artifacts
+
+
 def _assert_clean_names(names: set[str], *, wheel: bool) -> None:
     for name in names:
         parts = set(Path(name).parts)
@@ -236,15 +312,44 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag")
     parser.add_argument("--dist", type=Path)
+    candidate = parser.add_mutually_exclusive_group()
+    candidate.add_argument("--record-candidate", type=Path)
+    candidate.add_argument("--verify-candidate", type=Path)
+    parser.add_argument("--source-commit")
     args = parser.parse_args()
     try:
         version = verify_metadata(expected_tag=args.tag)
         if args.dist is not None:
             verify_distributions(args.dist)
+        if (args.record_candidate is not None or args.verify_candidate is not None) and (
+            args.source_commit is None or args.tag is None
+        ):
+            raise ValueError("candidate verification requires --source-commit and --tag")
+        if args.record_candidate is not None:
+            record_candidate(
+                args.record_candidate,
+                source_commit=args.source_commit,
+                release_tag=args.tag,
+            )
+        if args.verify_candidate is not None:
+            verify_candidate(
+                args.verify_candidate,
+                source_commit=args.source_commit,
+                release_tag=args.tag,
+            )
     except ValueError as exc:
         print(f"release verification failed: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"version": version, "distributions": args.dist is not None}))
+    print(
+        json.dumps(
+            {
+                "version": version,
+                "distributions": args.dist is not None,
+                "candidate_recorded": args.record_candidate is not None,
+                "candidate_verified": args.verify_candidate is not None,
+            }
+        )
+    )
     return 0
 
 

@@ -1,13 +1,14 @@
 # Typed action contracts
 
-An `Action` connects typed models to the application services that know how to
-control them. Calling `to_definition()` produces the public `ActionDefinition`
-used by the runtime. The facade adds no runtime path and no hidden behavior.
+An `ActionSpec` declares the four boundary models and immutable action
+semantics. An `ActionRecipe` connects them to operation-scoped application
+services. Binding compiles both to the public `ActionDefinition` used by the
+runtime; the gradual-reveal layer adds no second lifecycle.
 
 ## Four models, four jobs
 
 ```python
---8<-- "examples/docs/quickstart.py:models"
+--8<-- "examples/refund/domain.py:boundary-models"
 ```
 
 Keep the command small. It expresses intent, not trusted business state. The
@@ -15,7 +16,7 @@ preparation port resolves canonical application data and creates two separate
 objects:
 
 ```python
---8<-- "examples/docs/quickstart.py:preparation"
+--8<-- "examples/refund/app.py:host-prepare"
 ```
 
 - `private_snapshot` is protected before it reaches the action store. Put the
@@ -48,23 +49,25 @@ Every action supplies these ports:
 | `protection_codec` | Protect and later destroy the private snapshot. |
 | `retention` | Authorize privileged erasure. |
 
-## Compile the definition
+## Declare and register
 
 ```python
---8<-- "examples/docs/quickstart.py:definition"
+--8<-- "examples/refund/app.py:action-specification"
+
+--8<-- "examples/refund/app.py:action-registration"
 ```
 
-The runtime only receives the compiled definition. It does not know that an
-`Action` subclass exists. Production services such as authorization, key
-custody, execution, and verification may still be separately owned and
-constructor-injected.
+The runtime only receives the compiled definition. Production services such as
+authorization, key custody, execution, and verification remain separately
+owned and are borrowed through the host dependency scope.
 
 `ActionRegistry` is optional. Use it when one process hosts heterogeneous
 definitions and needs checked recovery of their four model types. Directly
 passing a compiled definition to `ActionRuntime` is simpler when the action is
 already known.
 
-`ActionDefinition` remains public, documented plumbing. Build it directly when
+`Action` and `ActionDefinition` remain supported, documented expert plumbing.
+Use `Action` when one object implements all ports. Build a definition directly when
 your integration already has separate port objects or when an inheritance
 facade does not fit the application's ownership model. Both routes execute the
 same runtime contract.

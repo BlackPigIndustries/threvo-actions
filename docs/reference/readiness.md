@@ -5,6 +5,11 @@ PostgreSQL and MySQL adapters. They verify that migration history is current
 and that the connected credential matches either the runtime or retention
 lane. They never migrate, grant privileges, or write action data.
 
+`ActionApplication.inspect()` is not readiness. It reports allowlisted static
+semantics without opening a dependency scope. Only these adapter-specific
+checks may report database migration or credential posture, and neither static
+inspection nor readiness can authorize an action.
+
 Call the adapter-specific function after creating the application's pool and
 before accepting work. Stop startup when `ready` is false and surface `issues`
 to operators. Do not silently continue with a migrator credential.

@@ -1,7 +1,25 @@
 # Action authoring and approval requirements
 
-`Action` is an authoring facade. It compiles to `ActionDefinition`; the runtime
-continues to accept definitions only.
+For new integrations, start with the namespaced gradual-reveal API. It keeps
+immutable semantics separate from operation-scoped host dependencies and
+compiles to the same `ActionDefinition` and `ActionRuntime` used by the expert
+path.
+
+::: threvo_actions.experimental
+    options:
+      members:
+        - ActionApplication
+        - ActionApplicationError
+        - ActionComponents
+        - ActionIssueCode
+        - ActionRecipe
+        - ActionSpec
+        - BoundAction
+        - RegisteredAction
+      show_source: false
+
+`Action` remains the supported authoring facade for a host object that already
+implements every port. The runtime continues to accept definitions only.
 
 ::: threvo_actions.action
     options:
