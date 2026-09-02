@@ -210,7 +210,7 @@ def build_stack(
     )
 
 
-def build_scoped_stack() -> ScopedActionStack:
+def build_scoped_stack(*, freeze_application: bool = True) -> ScopedActionStack:
     store = MemoryActionStore()
     clock = MutableClock()
     events = CapturingEvents()
@@ -248,7 +248,8 @@ def build_scoped_stack() -> ScopedActionStack:
         ),
         ActionRecipe(bind=scoped_components),
     )
-    application.freeze()
+    if freeze_application:
+        application.freeze()
     scope_factory = RecordingScopeFactory(
         store=store,
         clock=clock,

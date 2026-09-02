@@ -446,6 +446,8 @@ class ActionApplication(Generic[DepsT]):
         self,
         action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
     ) -> type[CommandT]:
+        if not self._frozen:
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
         specification, _ = self._typed_registration(action)
         return specification.command_model
 

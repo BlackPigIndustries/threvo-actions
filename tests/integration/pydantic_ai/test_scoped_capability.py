@@ -18,6 +18,7 @@ from pydantic_ai.models.test import TestModel
 from tests.integration.pydantic_ai.support import AgentDeps, build_scoped_stack
 from tests.unit.test_runtime import authorize
 
+from threvo_actions.experimental import ActionApplicationError, ActionIssueCode
 from threvo_actions.integrations.pydantic_ai import ActionToolResult, IntegrationOutcome
 
 
@@ -44,6 +45,14 @@ def _model(observed: list[list[ModelMessage]] | None = None) -> FunctionModel:
         return ModelResponse(parts=[TextPart("done")])
 
     return FunctionModel(respond)
+
+
+def test_scoped_capability_refuses_an_unfrozen_application_during_wiring() -> None:
+    with pytest.raises(ActionApplicationError) as captured:
+        build_scoped_stack(freeze_application=False)
+
+    assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
+    assert str(captured.value) == "action binding is incomplete"
 
 
 def test_scoped_capability_commits_before_deferral_and_rebinds_for_resume() -> None:
