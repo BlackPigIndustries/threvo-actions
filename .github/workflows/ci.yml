@@ -54,6 +54,24 @@ jobs:
           --ignore=tests/integration/postgres
           --ignore=tests/integration/pydantic_ai
 
+  pydantic-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pydantic-spec: ["pydantic==2.10.*", "pydantic>=2.10,<3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: uv sync --extra dev --locked
+      - run: uv pip install --python .venv/bin/python --upgrade "${{ matrix.pydantic-spec }}"
+      - run: uv run --no-sync pytest -q tests/typing/test_experimental_application.py
+
   pydantic-ai:
     runs-on: ubuntu-latest
     strategy:
@@ -165,7 +183,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [quality, test, pydantic-ai, postgres, mysql]
+    needs: [quality, test, pydantic-compatibility, pydantic-ai, postgres, mysql]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
