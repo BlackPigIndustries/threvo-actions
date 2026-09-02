@@ -14,12 +14,31 @@ from scripts.verify_release import (
     _publication_source_paths,
     record_candidate,
     verify_candidate,
+    verify_metadata,
 )
 
 import threvo_actions
 import threvo_actions.experimental as experimental
 
 ROOT = Path(__file__).parents[2]
+
+
+def _workflow_run_bodies(workflow: str) -> tuple[str, ...]:
+    lines = workflow.splitlines()
+    bodies: list[str] = []
+    for index, line in enumerate(lines):
+        match = re.match(r"^(?P<indent>\s*)(?:-\s+)?run:\s*(?P<inline>.*)$", line)
+        if match is None:
+            continue
+        indent = len(match.group("indent"))
+        body = [match.group("inline")]
+        for following in lines[index + 1 :]:
+            following_indent = len(following) - len(following.lstrip())
+            if following.strip() and following_indent <= indent:
+                break
+            body.append(following)
+        bodies.append("\n".join(body))
+    return tuple(bodies)
 
 
 def test_release_metadata_is_consistent() -> None:
@@ -82,6 +101,27 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     assert "sha256sum --check --strict" in workflow
     assert "Promotion gate: **passed**" in workflow
     assert "release-distributions" in workflow
+
+
+def test_release_dispatch_values_never_enter_shell_source() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "${{ inputs.release_tag }}" not in "\n".join(_workflow_run_bodies(workflow))
+    assert workflow.count("^v[0-9]+\\.[0-9]+\\.[0-9]+$") == 2
+
+
+@pytest.mark.parametrize(
+    "release_tag",
+    (
+        "v0.1.4$(touch injected)",
+        "v0.1.4`touch injected`",
+        'v0.1.4"; touch injected; echo "',
+        "v0.1.4\ninvalid",
+    ),
+)
+def test_release_verifier_rejects_tag_shell_metacharacters(release_tag: str) -> None:
+    with pytest.raises(ValueError, match="tag does not match package version"):
+        verify_metadata(expected_tag=release_tag)
 
 
 def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:

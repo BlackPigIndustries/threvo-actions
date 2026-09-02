@@ -50,12 +50,14 @@ jobs:
             echo "Release tags must point to a commit already contained in main." >&2
             exit 1
           fi
-          case "$RELEASE_TAG" in
-            v[0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "release_tag must be an exact vX.Y.Z tag" >&2; exit 1 ;;
-          esac
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must be an exact vX.Y.Z tag" >&2
+            exit 1
+          fi
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
-      - run: uv run --no-project python scripts/verify_release.py --tag "${{ inputs.release_tag }}"
+      - env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: uv run --no-project python scripts/verify_release.py --tag "$RELEASE_TAG"
 
   build-candidate:
     if: inputs.operation == 'candidate'
@@ -86,12 +88,14 @@ jobs:
       - run: uv build
       - run: uv run python scripts/verify_release.py --dist dist
       - name: Record candidate-source-commit and artifact digests
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           mkdir -p release/packages
           mv dist/*.whl dist/*.tar.gz release/packages/
           mv dist/SHA256SUMS release/SHA256SUMS
           uv run python scripts/verify_release.py \
-            --tag "${{ inputs.release_tag }}" \
+            --tag "$RELEASE_TAG" \
             --record-candidate release \
             --source-commit "$GITHUB_SHA"
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -296,6 +300,10 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_COMMIT: ${{ inputs.candidate_source_commit }}
         run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must be an exact vX.Y.Z tag" >&2
+            exit 1
+          fi
           git fetch --no-tags origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
           git show origin/main:docs/testing/gradual-reveal-adoption.md \
@@ -359,11 +367,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
       - name: Revalidate candidate bytes before public publication
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_COMMIT: ${{ inputs.candidate_source_commit }}
         run: >-
           uv run --no-project python scripts/verify_release.py
-          --tag "${{ inputs.release_tag }}"
+          --tag "$RELEASE_TAG"
           --verify-candidate release
-          --source-commit "${{ inputs.candidate_source_commit }}"
+          --source-commit "$SOURCE_COMMIT"
       - name: Revalidate the signed tag before public publication
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
@@ -443,11 +454,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
       - name: Revalidate candidate bytes before PyPI publication
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_COMMIT: ${{ inputs.candidate_source_commit }}
         run: >-
           uv run --no-project python scripts/verify_release.py
-          --tag "${{ inputs.release_tag }}"
+          --tag "$RELEASE_TAG"
           --verify-candidate release
-          --source-commit "${{ inputs.candidate_source_commit }}"
+          --source-commit "$SOURCE_COMMIT"
       - name: Revalidate the signed tag before PyPI publication
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
