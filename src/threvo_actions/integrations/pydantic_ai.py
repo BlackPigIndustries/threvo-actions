@@ -46,13 +46,21 @@ from ..runtime import (
     AuthorizationDeniedError,
     OperationOutcome,
     ProposalNotFoundError,
+    ProposalView,
 )
 
 if TYPE_CHECKING:
+    from ..experimental import (
+        ActionApplication,
+        DependencyScopeFactory,
+        RegisteredAction,
+    )
     from ..registry import ActionDefinition
 
 DepsT = TypeVar("DepsT")
+ScopedDepsT = TypeVar("ScopedDepsT")
 DepsContraT = TypeVar("DepsContraT", contravariant=True)
+CommandContraT = TypeVar("CommandContraT", bound=BaseModel, contravariant=True)
 CommandT = TypeVar("CommandT", bound=BaseModel)
 PrivateSnapshotT = TypeVar("PrivateSnapshotT", bound=BaseModel)
 PreviewT = TypeVar("PreviewT", bound=BaseModel)
@@ -121,7 +129,7 @@ class _BuildableBinding(Protocol[DepsContraT]):
     @property
     def name(self) -> str: ...
 
-    def build_tool(self, runtime: ActionRuntime) -> Tool[DepsContraT]: ...
+    def build_tool(self, runtime: ActionRuntime | None) -> Tool[DepsContraT]: ...
 
 
 def _tool_result(result: ActionOperationResult) -> ActionToolResult:
@@ -143,6 +151,182 @@ def _continuation_metadata(value: object) -> _ContinuationMetadata | None:
         return None
 
 
+class _ActionOperations(Protocol[CommandContraT]):
+    async def prepare(
+        self,
+        *,
+        tenant_reference: str,
+        command: CommandContraT,
+        requesting_principal: RequestingPrincipal,
+        proposing_agent: ProposingAgent | None = None,
+    ) -> ActionOperationResult: ...
+
+    async def execute(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult: ...
+
+    async def reconcile(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult: ...
+
+    async def read(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ProposalView: ...
+
+
+@dataclass(frozen=True)
+class _FixedActionOperations(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
+    runtime: ActionRuntime
+    definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT]
+
+    async def prepare(
+        self,
+        *,
+        tenant_reference: str,
+        command: CommandT,
+        requesting_principal: RequestingPrincipal,
+        proposing_agent: ProposingAgent | None = None,
+    ) -> ActionOperationResult:
+        return await self.runtime.prepare(
+            self.definition,
+            tenant_reference=tenant_reference,
+            command=command,
+            requesting_principal=requesting_principal,
+            proposing_agent=proposing_agent,
+        )
+
+    async def execute(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult:
+        return await self.runtime.execute(
+            self.definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
+    async def reconcile(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+    ) -> ActionOperationResult:
+        return await self.runtime.reconcile(
+            self.definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
+    async def read(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ProposalView:
+        return await self.runtime.read(
+            self.definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+
+
+async def _invoke_action_tool(
+    *,
+    approved: bool,
+    continuation_value: object,
+    arguments: dict[str, object],
+    command_model: type[CommandT],
+    action_type: ActionType,
+    operations: _ActionOperations[CommandT],
+    trusted: ActionAgentContext,
+    tool_name: str,
+) -> ActionToolResult | _ContinuationMetadata:
+    if approved:
+        continuation = _continuation_metadata(continuation_value)
+        if (
+            continuation is None
+            or continuation.tool_name != tool_name
+            or continuation.action_type != action_type
+        ):
+            return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
+        try:
+            read_context = ReadContext(
+                tenant_reference=trusted.tenant_reference,
+                consumer=trusted.evidence_consumer,
+            )
+            await operations.read(
+                proposal_reference=continuation.proposal_reference,
+                context=read_context,
+            )
+            result = await operations.execute(
+                tenant_reference=trusted.tenant_reference,
+                proposal_reference=continuation.proposal_reference,
+            )
+            if result.outcome in {
+                OperationOutcome.VERIFICATION_PENDING,
+                OperationOutcome.FAILED_UNKNOWN,
+            }:
+                result = await operations.reconcile(
+                    tenant_reference=trusted.tenant_reference,
+                    proposal_reference=result.proposal_reference,
+                )
+            await operations.read(
+                proposal_reference=result.proposal_reference,
+                context=read_context,
+            )
+            if result.fresh_proposal_reference is not None:
+                await operations.read(
+                    proposal_reference=result.fresh_proposal_reference,
+                    context=read_context,
+                )
+        except ProposalNotFoundError:
+            return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
+        return _tool_result(result)
+
+    try:
+        command = command_model.model_validate(arguments)
+    except ValidationError as exc:
+        raise ModelRetry(
+            "Financial action arguments do not match the declared command schema."
+        ) from exc
+    try:
+        prepared = await operations.prepare(
+            tenant_reference=trusted.tenant_reference,
+            command=command,
+            requesting_principal=trusted.requesting_principal,
+            proposing_agent=trusted.proposing_agent,
+        )
+    except AuthorizationDeniedError:
+        return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+    try:
+        prepared_view = await operations.read(
+            proposal_reference=prepared.proposal_reference,
+            context=ReadContext(
+                tenant_reference=trusted.tenant_reference,
+                consumer=trusted.evidence_consumer,
+            ),
+        )
+    except ProposalNotFoundError:
+        return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+    return _ContinuationMetadata(
+        proposal_reference=prepared.proposal_reference,
+        tool_name=tool_name,
+        action_type=action_type,
+        display_preview=prepared_view.display_preview,
+    )
+
+
 @dataclass(frozen=True)
 class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     """Explicitly binds one action definition to one model-visible tool."""
@@ -158,103 +342,97 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
         if not self.description.strip():
             raise ValueError("tool description must not be empty")
 
-    def build_tool(self, runtime: ActionRuntime) -> Tool[DepsT]:
+    def build_tool(self, runtime: ActionRuntime | None) -> Tool[DepsT]:
+        if runtime is None:
+            raise ValueError("fixed action tool bindings require an action runtime")
         definition = self.definition
         context_resolver = self.context_resolver
         tool_name = self.name
+        operations = _FixedActionOperations(runtime=runtime, definition=definition)
 
         async def financial_action_tool(
             ctx: RunContext[DepsT],
             **arguments: object,
         ) -> ActionToolResult:
             trusted = context_resolver(ctx.deps)
-            if ctx.tool_call_approved:
-                continuation = _continuation_metadata(ctx.tool_call_metadata)
-                if (
-                    continuation is None
-                    or continuation.tool_name != tool_name
-                    or continuation.action_type != definition.action_type
-                ):
-                    return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
-                try:
-                    read_context = ReadContext(
-                        tenant_reference=trusted.tenant_reference,
-                        consumer=trusted.evidence_consumer,
-                    )
-                    await runtime.read(
-                        definition,
-                        proposal_reference=continuation.proposal_reference,
-                        context=read_context,
-                    )
-                    result = await runtime.execute(
-                        definition,
-                        tenant_reference=trusted.tenant_reference,
-                        proposal_reference=continuation.proposal_reference,
-                    )
-                    if result.outcome in {
-                        OperationOutcome.VERIFICATION_PENDING,
-                        OperationOutcome.FAILED_UNKNOWN,
-                    }:
-                        result = await runtime.reconcile(
-                            definition,
-                            tenant_reference=trusted.tenant_reference,
-                            proposal_reference=result.proposal_reference,
-                        )
-                    await runtime.read(
-                        definition,
-                        proposal_reference=result.proposal_reference,
-                        context=read_context,
-                    )
-                    if result.fresh_proposal_reference is not None:
-                        await runtime.read(
-                            definition,
-                            proposal_reference=result.fresh_proposal_reference,
-                            context=read_context,
-                        )
-                except ProposalNotFoundError:
-                    return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
-                return _tool_result(result)
-
-            try:
-                command = definition.command_model.model_validate(arguments)
-            except ValidationError as exc:
-                raise ModelRetry(
-                    "Financial action arguments do not match the declared command schema."
-                ) from exc
-            try:
-                prepared = await runtime.prepare(
-                    definition,
-                    tenant_reference=trusted.tenant_reference,
-                    command=command,
-                    requesting_principal=trusted.requesting_principal,
-                    proposing_agent=trusted.proposing_agent,
-                )
-            except AuthorizationDeniedError:
-                return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
-            try:
-                prepared_view = await runtime.read(
-                    definition,
-                    proposal_reference=prepared.proposal_reference,
-                    context=ReadContext(
-                        tenant_reference=trusted.tenant_reference,
-                        consumer=trusted.evidence_consumer,
-                    ),
-                )
-            except ProposalNotFoundError:
-                return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
-            metadata = _ContinuationMetadata(
-                proposal_reference=prepared.proposal_reference,
-                tool_name=tool_name,
+            outcome = await _invoke_action_tool(
+                approved=ctx.tool_call_approved,
+                continuation_value=ctx.tool_call_metadata,
+                arguments=arguments,
+                command_model=definition.command_model,
                 action_type=definition.action_type,
-                display_preview=prepared_view.display_preview,
+                operations=operations,
+                trusted=trusted,
+                tool_name=tool_name,
             )
-            raise ApprovalRequired(metadata=metadata.model_dump(mode="json"))
+            if isinstance(outcome, _ContinuationMetadata):
+                raise ApprovalRequired(metadata=outcome.model_dump(mode="json"))
+            return outcome
 
         return Tool[DepsT].from_schema(
             function=financial_action_tool,
             name=self.name,
             description=self.description,
             json_schema=definition.command_model.model_json_schema(),
+            takes_ctx=True,
+            sequential=True,
+        )
+
+
+@dataclass(frozen=True)
+class ScopedActionToolBinding(
+    Generic[DepsT, ScopedDepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]
+):
+    """Bind one registered action through fresh host dependencies per tool call."""
+
+    application: ActionApplication[ScopedDepsT]
+    action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT]
+    dependency_scope: DependencyScopeFactory[DepsT, ScopedDepsT]
+    context_resolver: ActionContextResolver[ScopedDepsT]
+    name: str
+    description: str
+
+    def __post_init__(self) -> None:
+        if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
+            raise ValueError("tool name must be a lowercase Python-style identifier")
+        if not self.description.strip():
+            raise ValueError("tool description must not be empty")
+
+    def build_tool(self, runtime: ActionRuntime | None) -> Tool[DepsT]:
+        del runtime
+        application = self.application
+        action = self.action
+        dependency_scope = self.dependency_scope
+        context_resolver = self.context_resolver
+        command_model = application._command_model_for(action)
+        tool_name = self.name
+
+        async def financial_action_tool(
+            ctx: RunContext[DepsT],
+            **arguments: object,
+        ) -> ActionToolResult:
+            async with dependency_scope(ctx.deps) as dependencies:
+                trusted = context_resolver(dependencies)
+                with application.bind(action, dependencies=dependencies) as bound:
+                    outcome = await _invoke_action_tool(
+                        approved=ctx.tool_call_approved,
+                        continuation_value=ctx.tool_call_metadata,
+                        arguments=arguments,
+                        command_model=command_model,
+                        action_type=action.action_type,
+                        operations=bound,
+                        trusted=trusted,
+                        tool_name=tool_name,
+                    )
+            if isinstance(outcome, _ContinuationMetadata):
+                raise ApprovalRequired(metadata=outcome.model_dump(mode="json"))
+            return outcome
+
+        return Tool[DepsT].from_schema(
+            function=financial_action_tool,
+            name=self.name,
+            description=self.description,
+            json_schema=command_model.model_json_schema(),
             takes_ctx=True,
             sequential=True,
         )
@@ -271,8 +449,8 @@ class ActionCapability(AbstractCapability[DepsT]):
     def __init__(
         self,
         *,
-        runtime: ActionRuntime,
         bindings: Sequence[_BuildableBinding[DepsT]],
+        runtime: ActionRuntime | None = None,
         inline_authority_handler: InlineAuthorityHandler[DepsT] | None = None,
         id: str = "threvo_actions",
     ) -> None:
@@ -370,4 +548,5 @@ __all__ = [
     "DeferredActionRequest",
     "InlineAuthorityHandler",
     "IntegrationOutcome",
+    "ScopedActionToolBinding",
 ]

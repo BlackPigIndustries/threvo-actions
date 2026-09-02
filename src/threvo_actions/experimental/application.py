@@ -419,6 +419,13 @@ class ActionApplication(Generic[DepsT]):
         )  # why: register stored this recipe with the same verified opaque handle
         return specification, recipe
 
+    def _command_model_for(
+        self,
+        action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+    ) -> type[CommandT]:
+        specification, _ = self._typed_registration(action)
+        return specification.command_model
+
     @contextmanager
     def bind(
         self,
