@@ -21,11 +21,20 @@ from threvo_actions import (
     ReadContext,
 )
 from threvo_actions.conformance import ConformanceError, assert_no_sensitive_data
+from threvo_actions.experimental import ActionApplication, ActionRecipe
 
 if TYPE_CHECKING:
     from threvo_actions.registry import PreparationContext
 
-from .app import REQUESTER, TENANT, RefundApplication, RefundHost, build_refund_application
+from .app import (
+    REQUESTER,
+    TENANT,
+    RefundApplication,
+    RefundDependencies,
+    RefundHost,
+    build_refund_application,
+    refund_components,
+)
 from .domain import (
     PaymentOrder,
     RefundCommand,
@@ -375,9 +384,8 @@ def test_generic_evidence_and_safe_results_do_not_leak_private_psp_data() -> Non
         accepted = await application.execute(proposal_reference)
         application.clock.advance(timedelta(seconds=5))
         verified = await application.reconcile(proposal_reference)
-        view = await application.runtime.read(
-            application.action,
-            proposal_reference=proposal_reference,
+        view = await application.read(
+            proposal_reference,
             context=ReadContext(
                 tenant_reference=TENANT,
                 consumer=EvidenceConsumer(reference="operator:auditor"),
@@ -426,14 +434,19 @@ def test_leakage_conformance_catches_seeded_unsafe_preview_without_echoing_secre
             psp=application.psp,
             tenant_reference=TENANT,
         )
-        leaky_action = replace(application.action, preparation=leaky_host)
-
-        leaked = await application.runtime.prepare(
-            leaky_action,
-            tenant_reference=TENANT,
-            command=_command(),
-            requesting_principal=REQUESTER,
+        leaky_dependencies = replace(application.dependencies, host=leaky_host)
+        leaky_actions = ActionApplication[RefundDependencies]()
+        leaky_refund = leaky_actions.register(
+            application.specification,
+            ActionRecipe(bind=refund_components),
         )
+        leaky_actions.freeze()
+        with leaky_actions.bind(leaky_refund, dependencies=leaky_dependencies) as bound:
+            leaked = await bound.prepare(
+                tenant_reference=TENANT,
+                command=_command(),
+                requesting_principal=REQUESTER,
+            )
         with pytest.raises(ConformanceError) as raised:
             assert_no_sensitive_data(
                 leaked,

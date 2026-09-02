@@ -19,20 +19,24 @@ from pydantic_ai.models import override_allow_model_requests
 from examples.docs.pydantic_ai_agent import (
     AgentDependencies,
     action_context,
+    action_dependencies,
     offline_model,
+    seed_demo,
 )
-from examples.docs.quickstart import TENANT, build_demo
-from threvo_actions.integrations.pydantic_ai import ActionCapability, ActionToolBinding
+from examples.refund.app import TENANT, build_refund_application
+from threvo_actions.integrations.pydantic_ai import ActionCapability, ScopedActionToolBinding
 
 
 async def main() -> None:
-    demo = build_demo()
+    demo = build_refund_application()
+    seed_demo(demo)
     dependencies = AgentDependencies(tenant_reference=TENANT, demo=demo)
     actions = ActionCapability[AgentDependencies](
-        runtime=demo.runtime,
         bindings=[
-            ActionToolBinding(
-                definition=demo.action,
+            ScopedActionToolBinding(
+                application=demo.actions,
+                action=demo.refund,
+                dependency_scope=action_dependencies,
                 context_resolver=action_context,
                 name="refund",
                 description="Prepare a refund and show a safe preview before execution.",

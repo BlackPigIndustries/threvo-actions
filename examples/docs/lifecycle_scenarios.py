@@ -4,27 +4,33 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
+from decimal import Decimal
 
-from examples.docs.quickstart import (
-    AGENT,
-    CONSUMER,
-    REQUESTER,
-    TENANT,
-    Demo,
-    RefundCommand,
-    build_demo,
-)
-from threvo_actions import ActionOperationResult, ReadContext
+from examples.refund.app import TENANT, RefundApplication, build_refund_application
+from examples.refund.domain import PaymentOrder, RefundCommand
+from threvo_actions import ActionOperationResult, EvidenceConsumer, Money, ReadContext
+
+CONSUMER = EvidenceConsumer(reference="consumer:user:requester")
+REFUND = Money(amount=Decimal("10.00"), currency="EUR")
 
 
-async def prepare(order_reference: str) -> tuple[Demo, ActionOperationResult]:
-    demo = build_demo()
-    proposal = await demo.runtime.prepare(
-        demo.action,
-        tenant_reference=TENANT,
-        command=RefundCommand(order_reference=order_reference),
-        requesting_principal=REQUESTER,
-        proposing_agent=AGENT,
+async def prepare(order_reference: str) -> tuple[RefundApplication, ActionOperationResult]:
+    demo = build_refund_application()
+    demo.ledger.add(
+        PaymentOrder(
+            order_reference=order_reference,
+            payment_reference=f"payment:{order_reference}",
+            customer_contact="private@example.test",
+            captured=Money(amount=Decimal("100.00"), currency="EUR"),
+            refunded=Money(amount=Decimal("20.00"), currency="EUR"),
+        )
+    )
+    proposal = await demo.prepare(
+        RefundCommand(
+            intent_reference=f"intent:{order_reference}",
+            order_reference=order_reference,
+            amount=REFUND,
+        )
     )
     return demo, proposal
 
@@ -34,89 +40,54 @@ async def drift_refusal() -> None:
     await demo.approve(proposal.proposal_reference)
 
     # The order changed after the manager approved the preview.
-    demo.host.order_version += 1
-    result = await demo.runtime.execute(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=proposal.proposal_reference,
+    demo.ledger.record_external_refund(
+        order_reference="ORD-DRIFT",
+        amount=Money(amount=Decimal("5.00"), currency="EUR"),
     )
+    result = await demo.execute(proposal.proposal_reference)
     print(f"drift: {result.outcome}, executor calls: {demo.host.executor_calls}")
 
 
 async def proposal_expiry() -> None:
     demo, proposal = await prepare("ORD-EXPIRED")
     demo.clock.advance(timedelta(minutes=11))
-    result = await demo.runtime.expire_due(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=proposal.proposal_reference,
-    )
+    result = await demo.expire_due(proposal.proposal_reference)
     print(f"expiry: {result.outcome}")
 
 
 async def competing_proposals() -> None:
     demo, first = await prepare("ORD-REPLAY")
-    second = await demo.runtime.prepare(
-        demo.action,
-        tenant_reference=TENANT,
-        command=RefundCommand(order_reference="ORD-REPLAY"),
-        requesting_principal=REQUESTER,
-        proposing_agent=AGENT,
+    second = await demo.prepare(
+        RefundCommand(
+            intent_reference="intent:ORD-REPLAY",
+            order_reference="ORD-REPLAY",
+            amount=REFUND,
+        )
     )
     await demo.approve(first.proposal_reference)
     await demo.approve(second.proposal_reference)
 
-    await demo.runtime.execute(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=first.proposal_reference,
-    )
-    replay = await demo.runtime.execute(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=second.proposal_reference,
-    )
+    await demo.execute(first.proposal_reference)
+    replay = await demo.execute(second.proposal_reference)
     print(f"competing proposal: {replay.outcome}, executor calls: {demo.host.executor_calls}")
 
 
 async def delayed_verification() -> None:
     demo, proposal = await prepare("ORD-PENDING")
     await demo.approve(proposal.proposal_reference)
-    demo.host.refund_visible_to_verifier = False
-    await demo.runtime.execute(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=proposal.proposal_reference,
-    )
-    pending = await demo.runtime.reconcile(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=proposal.proposal_reference,
-    )
+    await demo.execute(proposal.proposal_reference)
+    pending = await demo.reconcile(proposal.proposal_reference)
 
     demo.clock.advance(timedelta(minutes=2))
-    demo.host.refund_visible_to_verifier = True
-    verified = await demo.runtime.reconcile(
-        demo.action,
-        tenant_reference=TENANT,
-        proposal_reference=proposal.proposal_reference,
-    )
+    verified = await demo.reconcile(proposal.proposal_reference)
     print(f"verification: {pending.outcome} -> {verified.outcome}")
 
 
 async def protected_erasure() -> None:
     demo, proposal = await prepare("ORD-ERASE")
     context = ReadContext(tenant_reference=TENANT, consumer=CONSUMER)
-    erased = await demo.runtime.erase(
-        demo.action,
-        proposal_reference=proposal.proposal_reference,
-        context=context,
-    )
-    view = await demo.runtime.read(
-        demo.action,
-        proposal_reference=proposal.proposal_reference,
-        context=context,
-    )
+    erased = await demo.erase(proposal.proposal_reference, context=context)
+    view = await demo.read(proposal.proposal_reference, context=context)
     print(f"erasure: {erased.outcome}, content hidden: {view.erased}")
 
 

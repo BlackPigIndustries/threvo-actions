@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
-from collections.abc import Awaitable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
@@ -50,9 +51,10 @@ from ..runtime import (
 )
 
 if TYPE_CHECKING:
+    from contextlib import AbstractAsyncContextManager
+
     from ..experimental import (
         ActionApplication,
-        DependencyScopeFactory,
         RegisteredAction,
     )
     from ..registry import ActionDefinition
@@ -295,8 +297,8 @@ async def _invoke_action_tool(
         return _tool_result(result)
 
     try:
-        command = command_model.model_validate(arguments)
-    except ValidationError as exc:
+        command = command_model.model_validate_json(json.dumps(arguments))
+    except (TypeError, ValueError) as exc:
         raise ModelRetry(
             "Financial action arguments do not match the declared command schema."
         ) from exc
@@ -387,7 +389,10 @@ class ScopedActionToolBinding(
 
     application: ActionApplication[ScopedDepsT]
     action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT]
-    dependency_scope: DependencyScopeFactory[DepsT, ScopedDepsT]
+    dependency_scope: Callable[
+        [DepsT],
+        AbstractAsyncContextManager[ScopedDepsT],
+    ]
     context_resolver: ActionContextResolver[ScopedDepsT]
     name: str
     description: str
