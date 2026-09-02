@@ -6,6 +6,7 @@ from pathlib import Path
 from mypy import api as mypy_api
 
 CASES = Path(__file__).parent / "cases"
+MYPY_CONFIG = Path(__file__).with_name("mypy.ini")
 
 
 def _run_mypy(case: str, *, cache_dir: Path) -> tuple[str, str, int]:
@@ -14,6 +15,7 @@ def _run_mypy(case: str, *, cache_dir: Path) -> tuple[str, str, int]:
     try:
         return mypy_api.run(
             [
+                f"--config-file={MYPY_CONFIG}",
                 "--strict",
                 "--python-version=3.11",
                 "--show-error-codes",
@@ -42,3 +44,13 @@ def test_invalid_application_refuses_mismatched_and_erased_types(tmp_path: Path)
     assert "Cannot infer value of type parameter" in stdout
     assert 'generic type "RegisteredAction"' in stdout
     assert "[type-arg]" in stdout
+
+
+def test_typing_gate_loads_the_pydantic_plugin(tmp_path: Path) -> None:
+    stdout, stderr, status = _run_mypy(
+        "invalid_frozen_specification.py",
+        cache_dir=tmp_path / "pydantic-plugin",
+    )
+
+    assert status == 1, stdout + stderr
+    assert 'Property "proposal_ttl" defined in "ActionSpec" is read-only' in stdout
