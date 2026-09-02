@@ -16,7 +16,7 @@ import asyncio
 import os
 import uuid
 from dataclasses import replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from urllib.parse import unquote, urlsplit
 
@@ -73,7 +73,7 @@ async def main() -> None:
     try:
         await migrate_mysql(pool)
         store = MySQLActionStore(pool)
-        clock = MutableClock()
+        clock = MutableClock(datetime.now(UTC))
         demo = build_refund_application()
         demo.ledger.add(
             PaymentOrder(

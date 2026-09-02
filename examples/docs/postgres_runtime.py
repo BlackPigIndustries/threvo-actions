@@ -15,7 +15,7 @@ import asyncio
 import os
 import uuid
 from dataclasses import replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import asyncpg
@@ -56,7 +56,7 @@ async def main() -> None:
         await migrate_postgres(pool, schema="threvo_actions")
         store = PostgresActionStore(pool, schema="threvo_actions")
         retention_store = PostgresRetentionStore(pool, schema="threvo_actions")
-        clock = MutableClock()
+        clock = MutableClock(datetime.now(UTC))
         demo = build_refund_application()
         demo.ledger.add(
             PaymentOrder(
