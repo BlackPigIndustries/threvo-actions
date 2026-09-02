@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
+from tests.unit.test_experimental_application import Dependencies, recipe, specification
 
 from threvo_actions.conformance import (
     ConformanceError,
     assert_no_sensitive_data,
     find_sensitive_data,
 )
+from threvo_actions.experimental import ActionApplication, ActionRecipe
 from threvo_actions.models import (
     ActionType,
     AuthoritativeTarget,
@@ -144,3 +146,16 @@ def test_unordered_collection_findings_use_stable_secret_free_paths() -> None:
         ("$[set-item]", "iban"),
     ]
     assert all(secret not in finding.path for finding in findings for secret in FORBIDDEN.values())
+
+
+def test_experimental_inspection_passes_the_cross_surface_leakage_contract() -> None:
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), ActionRecipe(bind=recipe().bind))
+
+    inspection = application.inspect(registered)
+
+    assert_no_sensitive_data(
+        inspection,
+        forbidden_literals=FORBIDDEN,
+        forbidden_key_fragments=FORBIDDEN_KEYS,
+    )

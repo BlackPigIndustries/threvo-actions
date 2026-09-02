@@ -47,6 +47,11 @@ from ..runtime import (
     ProposalView,
 )
 from ..stores import ActionStore, RetentionStore
+from .inspection import (
+    ActionInspection,
+    ActionSettingsInspection,
+    BoundaryModelInspection,
+)
 
 CommandT = TypeVar("CommandT", bound=BaseModel)
 PrivateSnapshotT = TypeVar("PrivateSnapshotT", bound=BaseModel)
@@ -360,19 +365,50 @@ class ActionApplication(Generic[DepsT]):
     def freeze(self) -> None:
         self._frozen = True
 
-    @contextmanager
-    def bind(
+    def inspect(
         self,
         action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
-        *,
-        dependencies: DepsT,
-    ) -> Iterator[BoundAction[CommandT, PrivateSnapshotT, PreviewT, ResultT]]:
-        if not self._frozen or action._application_token is not self._application_token:
+    ) -> ActionInspection:
+        specification, _ = self._typed_registration(action)
+        return ActionInspection(
+            action_type=specification.action_type,
+            boundary_models=(
+                BoundaryModelInspection.from_model(
+                    role="command", model=specification.command_model
+                ),
+                BoundaryModelInspection.from_model(
+                    role="private_snapshot", model=specification.private_snapshot_model
+                ),
+                BoundaryModelInspection.from_model(
+                    role="display_preview", model=specification.display_preview_model
+                ),
+                BoundaryModelInspection.from_model(role="result", model=specification.result_model),
+            ),
+            settings=ActionSettingsInspection(
+                proposal_ttl=specification.proposal_ttl,
+                verification_delay=specification.verification_delay,
+                max_verification_attempts=specification.max_verification_attempts,
+                effect_kind=specification.effect_kind,
+                allow_resend_after_final_absence=(specification.allow_resend_after_final_absence),
+                verification_lease_duration=specification.verification_lease_duration,
+                semantic_idempotency_strategy=(specification.semantic_idempotency_strategy),
+            ),
+            issue_codes=tuple(code.value for code in ActionIssueCode),
+            catalog_frozen=self._frozen,
+        )
+
+    def _typed_registration(
+        self,
+        action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+    ) -> tuple[
+        ActionSpec[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        ActionRecipe[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT],
+    ]:
+        if action._application_token is not self._application_token:
             raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
         registration = self._registrations.get(action._registration_id)
         if registration is None:
             raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
-
         specification = cast(
             "ActionSpec[CommandT, PrivateSnapshotT, PreviewT, ResultT]",
             registration.specification,
@@ -381,6 +417,18 @@ class ActionApplication(Generic[DepsT]):
             "ActionRecipe[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]",
             registration.recipe,
         )  # why: register stored this recipe with the same verified opaque handle
+        return specification, recipe
+
+    @contextmanager
+    def bind(
+        self,
+        action: RegisteredAction[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        dependencies: DepsT,
+    ) -> Iterator[BoundAction[CommandT, PrivateSnapshotT, PreviewT, ResultT]]:
+        if not self._frozen:
+            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+        specification, recipe = self._typed_registration(action)
 
         components: ActionComponents[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
         try:

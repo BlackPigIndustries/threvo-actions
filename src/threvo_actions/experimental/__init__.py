@@ -15,14 +15,24 @@ from .application import (
     DependencyScopeFactory,
     RegisteredAction,
 )
+from .inspection import (
+    ActionInspection,
+    ActionOwnershipInspection,
+    ActionSettingsInspection,
+    BoundaryModelInspection,
+)
 
 __all__ = [
     "ActionApplication",
     "ActionApplicationError",
     "ActionComponents",
     "ActionIssueCode",
+    "ActionInspection",
+    "ActionOwnershipInspection",
     "ActionRecipe",
     "ActionSpec",
+    "ActionSettingsInspection",
+    "BoundaryModelInspection",
     "BoundAction",
     "DependencyScopeFactory",
     "RegisteredAction",
