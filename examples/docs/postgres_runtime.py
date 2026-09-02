@@ -15,7 +15,7 @@ import asyncio
 import os
 import uuid
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import asyncpg
@@ -25,6 +25,7 @@ from examples.refund.app import (
     PROPOSING_AGENT,
     REQUESTER,
     TENANT,
+    MutableClock,
     build_refund_application,
 )
 from examples.refund.domain import PaymentOrder, RefundCommand
@@ -45,11 +46,6 @@ class Identifiers:
         return f"{prefix}:{uuid.uuid4()}"
 
 
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
-
-
 async def main() -> None:
     dsn = os.environ.get("DATABASE_URL")
     if dsn is None:
@@ -60,7 +56,7 @@ async def main() -> None:
         await migrate_postgres(pool, schema="threvo_actions")
         store = PostgresActionStore(pool, schema="threvo_actions")
         retention_store = PostgresRetentionStore(pool, schema="threvo_actions")
-        clock = SystemClock()
+        clock = MutableClock()
         demo = build_refund_application()
         demo.ledger.add(
             PaymentOrder(
@@ -118,12 +114,7 @@ async def main() -> None:
             )
             if executed.outcome is not OperationOutcome.VERIFICATION_PENDING:
                 raise RuntimeError(f"execution failed: {executed.outcome}")
-            verified = await action.reconcile(
-                tenant_reference=TENANT,
-                proposal_reference=prepared.proposal_reference,
-            )
-            if verified.outcome is not OperationOutcome.VERIFICATION_PENDING:
-                raise RuntimeError(f"first verification was not pending: {verified.outcome}")
+            clock.advance(demo.specification.verification_delay)
             verified = await action.reconcile(
                 tenant_reference=TENANT,
                 proposal_reference=prepared.proposal_reference,
