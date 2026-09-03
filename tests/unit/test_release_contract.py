@@ -124,6 +124,16 @@ def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
     assert "adoption-record digest" in contributing
 
 
+def test_release_record_does_not_overclaim_ledger_chain_verification() -> None:
+    release_record = (ROOT / "docs/releases/0.1.4.md").read_text()
+
+    assert "current hash-linked adoption record" not in release_record
+    assert re.search(
+        r"does not parse or recompute the internal\s+entry-digest chain",
+        release_record,
+    )
+
+
 def test_release_dispatch_values_never_enter_shell_source() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
 
