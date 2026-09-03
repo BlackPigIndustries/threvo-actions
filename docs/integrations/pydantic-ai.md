@@ -54,6 +54,12 @@ from the source distribution.
 6. When verification is delayed or still uncertain, the host schedules a later
    reconciliation and reports completion only after a `verified` outcome.
 
+If preparation succeeds but the current evidence consumer cannot read the new
+proposal, the tool returns `prepared_not_visible` without a proposal reference,
+lifecycle status, or preview. This is distinct from `preparation_denied`: the
+proposal is durable and remains subject to the host's expiry, retention, and
+operator-reconciliation policies, but it is not exposed to the model.
+
 The agent is ordinary Pydantic AI:
 
 ```python

@@ -81,6 +81,7 @@ class ActionAgentContext(ExperimentalModel):
 class IntegrationOutcome(StrEnum):
     INVALID_CONTINUATION = "invalid_continuation"
     PREPARATION_DENIED = "preparation_denied"
+    PREPARED_NOT_VISIBLE = "prepared_not_visible"
 
 
 class ActionToolResult(ExperimentalModel):
@@ -365,7 +366,7 @@ async def _invoke_action_tool(
             ),
         )
     except ProposalNotFoundError:
-        return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+        return ActionToolResult(outcome=IntegrationOutcome.PREPARED_NOT_VISIBLE)
     return _ContinuationMetadata(
         proposal_reference=prepared.proposal_reference,
         tool_name=tool_name,
