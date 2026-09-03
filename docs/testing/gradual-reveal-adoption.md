@@ -45,7 +45,8 @@ Pending. Every attempt must record:
 | Participant | Identity or durable pseudonym plus independent participant statement |
 | Relevant experience and prior exposure | Free text |
 | Source commit | Exact 40-character commit |
-| Candidate artifacts | Wheel SHA-256 and source-distribution SHA-256 |
+| Candidate workflow | Exact GitHub Actions candidate run ID and run URL |
+| Candidate artifacts | Workflow-built wheel filename and SHA-256; workflow-built source-distribution filename and SHA-256 |
 | Fixture and methodology | Exact commits/revisions |
 | Start, end, pauses | ISO 8601 timestamps, monotonic elapsed, validated pause log |
 | Assistance and failures | Complete facilitator/tool assistance and failure log |
