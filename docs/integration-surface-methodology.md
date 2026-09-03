@@ -156,6 +156,33 @@ If a file mixes eligible integration code with excluded code, list the exact
 eligible line spans and count them manually. Publish both the eligible total
 and all excluded additions so that a low number cannot hide moved complexity.
 
+For the gradual-reveal comparison, classify every eligible line span by both
+purpose and adoption cost:
+
+- **Definition/composition wiring** is action-specific host code that declares
+  boundary models or safety semantics, implements or selects action ports,
+  registers and binds the action, bridges host identity or authority, wires
+  reconciliation, or configures that action. This is the only purpose class
+  used by the 30% expert-versus-candidate gate.
+- **Shared first-integration cost** is eligible host code introduced for the
+  first action and reused unchanged by later actions.
+- **Marginal action cost** is eligible host code attributable to one later
+  action, including its spans in shared catalog or configuration files.
+
+An eligible line has exactly one adoption-cost class: shared or one numbered
+marginal action. Never count a line in both. The shared count plus every
+marginal-action count must equal total eligible host added LOC. Moving a safety
+obligation into a helper, configuration file, or shared registration path does
+not change its eligibility or its attribution to the action that required it.
+
+Let `E` be expert-path definition/composition added LOC and `C` be candidate
+definition/composition added LOC over the same fixture baseline and eligible
+spans. Record `absolute_loc_delta = C - E` (a negative value is a reduction)
+and `reduction_percentage = ((E - C) / E) * 100`. The comparative gate fails
+when `E` is zero or `reduction_percentage` is below 30. The fifth-action
+500-line ceiling uses that action's complete marginal eligible-host LOC, not
+only its definition/composition subset.
+
 ## Worksheet
 
 Publish one worksheet per attempt with:
@@ -175,6 +202,7 @@ Publish one worksheet per attempt with:
 | Reused/configured/extended/new port counts | |
 | Eligible host non-test added LOC | |
 | Eligible file-by-file LOC | |
+| Purpose and adoption-cost classification for every eligible span | |
 | Excluded additions and reason | |
 | Facilitator assistance | |
 | Participant blockers and documentation gaps | |
