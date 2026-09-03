@@ -28,6 +28,7 @@ jobs:
       - run: uv run bandit -q -c pyproject.toml -r src examples benchmarks scripts
       - run: uv run pip-audit
       - run: uv run mkdocs build --strict
+      - run: uv run python examples/docs/installed_quickstart.py
       - run: uv run python -m examples.docs.quickstart
       - run: uv run python -m examples.docs.lifecycle_scenarios
       - run: uv run python -m examples.docs.pydantic_ai_agent

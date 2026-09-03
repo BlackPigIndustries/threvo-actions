@@ -51,15 +51,21 @@ def test_leakage_example_uses_the_public_safe_argument_contract() -> None:
     assert "forbidden_values=" not in guide
 
 
-def test_quickstart_is_small_and_described_as_source_distribution_code() -> None:
+def test_quickstarts_distinguish_copy_paste_from_the_source_tour() -> None:
     quickstart = (ROOT / "examples/docs/quickstart.py").read_text()
+    installed_quickstart = (ROOT / "examples/docs/installed_quickstart.py").read_text()
     guide = (ROOT / "docs/getting-started/first-action.md").read_text()
+    release = (ROOT / ".github/workflows/release.yml").read_text()
 
     assert sum(bool(line.strip()) for line in quickstart.splitlines()) < 100
     assert "demo.clock.advance(demo.specification.verification_delay)" in quickstart
+    assert "from examples." not in installed_quickstart
+    assert "import examples." not in installed_quickstart
+    assert "installed_quickstart.py" in release
+    assert 'mkdir "$consumer_root/wheel-quickstart"' in release
     assert "source distribution" in guide
     assert "production-shaped" in guide
-    assert "Copy the file below" not in guide
+    assert "Copy the file below" in guide
 
 
 def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
