@@ -111,6 +111,25 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     ) < workflow.index("gh release create")
 
 
+def test_release_014_owner_waiver_is_explicit_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (
+        ROOT / "docs/testing/gradual-reveal-adoption.md"
+    ).read_text()
+
+    waiver_marker = (
+        "Promotion gate: **waived**; release=v0.1.4; "
+        "candidate_source=89dd16f48b0f5ac6a4bea0fed2821286fa70810e; "
+        "authority=repository-owner"
+    )
+    assert waiver_marker in adoption_record
+    assert 'test "$RELEASE_TAG" = "v0.1.4"' in workflow
+    assert 'test "$SOURCE_COMMIT" = "89dd16f48b0f5ac6a4bea0fed2821286fa70810e"' in workflow
+    assert 'expected_waiver_gate="Promotion gate: **waived**;' in workflow
+    assert 'grep -Fxc -- "$expected_waiver_gate" adoption-evidence.md' in workflow
+    assert "adoption_waiver:" not in workflow
+
+
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text()
 

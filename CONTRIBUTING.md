@@ -41,6 +41,14 @@ Production releases come from `main`, never directly from `develop`:
    workflow promotes the candidate bytes through TestPyPI and PyPI without a
    rebuild.
 
+The repository owner's explicit 2026-09-03 direction created a one-time
+publication waiver for `v0.1.4` candidate source
+`89dd16f48b0f5ac6a4bea0fed2821286fa70810e`. The adoption record preserves the
+waiver without representing it as passing evidence. The workflow binds this
+exception to that release and source commit; it is not a reusable release
+option and does not waive artifact, tag, index-verification, or environment
+controls.
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as
