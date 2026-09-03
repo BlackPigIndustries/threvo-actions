@@ -221,6 +221,11 @@ jobs:
           extracted_root=$(find "$consumer_root" -maxdepth 1 -type d \
             -name 'threvo_actions-*' -print -quit)
           cp -R "$extracted_root/examples" "$consumer_root/examples"
+          mkdir "$consumer_root/wheel-quickstart"
+          cp "$extracted_root/examples/docs/installed_quickstart.py" \
+            "$consumer_root/wheel-quickstart/installed_quickstart.py"
+          cd "$consumer_root/wheel-quickstart"
+          "$consumer_root/venv/bin/python" installed_quickstart.py
           cd "$consumer_root"
           "$consumer_root/venv/bin/python" -m pytest -q \
             examples/refund/test_example.py \

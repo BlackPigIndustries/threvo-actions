@@ -192,6 +192,17 @@ jobs:
           python-version: "3.13"
       - run: uv build
       - run: uv run python scripts/verify_release.py --dist dist
+      - name: Verify installed-wheel quickstart
+        run: |
+          quickstart_root=$(mktemp -d)
+          uv venv "$quickstart_root/venv"
+          wheel=$(find dist -maxdepth 1 -name '*.whl' -print -quit)
+          uv pip install \
+            --python "$quickstart_root/venv/bin/python" \
+            "$wheel"
+          cp examples/docs/installed_quickstart.py "$quickstart_root/"
+          cd "$quickstart_root"
+          "$quickstart_root/venv/bin/python" installed_quickstart.py
       - name: Verify distribution contents
         run: |
           python - <<'PY'
