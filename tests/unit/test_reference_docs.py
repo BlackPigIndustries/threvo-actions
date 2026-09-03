@@ -68,6 +68,16 @@ def test_quickstarts_distinguish_copy_paste_from_the_source_tour() -> None:
     assert "Copy the file below" in guide
 
 
+def test_installed_quickstart_minimizes_its_display_preview() -> None:
+    quickstart = import_module("examples.docs.installed_quickstart")
+
+    assert set(quickstart.CategorizePreview.model_fields) == {
+        "expense_reference",
+        "category",
+    }
+    assert "previous_category" in quickstart.CategorizeSnapshot.model_fields
+
+
 def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
     design = (ROOT / "docs" / "design" / "gradual-reveal-api.md").read_text()
 

@@ -56,7 +56,6 @@ class CategorizeSnapshot(ExperimentalModel):
 
 class CategorizePreview(ExperimentalModel):
     expense_reference: SafeReference
-    previous_category: SafeReference
     category: SafeReference
 
 
@@ -82,7 +81,10 @@ class DemoPorts:
         )
         return PreparedAction(
             private_snapshot=snapshot,
-            display_preview=CategorizePreview.model_validate(snapshot.model_dump()),
+            display_preview=CategorizePreview(
+                expense_reference=snapshot.expense_reference,
+                category=snapshot.category,
+            ),
             semantic_effect_reference=f"categorize:{command.expense_reference}",
         )
 
