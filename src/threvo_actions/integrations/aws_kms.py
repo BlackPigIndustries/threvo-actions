@@ -7,6 +7,7 @@ import binascii
 import hashlib
 import hmac
 import secrets
+from asyncio import CancelledError
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
@@ -113,18 +114,39 @@ __all__ = [
     "KmsDataKeyClient",
     "KmsKeyIdentifier",
     "WrappedDataKey",
+    "WrappedDataKeyPersistenceOutcomeUnknownError",
     "WrappedDataKeyStore",
 ]
 
 
 class WrappedDataKeyStore(Protocol):
-    """Durable, access-controlled storage for proposal-scoped wrapped keys."""
+    """Durable, authoritative storage for proposal-scoped wrapped keys.
+
+    A completed write, including one whose acknowledgement is lost, must be
+    visible to a subsequent ``get`` through the same adapter.
+    """
 
     async def put(self, *, key_handle: str, envelope: WrappedDataKey) -> None: ...
 
     async def get(self, *, key_handle: str) -> WrappedDataKey | None: ...
 
     async def delete(self, *, key_handle: str) -> None: ...
+
+
+class WrappedDataKeyPersistenceOutcomeUnknownError(RuntimeError):
+    """Raised when a wrapped-key write cannot be reconciled safely."""
+
+    def __init__(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        key_handle: str,
+        purpose: EnvelopePurpose,
+    ) -> None:
+        self.proposal_identity = proposal_identity
+        self.key_handle = key_handle
+        self.purpose = purpose
+        super().__init__("wrapped data-key persistence outcome is unknown")
 
 
 class AwsKmsEnvelopeProtection(
@@ -372,17 +394,47 @@ class AwsKmsEnvelopeProtection(
         proposal_identity: ProposalIdentity,
         purpose: EnvelopePurpose,
     ) -> None:
-        await self._envelopes.put(
-            key_handle=handle,
-            envelope=WrappedDataKey(
-                tenant_reference=proposal_identity.tenant_reference,
-                proposal_reference=proposal_identity.proposal_reference,
-                purpose=purpose,
-                key_id=generated.resolved_key_id,
-                key_version=_key_version(generated.resolved_key_id),
-                ciphertext=generated.ciphertext,
-            ),
+        envelope = WrappedDataKey(
+            tenant_reference=proposal_identity.tenant_reference,
+            proposal_reference=proposal_identity.proposal_reference,
+            purpose=purpose,
+            key_id=generated.resolved_key_id,
+            key_version=_key_version(generated.resolved_key_id),
+            ciphertext=generated.ciphertext,
         )
+        try:
+            await self._envelopes.put(key_handle=handle, envelope=envelope)
+        except BaseException as failure:
+            try:
+                persisted = await self._envelopes.get(key_handle=handle)
+            except BaseException as reconciliation_failure:
+                if isinstance(failure, CancelledError):
+                    failure.add_note(
+                        "wrapped data-key persistence reconciliation was interrupted; "
+                        "do not compensate the protected value"
+                    )
+                    raise
+                unknown = WrappedDataKeyPersistenceOutcomeUnknownError(
+                    proposal_identity=proposal_identity,
+                    key_handle=handle,
+                    purpose=purpose,
+                )
+                unknown.add_note(
+                    "wrapped data-key persistence reconciliation failed: "
+                    f"{type(reconciliation_failure).__name__}"
+                )
+                raise unknown from failure
+            if persisted == envelope:
+                if isinstance(failure, CancelledError):
+                    failure.add_note(
+                        "wrapped data key persisted before cancellation; "
+                        "do not compensate the protected value"
+                    )
+                    raise
+                return
+            if persisted is not None:
+                raise ValueError("wrapped data-key handle is already bound") from failure
+            raise
 
     async def _decrypt_key(self, key_handle: str, envelope: WrappedDataKey) -> bytearray:
         decrypted = await self._kms.decrypt_data_key(

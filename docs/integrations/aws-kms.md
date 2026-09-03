@@ -52,6 +52,8 @@ it.
 must:
 
 - durably store each random key handle without overwriting an existing handle;
+- provide authoritative read-after-write visibility through `get()`, including
+  after a write acknowledgement is lost;
 - restrict reads and deletes to the action runtime and retention identities;
 - preserve the tenant reference, proposal reference, purpose, resolved key
   identifier, and KMS ciphertext blob exactly;
@@ -93,6 +95,13 @@ payload envelope raises `KeyError`, matching the provider conformance contract
 after erasure. KMS transport, authorization, and availability failures propagate
 to the host; they are not misreported as a digest mismatch or successful
 erasure.
+
+If `put()` raises after storing a wrapped key, the adapter reads the same random
+handle back and continues only when the complete envelope matches. If that
+read-back is unavailable, it raises
+`WrappedDataKeyPersistenceOutcomeUnknownError` with the safe proposal identity,
+handle, and purpose so trusted host reconciliation can locate the record. It
+does not pretend the write failed or delete potentially live key material.
 
 The adapter overwrites the mutable host-returned key buffer before later I/O
 or an authentication failure can escape. Python and the cryptography backend

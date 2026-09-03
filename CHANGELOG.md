@@ -17,6 +17,9 @@ and uses Semantic Versioning for the supported surface described in
 - The runtime now binds complete tenant-scoped proposal identities through
   proposal-bound commitment and protection contracts, preventing authorized
   reads or erasure from crossing tenants after whole-artifact substitution.
+- Proposal and wrapped-key writes now reconcile lost acknowledgements through
+  authoritative read-back and preserve possibly-live keys when persistence
+  remains unknown.
 - Plaintext KMS data-key buffers are overwritten before later I/O or
   authentication failures can escape through library traceback frames.
 

@@ -141,6 +141,12 @@ complete provider ports receive a strict `ProposalIdentity` containing both
 tenant and proposal references for every operation. Adapt the host's AWS client
 to its typed port rather than adding an SDK to the core.
 
+Durable action and wrapped-key stores must provide authoritative read-after-write
+visibility so acknowledgement-lost writes can be reconciled. Treat
+`ProposalPersistenceOutcomeUnknownError` and
+`WrappedDataKeyPersistenceOutcomeUnknownError` as operator reconciliation
+signals; do not retry preparation blindly or destroy possibly-live keys.
+
 At minimum prove:
 
 - unauthorized preparation, decision, execution, and read are denied;

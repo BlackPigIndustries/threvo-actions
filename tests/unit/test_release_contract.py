@@ -347,6 +347,7 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "PreparedAction",
         "ProposalAlreadyExistsError",
         "ProposalNotFoundError",
+        "ProposalPersistenceOutcomeUnknownError",
         "ProposalBoundCommitmentProvider",
         "ProposalBoundProtectionCodec",
         "ProposalIdentity",

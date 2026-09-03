@@ -17,6 +17,7 @@ from threvo_actions.integrations.aws_kms import (
     AwsKmsEnvelopeProtection,
     GeneratedDataKey,
     WrappedDataKey,
+    WrappedDataKeyPersistenceOutcomeUnknownError,
 )
 from threvo_actions.models import ProposalIdentity
 
@@ -340,6 +341,7 @@ def test_supported_kms_module_contract_is_explicit() -> None:
         "GeneratedDataKey",
         "KmsDataKeyClient",
         "KmsKeyIdentifier",
+        "WrappedDataKeyPersistenceOutcomeUnknownError",
         "WrappedDataKey",
         "WrappedDataKeyStore",
     }
@@ -549,6 +551,87 @@ def test_plaintext_data_key_is_zeroed_before_store_failure_escapes() -> None:
                     if isinstance(value, GeneratedDataKey):
                         assert bytes(value.plaintext) != canary
             traceback = traceback.tb_next
+
+    asyncio.run(scenario())
+
+
+def test_persisted_wrapped_key_is_reconciled_after_lost_acknowledgement() -> None:
+    class PersistThenRaiseEnvelopeStore(MemoryEnvelopeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.raise_once = True
+
+        async def put(self, *, key_handle: str, envelope: WrappedDataKey) -> None:
+            await super().put(key_handle=key_handle, envelope=envelope)
+            if self.raise_once:
+                self.raise_once = False
+                raise RuntimeError("acknowledgement lost")
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:lost-envelope-ack")
+        for purpose in ("payload", "commitment"):
+            envelopes = PersistThenRaiseEnvelopeStore()
+            protection = AwsKmsEnvelopeProtection(
+                key_id="alias/threvo-actions",
+                kms=FakeKmsClient(),
+                envelopes=envelopes,
+            )
+            if purpose == "payload":
+                payload = await protection.protect_for(
+                    proposal_identity=identity,
+                    canonical_payload=b"private",
+                )
+                assert payload.key_handle in envelopes.entries
+                assert (
+                    await protection.unprotect_for(
+                        proposal_identity=identity,
+                        payload=payload,
+                    )
+                    == b"private"
+                )
+                continue
+            commitment = await protection.create_for(
+                proposal_identity=identity,
+                canonical_payload=b"private",
+            )
+            assert commitment.key_handle in envelopes.entries
+            assert await protection.verify_for(
+                proposal_identity=identity,
+                canonical_payload=b"private",
+                commitment=commitment,
+            )
+
+    asyncio.run(scenario())
+
+
+def test_unavailable_wrapped_key_reconciliation_reports_safe_identity() -> None:
+    class AmbiguousEnvelopeStore(MemoryEnvelopeStore):
+        async def put(self, *, key_handle: str, envelope: WrappedDataKey) -> None:
+            await super().put(key_handle=key_handle, envelope=envelope)
+            raise RuntimeError("private write diagnostic")
+
+        async def get(self, *, key_handle: str) -> WrappedDataKey | None:
+            del key_handle
+            raise RuntimeError("private read diagnostic")
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:unknown-envelope")
+        envelopes = AmbiguousEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+
+        with pytest.raises(WrappedDataKeyPersistenceOutcomeUnknownError) as caught:
+            await protection.protect_for(
+                proposal_identity=identity,
+                canonical_payload=b"private",
+            )
+
+        assert caught.value.proposal_identity == identity
+        assert caught.value.key_handle in envelopes.entries
+        assert str(caught.value) == "wrapped data-key persistence outcome is unknown"
 
     asyncio.run(scenario())
 

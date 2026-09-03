@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from asyncio import CancelledError
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol, TypeVar
@@ -308,6 +309,14 @@ class InvalidActionResultError(RuntimeError):
 
 class RetentionStoreUnavailableError(RuntimeError):
     pass
+
+
+class ProposalPersistenceOutcomeUnknownError(RuntimeError):
+    """Raised when proposal persistence cannot be reconciled safely."""
+
+    def __init__(self, proposal_identity: ProposalIdentity) -> None:
+        self.proposal_identity = proposal_identity
+        super().__init__("proposal persistence outcome is unknown")
 
 
 class ActionRuntime:
@@ -911,6 +920,8 @@ class ActionRuntime:
             canonical_payload=commitment_input,
         )
         protected = None
+        record: StoredProposal | None = None
+        create_attempted = False
         try:
             protected = await _protect_payload(
                 definition.protection_codec,
@@ -945,9 +956,37 @@ class ActionRuntime:
                 receipts=(proposal_receipt,),
                 max_verification_attempts=definition.max_verification_attempts,
             )
+            create_attempted = True
             await self._store.create(record)
             return record
         except BaseException as failure:
+            if create_attempted and record is not None:
+                try:
+                    persisted = await self._store.get(
+                        proposal_identity.tenant_reference,
+                        proposal_identity.proposal_reference,
+                    )
+                except BaseException as reconciliation_failure:
+                    if isinstance(failure, CancelledError):
+                        failure.add_note(
+                            "proposal persistence reconciliation was interrupted; "
+                            "do not compensate protected state"
+                        )
+                        raise
+                    unknown = ProposalPersistenceOutcomeUnknownError(proposal_identity)
+                    unknown.add_note(
+                        "proposal persistence reconciliation failed: "
+                        f"{type(reconciliation_failure).__name__}"
+                    )
+                    raise unknown from failure
+                if persisted == record:
+                    if isinstance(failure, CancelledError):
+                        failure.add_note(
+                            "proposal persisted before cancellation; "
+                            "do not compensate protected state"
+                        )
+                        raise
+                    return record
             cleanup_failures: list[tuple[str, str]] = []
             if protected is not None:
                 try:

@@ -52,6 +52,13 @@ tenant and proposal references. Run
 [`assert_providers_conform()`](../testing/conformance.md) against every custom
 implementation.
 
+Proposal creation also reconciles an acknowledgement-lost `ActionStore.create`
+through the same adapter's authoritative `get`. An exact durable record is
+accepted. If read-back is unavailable, the runtime raises
+`ProposalPersistenceOutcomeUnknownError` and preserves the protected material
+for trusted host reconciliation instead of destroying keys that may belong to
+a persisted proposal.
+
 For a concrete managed-key composition, see the tested
 [AWS KMS envelope-protection reference](../integrations/aws-kms.md). It keeps
 the AWS SDK outside the runtime while binding proposal-scoped data keys through

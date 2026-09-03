@@ -57,6 +57,7 @@ from threvo_actions.runtime import (
     InvalidAuthorityEvidenceError,
     OperationOutcome,
     ProposalNotFoundError,
+    ProposalPersistenceOutcomeUnknownError,
     RetentionStoreUnavailableError,
     RuntimeReasonCode,
 )
@@ -344,6 +345,18 @@ class FailProposalCreateStore(MemoryActionStore):
     async def create(self, proposal: StoredProposal) -> None:
         del proposal
         raise RuntimeError("simulated proposal persistence outage")
+
+
+class PersistThenRaiseProposalCreateStore(MemoryActionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.raise_once = True
+
+    async def create(self, proposal: StoredProposal) -> None:
+        await super().create(proposal)
+        if self.raise_once:
+            self.raise_once = False
+            raise RuntimeError("acknowledgement lost")
 
 
 class CapturingEvents:
@@ -714,6 +727,65 @@ def test_preparation_persists_protected_private_state_and_never_executes() -> No
         assert "private-account-value" not in "".join(
             event.model_dump_json() for event in events.events
         )
+
+    asyncio.run(scenario())
+
+
+def test_preparation_reconciles_a_persisted_proposal_after_lost_acknowledgement() -> None:
+    async def scenario() -> None:
+        store = PersistThenRaiseProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+
+        prepared = await prepare(runtime, action)
+        stored = await store.get("tenant:a", prepared.proposal_reference)
+
+        assert stored is not None
+        assert stored.protected_private_snapshot is not None
+        assert stored.commitment is not None
+        assert secrets.bound_destroyed == []
+
+    asyncio.run(scenario())
+
+
+def test_preparation_preserves_keys_when_proposal_reconciliation_is_unavailable() -> None:
+    class AmbiguousProposalCreateStore(PersistThenRaiseProposalCreateStore):
+        async def get(
+            self,
+            tenant_reference: str,
+            proposal_reference: str,
+        ) -> StoredProposal | None:
+            del tenant_reference, proposal_reference
+            raise RuntimeError("private read diagnostic")
+
+    async def scenario() -> None:
+        store = AmbiguousProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        secrets = ProposalBoundSecrets()
+
+        with pytest.raises(ProposalPersistenceOutcomeUnknownError) as caught:
+            await prepare(runtime, definition(HostPorts(), secrets))
+
+        assert caught.value.proposal_identity == ProposalIdentity(
+            tenant_reference="tenant:a",
+            proposal_reference="proposal:1",
+        )
+        persisted = await MemoryActionStore.get(store, "tenant:a", "proposal:1")
+        assert persisted is not None
+        assert secrets.bound_destroyed == []
+        assert str(caught.value) == "proposal persistence outcome is unknown"
 
     asyncio.run(scenario())
 

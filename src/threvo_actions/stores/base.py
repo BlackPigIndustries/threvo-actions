@@ -122,6 +122,13 @@ class StoredProposal(ExperimentalModel):
 
 
 class ActionStore(Protocol):
+    """Authoritative persistence for tenant-scoped proposal state.
+
+    A completed write, including one whose acknowledgement is lost, must be
+    visible to a subsequent ``get`` through the same adapter so the runtime can
+    reconcile before compensating protected state.
+    """
+
     async def create(self, proposal: StoredProposal) -> None: ...
 
     async def get(
