@@ -113,9 +113,7 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
 
 def test_release_014_owner_waiver_is_explicit_and_not_reusable() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
-    adoption_record = (
-        ROOT / "docs/testing/gradual-reveal-adoption.md"
-    ).read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
 
     waiver_marker = (
         "Promotion gate: **waived**; release=v0.1.4; "
