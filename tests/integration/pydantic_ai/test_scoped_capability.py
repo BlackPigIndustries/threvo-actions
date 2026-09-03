@@ -87,11 +87,10 @@ def test_scoped_capability_commits_before_deferral_and_rebinds_for_resume() -> N
 
         assert completed.output == "done"
         assert len(stack.scope_factory.entered) == 2
-        assert len(set(stack.scope_factory.entered)) == 2
-        assert stack.scope_factory.exited == [
-            (stack.scope_factory.entered[0], None),
-            (stack.scope_factory.entered[1], None),
-        ]
+        assert stack.scope_factory.entered[0] is not stack.scope_factory.entered[1]
+        assert stack.scope_factory.exited[0][0] is stack.scope_factory.entered[0]
+        assert stack.scope_factory.exited[1][0] is stack.scope_factory.entered[1]
+        assert [error_type for _, error_type in stack.scope_factory.exited] == [None, None]
         assert stack.host.executor_calls == 1
 
     asyncio.run(scenario())
