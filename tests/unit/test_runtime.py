@@ -359,6 +359,12 @@ class PersistThenRaiseProposalCreateStore(MemoryActionStore):
             raise RuntimeError("acknowledgement lost")
 
 
+class PersistThenCancelProposalCreateStore(MemoryActionStore):
+    async def create(self, proposal: StoredProposal) -> None:
+        await super().create(proposal)
+        raise asyncio.CancelledError
+
+
 class CapturingEvents:
     def __init__(self) -> None:
         self.events: list[RuntimeEvent] = []
@@ -786,6 +792,30 @@ def test_preparation_preserves_keys_when_proposal_reconciliation_is_unavailable(
         assert persisted is not None
         assert secrets.bound_destroyed == []
         assert str(caught.value) == "proposal persistence outcome is unknown"
+
+    asyncio.run(scenario())
+
+
+def test_preparation_cancellation_after_persistence_preserves_durable_state() -> None:
+    async def scenario() -> None:
+        store = PersistThenCancelProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        secrets = ProposalBoundSecrets()
+
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await prepare(runtime, definition(HostPorts(), secrets))
+
+        persisted = await MemoryActionStore.get(store, "tenant:a", "proposal:1")
+        assert persisted is not None
+        assert secrets.bound_destroyed == []
+        assert caught.value.__notes__ == [
+            "proposal persisted before cancellation; do not compensate protected state"
+        ]
 
     asyncio.run(scenario())
 

@@ -27,6 +27,8 @@ and uses Semantic Versioning for the supported surface described in
 - Release qualification now behaviorally exercises commitment, payload, and
   erasure operations from the built AWS KMS extra on every supported Python
   version.
+- Ambiguous-store coverage now includes wrapped-key read failures, deletion
+  failures, and cancellation after both key and proposal persistence.
 
 ### Security
 

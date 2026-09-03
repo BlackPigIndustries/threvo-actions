@@ -629,6 +629,83 @@ def test_wrapped_key_delete_failure_is_retryable_and_never_reported_absent() -> 
     asyncio.run(scenario())
 
 
+def test_wrapped_key_read_failures_are_not_reported_as_absence() -> None:
+    class FailingReadEnvelopeStore(MemoryEnvelopeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.failure: RuntimeError | None = None
+
+        async def get(self, *, key_handle: str) -> WrappedDataKey | None:
+            if self.failure is not None:
+                raise self.failure
+            return await super().get(key_handle=key_handle)
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:read-failure")
+        envelopes = FailingReadEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+        commitment = await protection.create_for(
+            proposal_identity=identity,
+            canonical_payload=b"private",
+        )
+        payload = await protection.protect_for(
+            proposal_identity=identity,
+            canonical_payload=b"private",
+        )
+        failure = RuntimeError("authoritative read unavailable")
+        envelopes.failure = failure
+
+        with pytest.raises(RuntimeError) as verify_failure:
+            await protection.verify_for(
+                proposal_identity=identity,
+                canonical_payload=b"private",
+                commitment=commitment,
+            )
+        assert verify_failure.value is failure
+
+        with pytest.raises(RuntimeError) as unprotect_failure:
+            await protection.unprotect_for(
+                proposal_identity=identity,
+                payload=payload,
+            )
+        assert unprotect_failure.value is failure
+
+    asyncio.run(scenario())
+
+
+def test_wrapped_key_cancellation_after_persistence_preserves_reconciliation_state() -> None:
+    class PersistThenCancelEnvelopeStore(MemoryEnvelopeStore):
+        async def put(self, *, key_handle: str, envelope: WrappedDataKey) -> None:
+            await super().put(key_handle=key_handle, envelope=envelope)
+            raise asyncio.CancelledError
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:cancelled-envelope-write")
+        envelopes = PersistThenCancelEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await protection.protect_for(
+                proposal_identity=identity,
+                canonical_payload=b"private",
+            )
+
+        assert len(envelopes.entries) == 1
+        assert caught.value.__notes__ == [
+            "wrapped data key persisted before cancellation; do not compensate the protected value"
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_plaintext_data_key_is_zeroed_before_store_failure_escapes() -> None:
     canary = b"0123456789abcdef0123456789abcdef"
 
