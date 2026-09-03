@@ -37,12 +37,13 @@ successful HTTP response.
 ## Choose the authoring surface
 
 - Use the experimental `ActionApplication` plus a strict `ActionSpec` only when
-  the application pins an exact patch release, owns equivalence tests against
-  the expert runtime, and will review migration notes before every minor-line
-  upgrade. Register a typed `ActionRecipe` explicitly, freeze the catalog, and
-  bind a dependency container from a fresh host operation scope. Durable
-  services may be shared references inside that container. This gradual-reveal
-  surface compiles to the same expert runtime and cannot grant policy.
+  the application pins an exact patch release, reruns its equivalence tests
+  against the expert runtime before every patch upgrade, and reviews migration
+  notes before every minor-line upgrade. Register a typed `ActionRecipe`
+  explicitly, freeze the catalog, and bind a dependency container from a fresh
+  host operation scope. Durable services may be shared references inside that
+  container. This gradual-reveal surface compiles to the same expert runtime
+  and cannot grant policy.
 - Otherwise use the supported `Action[Command, Snapshot, Preview, Result]` when
   one host object already owns every action port. Build `ActionDefinition`
   directly when the host owns the ports as separate expert-level adapters. Do

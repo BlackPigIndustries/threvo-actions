@@ -59,7 +59,9 @@ def test_skill_gates_the_experimental_gradual_reveal_surface() -> None:
     assert "ActionSpec" in skill
     assert "ScopedActionToolBinding" in skill
     assert "exact patch release" in skill
-    assert "equivalence tests" in skill
+    assert "reruns its equivalence tests" in skill
+    assert "before every patch upgrade" in skill
+    assert "before every minor-line upgrade" in skill
     assert "Otherwise use the supported `Action[" in skill
     assert re.search(
         r"Minor-line upgrades require an\s+explicit migration review",
