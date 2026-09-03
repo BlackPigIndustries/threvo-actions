@@ -470,65 +470,49 @@ class ActionApplication(Generic[DepsT]):
             raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
         specification, recipe = self._typed_registration(action)
 
-        components: ActionComponents[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
-        try:
-            components = recipe.bind(dependencies)
-        except Exception:
-            components = None
+        components = recipe.bind(dependencies)
         if not isinstance(components, ActionComponents) or any(
             getattr(components, field_name, None) is None
             for field_name in _REQUIRED_COMPONENT_FIELDS
         ):
             raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
 
-        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
-        try:
-            definition = ActionDefinition(
-                action_type=specification.action_type,
-                command_model=specification.command_model,
-                private_snapshot_model=specification.private_snapshot_model,
-                display_preview_model=specification.display_preview_model,
-                result_model=specification.result_model,
-                preparation=components.preparation,
-                authorization=components.authorization,
-                authority_evaluator=components.authority_evaluator,
-                state_resolver=components.state_resolver,
-                executor=components.executor,
-                verifier=components.verifier,
-                commitment_provider=components.commitment_provider,
-                protection_codec=components.protection_codec,
-                retention=components.retention,
-                proposal_ttl=specification.proposal_ttl,
-                executor_identity=specification.executor_identity,
-                target_identity=specification.target_identity,
-                authority_audience=specification.authority_audience,
-                authority_channel_assurance=specification.authority_channel_assurance,
-                verification_delay=specification.verification_delay,
-                max_verification_attempts=specification.max_verification_attempts,
-                effect_kind=specification.effect_kind,
-                allow_resend_after_final_absence=(specification.allow_resend_after_final_absence),
-                verification_lease_duration=specification.verification_lease_duration,
-                semantic_idempotency_strategy=(specification.semantic_idempotency_strategy),
-            )
-        except Exception:
-            definition = None
-        if definition is None:
-            raise ActionApplicationError(ActionIssueCode.DEFINITION_NONCONFORMING)
+        definition = ActionDefinition(
+            action_type=specification.action_type,
+            command_model=specification.command_model,
+            private_snapshot_model=specification.private_snapshot_model,
+            display_preview_model=specification.display_preview_model,
+            result_model=specification.result_model,
+            preparation=components.preparation,
+            authorization=components.authorization,
+            authority_evaluator=components.authority_evaluator,
+            state_resolver=components.state_resolver,
+            executor=components.executor,
+            verifier=components.verifier,
+            commitment_provider=components.commitment_provider,
+            protection_codec=components.protection_codec,
+            retention=components.retention,
+            proposal_ttl=specification.proposal_ttl,
+            executor_identity=specification.executor_identity,
+            target_identity=specification.target_identity,
+            authority_audience=specification.authority_audience,
+            authority_channel_assurance=specification.authority_channel_assurance,
+            verification_delay=specification.verification_delay,
+            max_verification_attempts=specification.max_verification_attempts,
+            effect_kind=specification.effect_kind,
+            allow_resend_after_final_absence=(specification.allow_resend_after_final_absence),
+            verification_lease_duration=specification.verification_lease_duration,
+            semantic_idempotency_strategy=(specification.semantic_idempotency_strategy),
+        )
 
-        runtime: ActionRuntime | None
-        try:
-            runtime = ActionRuntime(
-                store=components.store,
-                retention_store=components.retention_store,
-                clock=components.clock,
-                identifiers=components.identifiers,
-                event_sink=components.event_sink,
-                runtime_revision=components.runtime_revision,
-            )
-        except Exception:
-            runtime = None
-        if runtime is None:
-            raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
+        runtime = ActionRuntime(
+            store=components.store,
+            retention_store=components.retention_store,
+            clock=components.clock,
+            identifiers=components.identifiers,
+            event_sink=components.event_sink,
+            runtime_revision=components.runtime_revision,
+        )
 
         state = _BindingState(definition=definition, runtime=runtime)
         try:

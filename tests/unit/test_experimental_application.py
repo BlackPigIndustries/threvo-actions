@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import traceback
 import weakref
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
@@ -411,27 +412,29 @@ def test_binding_rejects_a_handle_from_another_application() -> None:
     assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
 
 
-def test_recipe_failure_is_reported_without_host_exception_content() -> None:
+def test_recipe_failure_preserves_the_host_exception_for_diagnostics() -> None:
+    failure = RuntimeError("tenant:secret database password")
+
     def fail(
         dependencies: Dependencies,
     ) -> ActionComponents[Command, PrivateSnapshot, Preview, Result]:
         del dependencies
-        raise RuntimeError("tenant:secret database password")
+        raise failure
 
     application = ActionApplication[Dependencies]()
     registered = application.register(specification(), ActionRecipe(bind=fail))
     application.freeze()
 
     with (
-        pytest.raises(ActionApplicationError) as captured,
+        pytest.raises(RuntimeError) as captured,
         application.bind(registered, dependencies=Dependencies()),
     ):
         pass
 
-    assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
-    assert "secret" not in str(captured.value)
-    assert captured.value.__cause__ is None
-    assert captured.value.__context__ is None
+    assert captured.value is failure
+    assert "fail" in {
+        frame.name for frame in traceback.extract_tb(captured.value.__traceback__)
+    }
 
 
 def test_binding_rejects_none_for_a_required_component() -> None:

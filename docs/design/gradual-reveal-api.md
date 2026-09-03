@@ -48,7 +48,12 @@ produces the action-specific ports and providers required to construct an
 Host-supplied recipe callables are trusted application code. The library can
 prove that its own objects do not retain scoped resources; it cannot prove
 what an arbitrary callable closure captures. Documentation and inspection
-must state that boundary explicitly.
+must state that boundary explicitly. Exceptions raised by a recipe, definition
+construction, or runtime construction propagate with their original traceback
+so the host author can diagnose configuration failures. Stable content-safe
+`ActionApplicationError` codes cover failures the application layer recognizes
+and owns; hosts must not expose arbitrary binding exceptions to untrusted
+callers.
 
 ### 2. Registration
 
@@ -147,10 +152,12 @@ Each stage validates only facts it possesses:
 | Registration runtime | duplicate action type and catalog state |
 | Binding and compilation | complete fresh ports/providers, existing `ActionDefinition` conformance, host-specific checks |
 
-Validation failures use a closed issue-code vocabulary and content-safe
-messages. They never include callable representations, module or qualified
-names, arbitrary exception text, dependency serialization, tenant or principal
-identifiers, snapshots, commands, DSNs, tokens, or key handles.
+Application-layer validation failures use a closed issue-code vocabulary and
+content-safe messages. They never include callable representations, module or
+qualified names, arbitrary exception text, dependency serialization, tenant or
+principal identifiers, snapshots, commands, DSNs, tokens, or key handles.
+Trusted host exceptions raised while binding are not application-layer
+validation failures and retain their diagnostic traceback.
 
 The initial issue families are:
 
