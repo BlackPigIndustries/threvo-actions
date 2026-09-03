@@ -77,8 +77,13 @@ def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
         "Post-adoption window",
         "no unresolved",
         "safety anomaly",
+        "Stable promotion entries",
+        "Qualifying adoption",
+        "Independent DX proof",
+        "Post-adoption safety proof",
     ):
         assert requirement in worksheet
 
     versioning = (ROOT / "docs" / "versioning.md").read_text()
     assert "gradual-reveal-adoption.md#support-review-entries" in versioning
+    assert "gradual-reveal-adoption.md#stable-promotion-entries" in versioning
