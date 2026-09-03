@@ -166,7 +166,8 @@ The initial issue families are:
 - `registration_frozen`;
 - `incomplete_binding`;
 - `binding_inactive`;
-- `definition_nonconforming`;
+- `definition_nonconforming` (reserved for compatibility; `bind()` propagates
+  trusted definition-construction failures unchanged);
 - `policy_unavailable`.
 
 Missing policy, required behavior, trusted context, or a policy dependency

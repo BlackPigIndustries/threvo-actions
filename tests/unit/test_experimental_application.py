@@ -435,6 +435,13 @@ def test_recipe_failure_preserves_the_host_exception_for_diagnostics() -> None:
     assert "fail" in {frame.name for frame in traceback.extract_tb(captured.value.__traceback__)}
 
 
+def test_definition_nonconforming_issue_code_remains_compatible() -> None:
+    error = ActionApplicationError(ActionIssueCode.DEFINITION_NONCONFORMING)
+
+    assert error.code is ActionIssueCode.DEFINITION_NONCONFORMING
+    assert str(error) == "compiled action definition is nonconforming"
+
+
 def test_binding_rejects_none_for_a_required_component() -> None:
     def incomplete(
         dependencies: Dependencies,

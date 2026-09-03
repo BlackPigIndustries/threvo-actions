@@ -74,7 +74,12 @@ NonNegativeTimedelta = Annotated[timedelta, Field(ge=timedelta(0))]
 
 
 class ActionIssueCode(StrEnum):
-    """Content-safe issue vocabulary for the experimental authoring layer."""
+    """Content-safe issue vocabulary for the experimental authoring layer.
+
+    ``DEFINITION_NONCONFORMING`` is reserved for compatibility with the initial
+    experimental contract. ``ActionApplication.bind()`` does not emit it because
+    trusted definition-construction failures retain their original diagnostics.
+    """
 
     INVALID_SPECIFICATION = "invalid_specification"
     DUPLICATE_ACTION_TYPE = "duplicate_action_type"
