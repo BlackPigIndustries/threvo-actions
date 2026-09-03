@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from threvo_actions import (
@@ -481,8 +481,15 @@ class RefundApplication:
     psp: FakePSP
     events: CapturingEvents
 
+    def dependencies_for_operation(self) -> RefundDependencies:
+        """Create an operation container while sharing durable example services."""
+        return replace(self.dependencies)
+
     async def prepare(self, command: RefundCommand) -> ActionOperationResult:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.prepare(
                 tenant_reference=TENANT,
                 command=command,
@@ -508,41 +515,59 @@ class RefundApplication:
             issued_at=now,
             expires_at=now + timedelta(minutes=5),
         )
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.record_authority(
                 evidence=evidence,
                 authenticated_authority=FINANCE_MANAGER,
             )
 
     async def execute(self, proposal_reference: str) -> ActionOperationResult:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.execute(
                 tenant_reference=TENANT,
                 proposal_reference=proposal_reference,
             )
 
     async def reconcile(self, proposal_reference: str) -> ActionOperationResult:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.reconcile(
                 tenant_reference=TENANT,
                 proposal_reference=proposal_reference,
             )
 
     async def expire_due(self, proposal_reference: str) -> ActionOperationResult:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.expire_due(
                 tenant_reference=TENANT,
                 proposal_reference=proposal_reference,
             )
 
     async def read(self, proposal_reference: str, *, context: ReadContext) -> ProposalView:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.read(proposal_reference=proposal_reference, context=context)
 
     async def erase(
         self, proposal_reference: str, *, context: ReadContext
     ) -> ActionOperationResult:
-        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+        with self.actions.bind(
+            self.refund,
+            dependencies=self.dependencies_for_operation(),
+        ) as bound:
             return await bound.erase(proposal_reference=proposal_reference, context=context)
 
 

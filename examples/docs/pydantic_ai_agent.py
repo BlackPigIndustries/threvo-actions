@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -61,7 +61,7 @@ async def _action_dependencies(
 ) -> AsyncIterator[RefundDependencies]:
     if deps.tenant_reference != deps.demo.host.tenant_reference:
         raise PermissionError("tenant is not authenticated for this action")
-    yield replace(deps.demo.dependencies)
+    yield deps.demo.dependencies_for_operation()
 
 
 def action_dependencies(
