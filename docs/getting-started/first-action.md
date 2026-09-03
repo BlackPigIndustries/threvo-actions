@@ -42,7 +42,10 @@ actions.freeze()
 `ActionApplication` retains the specification, recipe callable, and opaque
 typed handle. It must not retain a tenant, principal, transaction, store
 instance, proposal key, viewer, or bound ports. The host owns those resources
-and supplies fresh dependencies at the operation boundary.
+and supplies a dependency container from a fresh operation or request scope.
+The in-memory reference app creates a new container for each call while sharing
+its store, clock, and port objects; it does not pretend to model a database
+transaction.
 
 ## Bind one operation
 

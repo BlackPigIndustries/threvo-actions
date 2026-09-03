@@ -83,6 +83,17 @@ def _seed_order(application: RefundApplication) -> None:
     )
 
 
+def test_refund_application_creates_a_fresh_dependency_bundle_per_operation() -> None:
+    application = build_refund_application()
+
+    first = application.dependencies_for_operation()
+    second = application.dependencies_for_operation()
+
+    assert first is not second
+    assert first.store is second.store is application.store
+    assert first.host is second.host is application.host
+
+
 async def _prepare_and_approve(application: RefundApplication, amount: str = "30.00") -> str:
     prepared = await application.prepare(_command(amount))
     approved = await application.approve(prepared.proposal_reference)

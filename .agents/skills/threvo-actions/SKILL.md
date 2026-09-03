@@ -38,8 +38,10 @@ successful HTTP response.
 
 - Prefer the experimental `ActionApplication` plus a strict `ActionSpec` for a
   new integration. Register a typed `ActionRecipe` explicitly, freeze the
-  catalog, and bind fresh host dependencies for each operation. This gradual-
-  reveal surface compiles to the same expert runtime and cannot grant policy.
+  catalog, and bind a dependency container from a fresh host operation scope.
+  Durable services may be shared references inside that container. This
+  gradual-reveal surface compiles to the same expert runtime and cannot grant
+  policy.
 - Use `Action[Command, Snapshot, Preview, Result]` when one host object already
   owns every action port. Build `ActionDefinition` directly when the host owns
   the ports as separate expert-level adapters. Do not introduce a second
