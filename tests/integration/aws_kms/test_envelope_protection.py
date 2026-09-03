@@ -47,7 +47,11 @@ def test_import_without_cryptography_extra_has_a_clear_install_message(
 class FakeKmsClient:
     def __init__(self, *, plaintext: bytes | None = None) -> None:
         self.alias_target = "arn:aws:kms:eu-west-1:123456789012:key/one"
-        self._master_keys = {self.alias_target: os.urandom(32)}
+        master_key = os.urandom(32)
+        self._master_keys = {
+            self.alias_target: master_key,
+            "alias/threvo-actions": master_key,
+        }
         self._plaintext = plaintext
         self.contexts: list[dict[str, str]] = []
         self.generated_key_ids: list[str] = []
@@ -56,6 +60,7 @@ class FakeKmsClient:
     def repoint_alias(self) -> None:
         self.alias_target = "arn:aws:kms:eu-west-1:123456789012:key/two"
         self._master_keys[self.alias_target] = os.urandom(32)
+        self._master_keys["alias/threvo-actions"] = self._master_keys[self.alias_target]
 
     async def generate_data_key(
         self,
@@ -168,6 +173,44 @@ def test_payload_metadata_and_ciphertext_are_authenticated() -> None:
         wrong_version = payload.model_copy(update={"key_version": "changed"})
         with pytest.raises(ValueError, match="metadata does not match"):
             await protection.unprotect(payload=wrong_version)
+
+    asyncio.run(scenario())
+
+
+def test_equivalent_kms_alias_cannot_replace_the_bound_resolved_key_id() -> None:
+    async def scenario() -> None:
+        envelopes = MemoryEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+        payload = await protection.protect(
+            proposal_reference="proposal:payload",
+            canonical_payload=b"private",
+        )
+        payload_envelope = envelopes.entries[payload.key_handle]
+        envelopes.entries[payload.key_handle] = payload_envelope.model_copy(
+            update={"key_id": "alias/threvo-actions"}
+        )
+
+        with pytest.raises(ValueError, match="authentication failed"):
+            await protection.unprotect(payload=payload)
+
+        commitment = await protection.create(
+            proposal_reference="proposal:commitment",
+            canonical_payload=b"private",
+        )
+        commitment_envelope = envelopes.entries[commitment.key_handle]
+        envelopes.entries[commitment.key_handle] = commitment_envelope.model_copy(
+            update={"key_id": "alias/threvo-actions"}
+        )
+
+        assert not await protection.verify(
+            proposal_reference="proposal:commitment",
+            canonical_payload=b"private",
+            commitment=commitment,
+        )
 
     asyncio.run(scenario())
 

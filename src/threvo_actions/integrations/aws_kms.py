@@ -156,7 +156,18 @@ class AwsKmsEnvelopeProtection(
         )
         key_version = _key_version(generated.resolved_key_id)
         try:
-            digest = hmac.new(generated.plaintext, canonical_payload, hashlib.sha256).hexdigest()
+            digest = hmac.new(
+                generated.plaintext,
+                _authenticated_metadata(
+                    key_handle=handle,
+                    proposal_reference=proposal_reference,
+                    purpose="commitment",
+                    key_id=generated.resolved_key_id,
+                    key_version=key_version,
+                )
+                + canonical_payload,
+                hashlib.sha256,
+            ).hexdigest()
         finally:
             _zero_key(generated.plaintext)
         await self._store_key(
@@ -191,7 +202,18 @@ class AwsKmsEnvelopeProtection(
             return False
         key = await self._decrypt_key(commitment.key_handle, envelope)
         try:
-            expected = hmac.new(key, canonical_payload, hashlib.sha256).hexdigest()
+            expected = hmac.new(
+                key,
+                _authenticated_metadata(
+                    key_handle=commitment.key_handle,
+                    proposal_reference=proposal_reference,
+                    purpose="commitment",
+                    key_id=envelope.key_id,
+                    key_version=envelope.key_version,
+                )
+                + canonical_payload,
+                hashlib.sha256,
+            ).hexdigest()
             return hmac.compare_digest(expected, commitment.digest)
         finally:
             _zero_key(key)
@@ -228,6 +250,7 @@ class AwsKmsEnvelopeProtection(
                     key_handle=handle,
                     proposal_reference=proposal_reference,
                     purpose="payload",
+                    key_id=generated.resolved_key_id,
                     key_version=key_version,
                 ),
             )
@@ -275,6 +298,7 @@ class AwsKmsEnvelopeProtection(
                     key_handle=payload.key_handle,
                     proposal_reference=envelope.proposal_reference,
                     purpose="payload",
+                    key_id=envelope.key_id,
                     key_version=envelope.key_version,
                 ),
             )
@@ -417,9 +441,10 @@ def _authenticated_metadata(
     key_handle: str,
     proposal_reference: str,
     purpose: EnvelopePurpose,
+    key_id: str,
     key_version: str,
 ) -> bytes:
-    parts = (key_handle, proposal_reference, purpose, key_version)
+    parts = (key_handle, proposal_reference, purpose, key_id, key_version)
     encoded = [part.encode("utf-8") for part in parts]
     return b"threvo-actions:aws-kms-envelope:v1" + b"".join(
         len(part).to_bytes(4, "big") + part for part in encoded

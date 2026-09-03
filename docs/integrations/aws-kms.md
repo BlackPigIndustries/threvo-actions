@@ -75,9 +75,10 @@ before it can compose this adapter.
 
 Every KMS operation carries encryption context for the random key handle,
 proposal reference, and purpose (`commitment` or `payload`). AES-GCM additional
-authenticated data also binds the handle, proposal, purpose, and reported key
-identifier. Copying or changing persisted metadata therefore fails verification
-or decryption.
+authenticated data and the commitment HMAC input also bind the handle, proposal,
+purpose, resolved key identifier, and derived key version. Copying or changing
+persisted binding metadata therefore fails verification or decryption, even if
+another identifier resolves to the same KMS key.
 
 AWS records encryption context in plaintext in CloudTrail. Proposal references
 must therefore be opaque, non-sensitive identifiers; never put an account
