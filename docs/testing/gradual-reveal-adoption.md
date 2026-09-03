@@ -1,9 +1,22 @@
 # Gradual-reveal adoption record
 
-Status: **awaiting an independent participant and workflow-built `0.1.4`
-candidate**
+Status: **`0.1.4` publication authorized by the repository owner; independent
+adoption evidence remains pending**
 
-Promotion gate: **pending**; release=v0.1.4; candidate_source=pending
+Promotion gate: **waived**; release=v0.1.4; candidate_source=89dd16f48b0f5ac6a4bea0fed2821286fa70810e; authority=repository-owner
+
+## One-time `0.1.4` publication waiver
+
+On 2026-09-03 the repository owner explicitly directed publication of the
+qualified workflow candidate from source commit
+`89dd16f48b0f5ac6a4bea0fed2821286fa70810e` without the independent-human
+adoption evidence below. Candidate workflow run `33743039614` qualified the
+wheel and source distribution for that exact commit.
+
+This waiver is not a passing adoption result, does not create a scored ledger
+entry, and does not satisfy the later support or stable-promotion gates. The
+release workflow recognizes it only for `v0.1.4` and the named source commit;
+it cannot authorize another release or rebuilt candidate.
 
 This is the append-only evidence ledger for the expert baseline and every
 gradual-reveal candidate attempt. A local source run, maintainer trial, or AI

@@ -345,7 +345,20 @@ jobs:
           printf '%s  %s\n' "$ADOPTION_RECORD_DIGEST" adoption-evidence.md \
             | sha256sum --check --strict
           expected_promotion_gate="Promotion gate: **passed**; release=$RELEASE_TAG; candidate_source=$SOURCE_COMMIT"
-          test "$(grep -Fxc -- "$expected_promotion_gate" adoption-evidence.md)" -eq 1
+          expected_waiver_gate="Promotion gate: **waived**; release=$RELEASE_TAG; candidate_source=$SOURCE_COMMIT; authority=repository-owner"
+          passed_gate_count=$(grep -Fxc -- "$expected_promotion_gate" adoption-evidence.md || true)
+          waiver_gate_count=$(grep -Fxc -- "$expected_waiver_gate" adoption-evidence.md || true)
+          if test "$passed_gate_count" -eq 1 && test "$waiver_gate_count" -eq 0; then
+            :
+          elif test "$RELEASE_TAG" = "v0.1.4" \
+            && test "$SOURCE_COMMIT" = "89dd16f48b0f5ac6a4bea0fed2821286fa70810e" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 1; then
+            echo "Using the repository owner's one-time v0.1.4 adoption waiver."
+          else
+            echo "Adoption evidence neither passed nor matches the one-time v0.1.4 owner waiver." >&2
+            exit 1
+          fi
           uv run --no-project python scripts/verify_release.py \
             --tag "$RELEASE_TAG" \
             --verify-candidate release \
@@ -557,6 +570,8 @@ jobs:
           git fetch --no-tags origin main:refs/remotes/origin/main
           git show origin/main:docs/testing/gradual-reveal-adoption.md \
             > release/ADOPTION-EVIDENCE.md
+          git show origin/main:docs/releases/0.1.4.md \
+            > release/RELEASE-NOTES.md
           printf '%s  %s\n' "$ADOPTION_RECORD_DIGEST" release/ADOPTION-EVIDENCE.md \
             | sha256sum --check --strict
       - name: Revalidate the signed tag immediately before GitHub release
@@ -593,4 +608,4 @@ jobs:
             release/ADOPTION-EVIDENCE.md \
             --verify-tag \
             --title "$RELEASE_TAG" \
-            --notes-file docs/releases/0.1.4.md
+            --notes-file release/RELEASE-NOTES.md
