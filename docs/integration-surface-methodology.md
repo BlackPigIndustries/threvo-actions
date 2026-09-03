@@ -214,11 +214,14 @@ by the release workflow, not an editable checkout. Add the candidate source
 commit, wheel and source-distribution SHA-256 digests, eligible expert wiring,
 eligible candidate wiring, absolute LOC delta, and percentage reduction.
 
-Entries are append-only and hash linked: canonicalize each completed worksheet
-as JSON, record its SHA-256, and include the previous entry digest (`genesis`
-for the first entry). Never replace a failed or assisted attempt. Any source,
-fixture, documentation, acceptance-test, or methodology change creates a new
-entry and may require a new independent participant.
+Entries are append-only and hash linked. Apply the adoption ledger's exact
+[integrity rules](testing/gradual-reveal-adoption.md#integrity-rules):
+canonicalize each completed worksheet with RFC 8785 JCS, encode it as UTF-8
+without a byte-order mark or trailing newline, hash those bytes with SHA-256,
+and include the previous entry digest (`genesis` for the first entry) while
+excluding the entry's own digest. Never replace a failed or assisted attempt.
+Any source, fixture, documentation, acceptance-test, or methodology change
+creates a new entry and may require a new independent participant.
 
 A passing candidate must satisfy the time limits, all nine safety conditions,
 fifth-action eligible host code of at most 500 lines, and at least 30% less

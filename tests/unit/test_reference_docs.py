@@ -81,6 +81,9 @@ def test_gradual_reveal_methodology_defines_comparative_loc_scoring() -> None:
     assert "absolute_loc_delta = C - E" in methodology
     assert "reduction_percentage = ((E - C) / E) * 100" in methodology
     assert "complete marginal eligible-host LOC" in methodology
+    assert "RFC 8785 JCS" in methodology
+    assert "encode it as UTF-8" in methodology
+    assert "gradual-reveal-adoption.md#integrity-rules" in methodology
 
 
 def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
