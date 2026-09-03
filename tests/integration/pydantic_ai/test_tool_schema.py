@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import sys
+from typing import get_type_hints
 
 import pytest
 from examples.docs.pydantic_ai_agent import (
@@ -20,6 +21,7 @@ from tests.integration.pydantic_ai.support import AgentDeps, build_stack
 
 from threvo_actions.integrations.pydantic_ai import (
     ActionCapability,
+    ActionToolBinding,
     ScopedActionToolBinding,
     _contains_json_float_for_decimal,
 )
@@ -30,6 +32,11 @@ def test_capability_requires_at_least_one_explicit_action_binding() -> None:
 
     with pytest.raises(ValueError, match="at least one"):
         ActionCapability(runtime=stack.runtime, bindings=[])
+
+
+@pytest.mark.parametrize("binding", [ActionToolBinding, ScopedActionToolBinding])
+def test_public_binding_annotations_are_runtime_resolvable(binding: type[object]) -> None:
+    assert get_type_hints(binding)
 
 
 def test_import_without_pydantic_ai_extra_has_a_clear_install_message(
