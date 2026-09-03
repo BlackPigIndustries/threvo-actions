@@ -24,6 +24,7 @@ from examples.docs.pydantic_ai_agent import (
     seed_demo,
 )
 from examples.refund.app import TENANT, build_refund_application
+from threvo_actions import OperationOutcome
 from threvo_actions.integrations.pydantic_ai import ActionCapability, ScopedActionToolBinding
 
 
@@ -80,6 +81,11 @@ async def main() -> None:
         )
 
     print(completed.output)
+    demo.clock.advance(demo.specification.verification_delay)
+    verified = await demo.reconcile(proposal_reference)
+    if verified.outcome is not OperationOutcome.VERIFIED:
+        raise RuntimeError("the authoritative verifier did not confirm the refund")
+    print("The refund was authoritatively verified.")
     print(f"executor calls: {demo.host.executor_calls}")
 
 
