@@ -784,13 +784,13 @@ class ActionRuntime:
         if protected is not None:
             await _destroy_payload(
                 definition.protection_codec,
-                proposal_reference=record.proposal_reference,
+                proposal_reference=proposal_reference,
                 payload=protected,
             )
         if commitment is not None:
             await _destroy_commitment(
                 definition.commitment_provider,
-                proposal_reference=record.proposal_reference,
+                proposal_reference=proposal_reference,
                 commitment=commitment,
             )
         if not await self._retention_store.complete_erasure(
@@ -1239,7 +1239,11 @@ class ActionRuntime:
 
     async def _required(self, tenant_reference: str, proposal_reference: str) -> StoredProposal:
         record = await self._store.get(tenant_reference, proposal_reference)
-        if record is None:
+        if (
+            record is None
+            or record.tenant_reference != tenant_reference
+            or record.proposal_reference != proposal_reference
+        ):
             raise ProposalNotFoundError
         return record
 

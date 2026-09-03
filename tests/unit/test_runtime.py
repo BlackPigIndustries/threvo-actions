@@ -556,6 +556,21 @@ class ConflictAfterConcurrentBlockStore(MemoryActionStore):
         return EffectClaimResult.CONFLICT
 
 
+class SubstitutingReadStore(MemoryActionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested_reference: str | None = None
+        self.substituted_reference: str | None = None
+
+    async def get(self, tenant_reference: str, proposal_reference: str) -> StoredProposal | None:
+        if (
+            proposal_reference == self.requested_reference
+            and self.substituted_reference is not None
+        ):
+            return await super().get(tenant_reference, self.substituted_reference)
+        return await super().get(tenant_reference, proposal_reference)
+
+
 async def prepare(
     runtime: ActionRuntime,
     action: ActionDefinition[Command, PrivateSnapshot, Preview, Result],
@@ -1345,6 +1360,48 @@ def test_runtime_prefers_proposal_bound_erasure_ports() -> None:
             ("payload", prepared.proposal_reference),
             ("commitment", prepared.proposal_reference),
         ]
+
+    asyncio.run(scenario())
+
+
+def test_erasure_rejects_a_store_record_substituted_after_authorization() -> None:
+    async def scenario() -> None:
+        store = SubstitutingReadStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+        requested = await prepare(runtime, action, order="ORD-1")
+        substituted = await prepare(runtime, action, order="ORD-2")
+        store.requested_reference = requested.proposal_reference
+        store.substituted_reference = substituted.proposal_reference
+        context = ReadContext(
+            tenant_reference="tenant:a",
+            consumer=EvidenceConsumer(reference="retention:officer"),
+        )
+
+        with pytest.raises(ProposalNotFoundError):
+            await runtime.erase(
+                action,
+                proposal_reference=requested.proposal_reference,
+                context=context,
+            )
+
+        store.requested_reference = None
+        requested_record = await store.get("tenant:a", requested.proposal_reference)
+        substituted_record = await store.get("tenant:a", substituted.proposal_reference)
+        assert secrets.bound_destroyed == []
+        assert requested_record is not None
+        assert requested_record.erasure_pending_at is None
+        assert requested_record.protected_private_snapshot is not None
+        assert substituted_record is not None
+        assert substituted_record.erasure_pending_at is None
+        assert substituted_record.protected_private_snapshot is not None
 
     asyncio.run(scenario())
 
