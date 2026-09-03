@@ -73,6 +73,19 @@ def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
     assert "| Registration runtime | duplicate action type and catalog state |" in design
 
 
+def test_primary_guidance_gates_the_experimental_authoring_surface() -> None:
+    readme = (ROOT / "README.md").read_text()
+    first_action = (ROOT / "docs" / "getting-started" / "first-action.md").read_text()
+
+    for document in (readme, first_action):
+        guide = " ".join(document.split())
+        assert "pin" in guide and "exact patch" in guide
+        assert "equivalence tests before every patch upgrade" in guide
+        assert "migration notes before every minor-line upgrade" in guide
+        assert "supported" in guide and "`Action`" in guide
+        assert "ActionDefinition" in guide
+
+
 def test_gradual_reveal_methodology_defines_comparative_loc_scoring() -> None:
     methodology = (ROOT / "docs" / "integration-surface-methodology.md").read_text()
 

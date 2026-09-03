@@ -56,10 +56,12 @@ and global installation options.
 
 The package provides strict, immutable Pydantic v2 boundary models plus an
 ordinary-Python confirm-first runtime and concurrency-correct in-memory store.
-New integrations can use the namespaced experimental `ActionApplication` and
-`ActionSpec` surface with fresh operation-scoped dependencies. Existing hosts
-can author one typed `Action` or build the public `ActionDefinition` directly.
-All three paths compile to the same expert runtime. Its explicit ports own
+New integrations should start with the supported typed `Action` facade or the
+public `ActionDefinition`. Applications may opt into the namespaced
+experimental `ActionApplication` and `ActionSpec` only when they pin an exact
+patch, rerun expert-path equivalence tests before every patch upgrade, and
+review migration notes before every minor-line upgrade. All three paths compile
+to the same expert runtime. Its explicit ports own
 preparation, live authorization, authority evaluation, state re-resolution,
 atomic execution, authoritative verification, snapshot protection, keyed
 commitments, and retention decisions.

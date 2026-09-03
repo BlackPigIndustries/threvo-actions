@@ -5,6 +5,14 @@ preview, and safe result. The gradual-reveal API keeps those semantics static
 while host stores, transactions, identities, policies, keys, and ports remain
 operation scoped.
 
+!!! warning "This tour uses the experimental authoring surface"
+
+    Adopt `threvo_actions.experimental` only if the application pins an exact
+    patch, reruns expert-path equivalence tests before every patch upgrade, and
+    reviews migration notes before every minor-line upgrade. Otherwise start
+    with the supported `Action` facade or construct `ActionDefinition`
+    directly. All paths use the same runtime and lifecycle.
+
 ## Run the tour
 
 The source distribution contains a 68-line executable tour:
@@ -26,9 +34,9 @@ boundary without pretending they fit in a copy-paste snippet.
 
 ## Compose the application
 
-Use `ActionSpec` for immutable action semantics and `ActionComponents` for
-borrowed, live resources. Register explicitly, then freeze the catalog before
-serving work:
+For this experimental tour, use `ActionSpec` for immutable action semantics and
+`ActionComponents` for borrowed, live resources. Register explicitly, then
+freeze the catalog before serving work:
 
 ```python
 actions = ActionApplication[RefundDependencies]()
