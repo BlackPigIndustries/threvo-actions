@@ -49,6 +49,7 @@ def test_release_metadata_is_consistent() -> None:
     assert project["version"] == threvo_actions.__version__
     assert f'version: "{threvo_actions.__version__}"' in skill
     assert f"## [{threvo_actions.__version__}] - " in changelog
+    assert (ROOT / f"docs/releases/{threvo_actions.__version__}.md").is_file()
 
 
 def test_experimental_authoring_surface_stays_namespaced() -> None:
