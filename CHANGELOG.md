@@ -14,9 +14,9 @@ and uses Semantic Versioning for the supported surface described in
 
 ### Security
 
-- The runtime now accepts complete proposal-bound commitment and protection
-  contracts, preventing an authorized erasure from deleting another
-  proposal's wrapped key after whole-artifact substitution.
+- The runtime now binds complete tenant-scoped proposal identities through
+  proposal-bound commitment and protection contracts, preventing authorized
+  reads or erasure from crossing tenants after whole-artifact substitution.
 - Plaintext KMS data-key buffers are overwritten before later I/O or
   authentication failures can escape through library traceback frames.
 

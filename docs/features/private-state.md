@@ -46,8 +46,9 @@ stays with the provider.
 
 Both provider contracts require idempotent destruction because erasure records
 intent before attempting key destruction. Prefer the complete proposal-bound
-contracts when the provider stores proposal-scoped keys: their destruction
-methods receive the independently authorized proposal reference. Run
+contracts when the provider stores proposal-scoped keys: every operation
+receives a strict `ProposalIdentity` containing the independently authorized
+tenant and proposal references. Run
 [`assert_providers_conform()`](../testing/conformance.md) against every custom
 implementation.
 

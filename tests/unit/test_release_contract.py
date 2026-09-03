@@ -349,6 +349,7 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "ProposalNotFoundError",
         "ProposalBoundCommitmentProvider",
         "ProposalBoundProtectionCodec",
+        "ProposalIdentity",
         "ProposalReceipt",
         "ProposalReceiptStatus",
         "ProposalView",

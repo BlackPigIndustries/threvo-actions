@@ -21,6 +21,7 @@ from threvo_actions.models import (
     ExperimentalModel,
     GovernedExecutor,
     LifecycleStatus,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -216,7 +217,51 @@ class DeterministicSecrets:
 class ProposalBoundSecrets(DeterministicSecrets):
     def __init__(self) -> None:
         super().__init__()
-        self.bound_destroyed: list[tuple[str, str]] = []
+        self.bound_destroyed: list[tuple[str, str, str]] = []
+
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
+        return await super().create(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool:
+        return await super().verify(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> ProtectedPayload:
+        return await super().protect(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
+        del proposal_identity
+        return await super().unprotect(payload=payload)
 
     async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None:
         del commitment
@@ -229,21 +274,33 @@ class ProposalBoundSecrets(DeterministicSecrets):
     async def destroy_commitment_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         commitment: KeyedCommitment,
     ) -> None:
-        assert commitment.key_handle == f"commitment:{proposal_reference}"
-        self.bound_destroyed.append(("commitment", proposal_reference))
+        assert commitment.key_handle == f"commitment:{proposal_identity.proposal_reference}"
+        self.bound_destroyed.append(
+            (
+                "commitment",
+                proposal_identity.tenant_reference,
+                proposal_identity.proposal_reference,
+            )
+        )
         self.destroyed_commitments.add(commitment.key_handle)
 
     async def destroy_payload_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         payload: ProtectedPayload,
     ) -> None:
-        assert payload.key_handle == f"payload:{proposal_reference}"
-        self.bound_destroyed.append(("payload", proposal_reference))
+        assert payload.key_handle == f"payload:{proposal_identity.proposal_reference}"
+        self.bound_destroyed.append(
+            (
+                "payload",
+                proposal_identity.tenant_reference,
+                proposal_identity.proposal_reference,
+            )
+        )
         self.destroyed_payloads.add(payload.key_handle)
 
 
@@ -1357,8 +1414,8 @@ def test_runtime_prefers_proposal_bound_erasure_ports() -> None:
         )
 
         assert secrets.bound_destroyed == [
-            ("payload", prepared.proposal_reference),
-            ("commitment", prepared.proposal_reference),
+            ("payload", "tenant:a", prepared.proposal_reference),
+            ("commitment", "tenant:a", prepared.proposal_reference),
         ]
 
     asyncio.run(scenario())

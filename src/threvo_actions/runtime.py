@@ -32,6 +32,7 @@ from .models import (
     ConfirmingAuthority,
     ExperimentalModel,
     LifecycleStatus,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
     SafeReference,
@@ -79,12 +80,12 @@ _LOGGER = logging.getLogger(__name__)
 async def _destroy_payload(
     codec: ProtectionCodecPort,
     *,
-    proposal_reference: str,
+    proposal_identity: ProposalIdentity,
     payload: ProtectedPayload,
 ) -> None:
     if isinstance(codec, ProposalBoundProtectionCodec):
         await codec.destroy_payload_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             payload=payload,
         )
         return
@@ -94,16 +95,84 @@ async def _destroy_payload(
 async def _destroy_commitment(
     provider: CommitmentProviderPort,
     *,
-    proposal_reference: str,
+    proposal_identity: ProposalIdentity,
     commitment: KeyedCommitment,
 ) -> None:
     if isinstance(provider, ProposalBoundCommitmentProvider):
         await provider.destroy_commitment_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             commitment=commitment,
         )
         return
     await provider.destroy_commitment(commitment=commitment)
+
+
+async def _create_commitment(
+    provider: CommitmentProviderPort,
+    *,
+    proposal_identity: ProposalIdentity,
+    canonical_payload: bytes,
+) -> KeyedCommitment:
+    if isinstance(provider, ProposalBoundCommitmentProvider):
+        return await provider.create_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+        )
+    return await provider.create(
+        proposal_reference=proposal_identity.proposal_reference,
+        canonical_payload=canonical_payload,
+    )
+
+
+async def _verify_commitment(
+    provider: CommitmentProviderPort,
+    *,
+    proposal_identity: ProposalIdentity,
+    canonical_payload: bytes,
+    commitment: KeyedCommitment,
+) -> bool:
+    if isinstance(provider, ProposalBoundCommitmentProvider):
+        return await provider.verify_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+    return await provider.verify(
+        proposal_reference=proposal_identity.proposal_reference,
+        canonical_payload=canonical_payload,
+        commitment=commitment,
+    )
+
+
+async def _protect_payload(
+    codec: ProtectionCodecPort,
+    *,
+    proposal_identity: ProposalIdentity,
+    canonical_payload: bytes,
+) -> ProtectedPayload:
+    if isinstance(codec, ProposalBoundProtectionCodec):
+        return await codec.protect_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+        )
+    return await codec.protect(
+        proposal_reference=proposal_identity.proposal_reference,
+        canonical_payload=canonical_payload,
+    )
+
+
+async def _unprotect_payload(
+    codec: ProtectionCodecPort,
+    *,
+    proposal_identity: ProposalIdentity,
+    payload: ProtectedPayload,
+) -> bytes:
+    if isinstance(codec, ProposalBoundProtectionCodec):
+        return await codec.unprotect_for(
+            proposal_identity=proposal_identity,
+            payload=payload,
+        )
+    return await codec.unprotect(payload=payload)
 
 
 class Clock(Protocol):
@@ -781,16 +850,20 @@ class ActionRuntime:
                     return self._result(record, OperationOutcome.CONFLICT)
         protected = record.protected_private_snapshot
         commitment = record.commitment
+        proposal_identity = ProposalIdentity(
+            tenant_reference=record.tenant_reference,
+            proposal_reference=record.proposal_reference,
+        )
         if protected is not None:
             await _destroy_payload(
                 definition.protection_codec,
-                proposal_reference=proposal_reference,
+                proposal_identity=proposal_identity,
                 payload=protected,
             )
         if commitment is not None:
             await _destroy_commitment(
                 definition.commitment_provider,
-                proposal_reference=proposal_reference,
+                proposal_identity=proposal_identity,
                 commitment=commitment,
             )
         if not await self._retention_store.complete_erasure(
@@ -822,20 +895,26 @@ class ActionRuntime:
         now: datetime,
     ) -> StoredProposal:
         proposal_reference = self._identifiers.new("proposal")
+        proposal_identity = ProposalIdentity(
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
         private_json = model_json_object(prepared.private_snapshot)
         private_canonical = canonicalize_v1(private_json)
         commitment_input = commitment_payload_v1(
             proposal_reference=proposal_reference,
             canonical_payload=private_canonical,
         )
-        commitment = await definition.commitment_provider.create(
-            proposal_reference=proposal_reference,
+        commitment = await _create_commitment(
+            definition.commitment_provider,
+            proposal_identity=proposal_identity,
             canonical_payload=commitment_input,
         )
         protected = None
         try:
-            protected = await definition.protection_codec.protect(
-                proposal_reference=proposal_reference,
+            protected = await _protect_payload(
+                definition.protection_codec,
+                proposal_identity=proposal_identity,
                 canonical_payload=private_canonical,
             )
             proposal_receipt = ProposalReceipt(
@@ -874,7 +953,7 @@ class ActionRuntime:
                 try:
                     await _destroy_payload(
                         definition.protection_codec,
-                        proposal_reference=proposal_reference,
+                        proposal_identity=proposal_identity,
                         payload=protected,
                     )
                 except BaseException as cleanup_failure:
@@ -882,7 +961,7 @@ class ActionRuntime:
             try:
                 await _destroy_commitment(
                     definition.commitment_provider,
-                    proposal_reference=proposal_reference,
+                    proposal_identity=proposal_identity,
                     commitment=commitment,
                 )
             except BaseException as cleanup_failure:
@@ -904,16 +983,25 @@ class ActionRuntime:
         commitment = record.commitment
         if protected is None or commitment is None:
             return None
+        proposal_identity = ProposalIdentity(
+            tenant_reference=record.tenant_reference,
+            proposal_reference=record.proposal_reference,
+        )
         try:
-            canonical = await definition.protection_codec.unprotect(payload=protected)
+            canonical = await _unprotect_payload(
+                definition.protection_codec,
+                proposal_identity=proposal_identity,
+                payload=protected,
+            )
         except (KeyError, ValueError):
             return None
         commitment_input = commitment_payload_v1(
             proposal_reference=record.proposal_reference,
             canonical_payload=canonical,
         )
-        verified = await definition.commitment_provider.verify(
-            proposal_reference=record.proposal_reference,
+        verified = await _verify_commitment(
+            definition.commitment_provider,
+            proposal_identity=proposal_identity,
             canonical_payload=commitment_input,
             commitment=commitment,
         )

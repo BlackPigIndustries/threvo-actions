@@ -53,8 +53,8 @@ must:
 
 - durably store each random key handle without overwriting an existing handle;
 - restrict reads and deletes to the action runtime and retention identities;
-- preserve the proposal reference, purpose, resolved key identifier, and KMS
-  ciphertext blob exactly;
+- preserve the tenant reference, proposal reference, purpose, resolved key
+  identifier, and KMS ciphertext blob exactly;
 - make deletion idempotent; and
 - apply deletion and backup-retention policy to every copy of a wrapped key.
 
@@ -64,9 +64,10 @@ deleting the shared KMS key. A backup that can restore the wrapped key can also
 restore decryptability, so backup expiry is part of the erasure claim.
 
 This adapter implements the complete proposal-bound provider and codec ports,
-not the older base ports whose destruction calls carry no independently trusted
-proposal identity. `ActionDefinition` accepts either complete contract, and the
-runtime selects the matching destruction call. Application code should let
+not the older base ports whose operations carry no independently trusted,
+tenant-scoped proposal identity. `ActionDefinition` accepts either complete
+contract, and the runtime supplies a strict `ProposalIdentity` to every create,
+verify, protect, unprotect, and destruction call. Application code should let
 `ActionRuntime.erase()` perform erasure. Generic code written only for the
 older base ports must accept `CommitmentProviderPort` and `ProtectionCodecPort`
 before it can compose this adapter.
@@ -74,16 +75,18 @@ before it can compose this adapter.
 ## Bindings and failure behavior
 
 Every KMS operation carries encryption context for the random key handle,
-proposal reference, and purpose (`commitment` or `payload`). AES-GCM additional
-authenticated data and the commitment HMAC input also bind the handle, proposal,
-purpose, resolved key identifier, and derived key version. Copying or changing
-persisted binding metadata therefore fails verification or decryption, even if
-another identifier resolves to the same KMS key.
+tenant reference, proposal reference, and purpose (`commitment` or `payload`).
+AES-GCM additional authenticated data and the commitment HMAC input bind the
+same complete proposal identity plus the handle, purpose, resolved key
+identifier, and derived key version. Copying or changing persisted binding
+metadata therefore fails verification or decryption, even if another tenant
+uses the same proposal reference or another identifier resolves to the same KMS
+key.
 
-AWS records encryption context in plaintext in CloudTrail. Proposal references
-must therefore be opaque, non-sensitive identifiers; never put an account
-number, email address, payment reference, or other private business value in
-them. See AWS's [encryption-context guidance](https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html).
+AWS records encryption context in plaintext in CloudTrail. Tenant and proposal
+references must therefore be opaque, non-sensitive identifiers; never put an
+account number, email address, payment reference, or other private business
+value in them. See AWS's [encryption-context guidance](https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html).
 
 A missing commitment envelope returns `False` from verification. A missing
 payload envelope raises `KeyError`, matching the provider conformance contract

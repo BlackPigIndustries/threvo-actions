@@ -35,6 +35,7 @@ from .models import (
     LifecycleStatus,
     Money,
     Participant,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -178,6 +179,7 @@ __all__ = [
     "ProposalNotFoundError",
     "ProposalBoundCommitmentProvider",
     "ProposalBoundProtectionCodec",
+    "ProposalIdentity",
     "ProposalReceipt",
     "ProposalReceiptStatus",
     "ProposalView",

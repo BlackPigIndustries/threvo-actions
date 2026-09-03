@@ -28,7 +28,7 @@ from ..canonical import (
     ProposalBoundProtectionCodec,
     ProtectedPayload,
 )
-from ..models import ExperimentalModel, SafeReference
+from ..models import ExperimentalModel, ProposalIdentity, SafeReference
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -37,7 +37,6 @@ _DATA_KEY_BYTES = 32
 _NONCE_BYTES = 12
 _CODEC = "aws-kms-envelope-aes256-gcm-v1"
 _ALGORITHM = "hmac-sha256"
-_SAFE_REFERENCE_ADAPTER = TypeAdapter(SafeReference)
 EnvelopePurpose = Literal["commitment", "payload"]
 
 
@@ -75,6 +74,7 @@ class WrappedDataKey(ExperimentalModel):
         val_json_bytes="base64",
     )
 
+    tenant_reference: SafeReference
     proposal_reference: SafeReference
     purpose: EnvelopePurpose
     key_id: KmsKeyIdentifier
@@ -149,9 +149,14 @@ class AwsKmsEnvelopeProtection(
         self._kms = kms
         self._envelopes = envelopes
 
-    async def create(self, *, proposal_reference: str, canonical_payload: bytes) -> KeyedCommitment:
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
         handle, generated = await self._generate_key(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="commitment",
         )
         key_version = _key_version(generated.resolved_key_id)
@@ -160,7 +165,7 @@ class AwsKmsEnvelopeProtection(
                 generated.plaintext,
                 _authenticated_metadata(
                     key_handle=handle,
-                    proposal_reference=proposal_reference,
+                    proposal_identity=proposal_identity,
                     purpose="commitment",
                     key_id=generated.resolved_key_id,
                     key_version=key_version,
@@ -179,15 +184,15 @@ class AwsKmsEnvelopeProtection(
         await self._store_key(
             handle=handle,
             generated=generated,
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="commitment",
         )
         return commitment
 
-    async def verify(
+    async def verify_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         canonical_payload: bytes,
         commitment: KeyedCommitment,
     ) -> bool:
@@ -196,7 +201,7 @@ class AwsKmsEnvelopeProtection(
         envelope = await self._envelopes.get(key_handle=commitment.key_handle)
         if envelope is None or not self._matches(
             envelope,
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="commitment",
             key_version=commitment.key_version,
         ):
@@ -207,7 +212,7 @@ class AwsKmsEnvelopeProtection(
                 key,
                 _authenticated_metadata(
                     key_handle=commitment.key_handle,
-                    proposal_reference=proposal_reference,
+                    proposal_identity=proposal_identity,
                     purpose="commitment",
                     key_id=envelope.key_id,
                     key_version=envelope.key_version,
@@ -222,7 +227,7 @@ class AwsKmsEnvelopeProtection(
     async def destroy_commitment_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         commitment: KeyedCommitment,
     ) -> None:
         if commitment.algorithm != _ALGORITHM:
@@ -231,14 +236,17 @@ class AwsKmsEnvelopeProtection(
             key_handle=commitment.key_handle,
             key_version=commitment.key_version,
             purpose="commitment",
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
         )
 
-    async def protect(
-        self, *, proposal_reference: str, canonical_payload: bytes
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
     ) -> ProtectedPayload:
         handle, generated = await self._generate_key(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="payload",
         )
         key_version = _key_version(generated.resolved_key_id)
@@ -249,7 +257,7 @@ class AwsKmsEnvelopeProtection(
                 canonical_payload,
                 _authenticated_metadata(
                     key_handle=handle,
-                    proposal_reference=proposal_reference,
+                    proposal_identity=proposal_identity,
                     purpose="payload",
                     key_id=generated.resolved_key_id,
                     key_version=key_version,
@@ -266,12 +274,17 @@ class AwsKmsEnvelopeProtection(
         await self._store_key(
             handle=handle,
             generated=generated,
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="payload",
         )
         return protected
 
-    async def unprotect(self, *, payload: ProtectedPayload) -> bytes:
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
         if payload.codec != _CODEC:
             raise ValueError("protected payload codec is not supported")
         envelope = await self._envelopes.get(key_handle=payload.key_handle)
@@ -279,7 +292,7 @@ class AwsKmsEnvelopeProtection(
             raise KeyError(payload.key_handle)
         if not self._matches(
             envelope,
-            proposal_reference=envelope.proposal_reference,
+            proposal_identity=proposal_identity,
             purpose="payload",
             key_version=payload.key_version,
         ):
@@ -298,7 +311,7 @@ class AwsKmsEnvelopeProtection(
                 ciphertext,
                 _authenticated_metadata(
                     key_handle=payload.key_handle,
-                    proposal_reference=envelope.proposal_reference,
+                    proposal_identity=proposal_identity,
                     purpose="payload",
                     key_id=envelope.key_id,
                     key_version=envelope.key_version,
@@ -312,7 +325,7 @@ class AwsKmsEnvelopeProtection(
     async def destroy_payload_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         payload: ProtectedPayload,
     ) -> None:
         if payload.codec != _CODEC:
@@ -321,20 +334,19 @@ class AwsKmsEnvelopeProtection(
             key_handle=payload.key_handle,
             key_version=payload.key_version,
             purpose="payload",
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
         )
 
     async def _generate_key(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         purpose: EnvelopePurpose,
     ) -> tuple[str, GeneratedDataKey]:
-        reference = _SAFE_REFERENCE_ADAPTER.validate_python(proposal_reference)
         handle = f"kms-envelope:{secrets.token_hex(16)}"
         context = _encryption_context(
             key_handle=handle,
-            proposal_reference=reference,
+            proposal_identity=proposal_identity,
             purpose=purpose,
         )
         generated = await self._kms.generate_data_key(
@@ -357,13 +369,14 @@ class AwsKmsEnvelopeProtection(
         *,
         handle: str,
         generated: GeneratedDataKey,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         purpose: EnvelopePurpose,
     ) -> None:
         await self._envelopes.put(
             key_handle=handle,
             envelope=WrappedDataKey(
-                proposal_reference=proposal_reference,
+                tenant_reference=proposal_identity.tenant_reference,
+                proposal_reference=proposal_identity.proposal_reference,
                 purpose=purpose,
                 key_id=generated.resolved_key_id,
                 key_version=_key_version(generated.resolved_key_id),
@@ -377,7 +390,10 @@ class AwsKmsEnvelopeProtection(
             ciphertext=envelope.ciphertext,
             encryption_context=_encryption_context(
                 key_handle=key_handle,
-                proposal_reference=envelope.proposal_reference,
+                proposal_identity=ProposalIdentity(
+                    tenant_reference=envelope.tenant_reference,
+                    proposal_reference=envelope.proposal_reference,
+                ),
                 purpose=envelope.purpose,
             ),
         )
@@ -394,15 +410,14 @@ class AwsKmsEnvelopeProtection(
         key_handle: str,
         key_version: str,
         purpose: EnvelopePurpose,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
     ) -> None:
-        reference = _SAFE_REFERENCE_ADAPTER.validate_python(proposal_reference)
         envelope = await self._envelopes.get(key_handle=key_handle)
         if envelope is None:
             return
         if not self._matches(
             envelope,
-            proposal_reference=reference,
+            proposal_identity=proposal_identity,
             purpose=purpose,
             key_version=key_version,
         ):
@@ -413,13 +428,14 @@ class AwsKmsEnvelopeProtection(
     def _matches(
         envelope: WrappedDataKey | None,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         purpose: EnvelopePurpose,
         key_version: str,
     ) -> bool:
         return (
             envelope is not None
-            and envelope.proposal_reference == proposal_reference
+            and envelope.tenant_reference == proposal_identity.tenant_reference
+            and envelope.proposal_reference == proposal_identity.proposal_reference
             and envelope.purpose == purpose
             and envelope.key_version == key_version
         )
@@ -428,12 +444,13 @@ class AwsKmsEnvelopeProtection(
 def _encryption_context(
     *,
     key_handle: str,
-    proposal_reference: str,
+    proposal_identity: ProposalIdentity,
     purpose: EnvelopePurpose,
 ) -> dict[str, str]:
     return {
         "threvo-actions:key-handle": key_handle,
-        "threvo-actions:proposal": proposal_reference,
+        "threvo-actions:tenant": proposal_identity.tenant_reference,
+        "threvo-actions:proposal": proposal_identity.proposal_reference,
         "threvo-actions:purpose": purpose,
     }
 
@@ -441,12 +458,19 @@ def _encryption_context(
 def _authenticated_metadata(
     *,
     key_handle: str,
-    proposal_reference: str,
+    proposal_identity: ProposalIdentity,
     purpose: EnvelopePurpose,
     key_id: str,
     key_version: str,
 ) -> bytes:
-    parts = (key_handle, proposal_reference, purpose, key_id, key_version)
+    parts = (
+        key_handle,
+        proposal_identity.tenant_reference,
+        proposal_identity.proposal_reference,
+        purpose,
+        key_id,
+        key_version,
+    )
     encoded = [part.encode("utf-8") for part in parts]
     return b"threvo-actions:aws-kms-envelope:v1" + b"".join(
         len(part).to_bytes(4, "big") + part for part in encoded

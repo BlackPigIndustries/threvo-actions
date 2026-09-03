@@ -136,8 +136,10 @@ and deferred-resume trust boundary.
 Use deterministic helpers only in tests. `EphemeralProtection` deliberately
 loses data on restart and is never production encryption or key custody.
 For AWS deployments, the optional `AwsKmsEnvelopeProtection` reference uses
-proposal-scoped KMS data keys and a host-owned durable wrapped-key store; adapt
-the host's AWS client to its typed port rather than adding an SDK to the core.
+proposal-scoped KMS data keys and a host-owned durable wrapped-key store. Its
+complete provider ports receive a strict `ProposalIdentity` containing both
+tenant and proposal references for every operation. Adapt the host's AWS client
+to its typed port rather than adding an SDK to the core.
 
 At minimum prove:
 

@@ -45,6 +45,7 @@ from threvo_actions.models import (
     AuthoritativeTarget,
     GovernedExecutor,
     LifecycleStatus,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -287,25 +288,71 @@ class NoOpCommitmentDestruction(DeterministicSecrets):
         del commitment
 
 
-class ProposalBlindPayloadDestruction(DeterministicSecrets):
+class ProposalBoundDeterministicSecrets(DeterministicSecrets):
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
+        return await self.create(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool:
+        return await self.verify(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> ProtectedPayload:
+        return await self.protect(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
+        del proposal_identity
+        return await self.unprotect(payload=payload)
+
+
+class ProposalBlindPayloadDestruction(ProposalBoundDeterministicSecrets):
     async def destroy_payload_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         payload: ProtectedPayload,
     ) -> None:
-        del proposal_reference
+        del proposal_identity
         await self.destroy_payload(payload=payload)
 
 
-class ProposalBlindCommitmentDestruction(DeterministicSecrets):
+class ProposalBlindCommitmentDestruction(ProposalBoundDeterministicSecrets):
     async def destroy_commitment_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         commitment: KeyedCommitment,
     ) -> None:
-        del proposal_reference
+        del proposal_identity
         await self.destroy_commitment(commitment=commitment)
 
 

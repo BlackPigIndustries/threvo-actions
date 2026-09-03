@@ -18,6 +18,7 @@ from threvo_actions.integrations.aws_kms import (
     GeneratedDataKey,
     WrappedDataKey,
 )
+from threvo_actions.models import ProposalIdentity
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,6 +30,17 @@ def _context_bytes(context: Mapping[str, str]) -> bytes:
 
 def _flip_last_byte(value: bytes) -> bytes:
     return value[:-1] + bytes((value[-1] ^ 1,))
+
+
+def _proposal(
+    proposal_reference: str,
+    *,
+    tenant_reference: str = "tenant:test",
+) -> ProposalIdentity:
+    return ProposalIdentity(
+        tenant_reference=tenant_reference,
+        proposal_reference=proposal_reference,
+    )
 
 
 def test_import_without_cryptography_extra_has_a_clear_install_message(
@@ -156,8 +168,9 @@ def test_payload_metadata_and_ciphertext_are_authenticated() -> None:
             kms=FakeKmsClient(),
             envelopes=MemoryEnvelopeStore(),
         )
-        payload = await protection.protect(
-            proposal_reference="proposal:1",
+        identity = _proposal("proposal:1")
+        payload = await protection.protect_for(
+            proposal_identity=identity,
             canonical_payload=b'{"account":"private"}',
         )
 
@@ -169,11 +182,11 @@ def test_payload_metadata_and_ciphertext_are_authenticated() -> None:
             }
         )
         with pytest.raises(ValueError, match="authentication failed"):
-            await protection.unprotect(payload=corrupted)
+            await protection.unprotect_for(proposal_identity=identity, payload=corrupted)
 
         wrong_version = payload.model_copy(update={"key_version": "changed"})
         with pytest.raises(ValueError, match="metadata does not match"):
-            await protection.unprotect(payload=wrong_version)
+            await protection.unprotect_for(proposal_identity=identity, payload=wrong_version)
 
     asyncio.run(scenario())
 
@@ -186,8 +199,9 @@ def test_equivalent_kms_alias_cannot_replace_the_bound_resolved_key_id() -> None
             kms=FakeKmsClient(),
             envelopes=envelopes,
         )
-        payload = await protection.protect(
-            proposal_reference="proposal:payload",
+        payload_identity = _proposal("proposal:payload")
+        payload = await protection.protect_for(
+            proposal_identity=payload_identity,
             canonical_payload=b"private",
         )
         payload_envelope = envelopes.entries[payload.key_handle]
@@ -196,10 +210,14 @@ def test_equivalent_kms_alias_cannot_replace_the_bound_resolved_key_id() -> None
         )
 
         with pytest.raises(ValueError, match="authentication failed"):
-            await protection.unprotect(payload=payload)
+            await protection.unprotect_for(
+                proposal_identity=payload_identity,
+                payload=payload,
+            )
 
-        commitment = await protection.create(
-            proposal_reference="proposal:commitment",
+        commitment_identity = _proposal("proposal:commitment")
+        commitment = await protection.create_for(
+            proposal_identity=commitment_identity,
             canonical_payload=b"private",
         )
         commitment_envelope = envelopes.entries[commitment.key_handle]
@@ -207,8 +225,8 @@ def test_equivalent_kms_alias_cannot_replace_the_bound_resolved_key_id() -> None
             update={"key_id": "alias/threvo-actions"}
         )
 
-        assert not await protection.verify(
-            proposal_reference="proposal:commitment",
+        assert not await protection.verify_for(
+            proposal_identity=commitment_identity,
             canonical_payload=b"private",
             commitment=commitment,
         )
@@ -224,12 +242,13 @@ def test_empty_payload_round_trips() -> None:
             envelopes=MemoryEnvelopeStore(),
         )
 
-        payload = await protection.protect(
-            proposal_reference="proposal:empty",
+        identity = _proposal("proposal:empty")
+        payload = await protection.protect_for(
+            proposal_identity=identity,
             canonical_payload=b"",
         )
 
-        assert await protection.unprotect(payload=payload) == b""
+        assert await protection.unprotect_for(proposal_identity=identity, payload=payload) == b""
 
     asyncio.run(scenario())
 
@@ -244,8 +263,8 @@ def test_invalid_protected_payload_does_not_persist_an_orphaned_key() -> None:
         )
 
         with pytest.raises(ValidationError, match="at most 1048576"):
-            await protection.protect(
-                proposal_reference="proposal:oversized",
+            await protection.protect_for(
+                proposal_identity=_proposal("proposal:oversized"),
                 canonical_payload=b"x" * 786_405,
             )
 
@@ -263,8 +282,9 @@ def test_resolved_key_id_survives_alias_repointing() -> None:
             kms=kms,
             envelopes=envelopes,
         )
-        payload = await protection.protect(
-            proposal_reference="proposal:1",
+        identity = _proposal("proposal:1")
+        payload = await protection.protect_for(
+            proposal_identity=identity,
             canonical_payload=b"private",
         )
         envelope = envelopes.entries[payload.key_handle]
@@ -272,7 +292,10 @@ def test_resolved_key_id_survives_alias_repointing() -> None:
         kms.repoint_alias()
 
         assert envelope.key_id.endswith("key/one")
-        assert await protection.unprotect(payload=payload) == b"private"
+        assert (
+            await protection.unprotect_for(proposal_identity=identity, payload=payload)
+            == b"private"
+        )
 
     asyncio.run(scenario())
 
@@ -286,8 +309,8 @@ def test_configured_key_id_is_forwarded_to_generate_data_key() -> None:
             envelopes=MemoryEnvelopeStore(),
         )
 
-        await protection.protect(
-            proposal_reference="proposal:1",
+        await protection.protect_for(
+            proposal_identity=_proposal("proposal:1"),
             canonical_payload=b"private",
         )
 
@@ -298,6 +321,7 @@ def test_configured_key_id_is_forwarded_to_generate_data_key() -> None:
 
 def test_wrapped_key_json_round_trip_preserves_binary_ciphertext() -> None:
     envelope = WrappedDataKey(
+        tenant_reference="tenant:test",
         proposal_reference="proposal:1",
         purpose="payload",
         key_id="arn:aws:kms:eu-west-1:123456789012:key/example",
@@ -350,19 +374,20 @@ def test_commitment_is_bound_to_the_proposal_and_stored_envelope() -> None:
             kms=FakeKmsClient(),
             envelopes=envelopes,
         )
-        commitment = await protection.create(
-            proposal_reference="proposal:1",
+        identity = _proposal("proposal:1")
+        commitment = await protection.create_for(
+            proposal_identity=identity,
             canonical_payload=b'{"account":"private"}',
         )
 
-        assert not await protection.verify(
-            proposal_reference="proposal:2",
+        assert not await protection.verify_for(
+            proposal_identity=_proposal("proposal:2"),
             canonical_payload=b'{"account":"private"}',
             commitment=commitment,
         )
         await envelopes.delete(key_handle=commitment.key_handle)
-        assert not await protection.verify(
-            proposal_reference="proposal:1",
+        assert not await protection.verify_for(
+            proposal_identity=identity,
             canonical_payload=b'{"account":"private"}',
             commitment=commitment,
         )
@@ -389,45 +414,107 @@ def test_whole_artifact_substitution_cannot_erase_another_proposal() -> None:
             kms=FakeKmsClient(),
             envelopes=envelopes,
         )
-        first = await protection.protect(
-            proposal_reference="proposal:first",
+        first_identity = _proposal("proposal:first")
+        second_identity = _proposal("proposal:second")
+        first = await protection.protect_for(
+            proposal_identity=first_identity,
             canonical_payload=b"first",
         )
-        second = await protection.protect(
-            proposal_reference="proposal:second",
+        second = await protection.protect_for(
+            proposal_identity=second_identity,
             canonical_payload=b"second",
         )
         with pytest.raises(ValueError, match="metadata does not match"):
             await protection.destroy_payload_for(
-                proposal_reference="proposal:first",
+                proposal_identity=first_identity,
                 payload=second,
             )
-        assert await protection.unprotect(payload=first) == b"first"
-        assert await protection.unprotect(payload=second) == b"second"
+        assert (
+            await protection.unprotect_for(proposal_identity=first_identity, payload=first)
+            == b"first"
+        )
+        assert (
+            await protection.unprotect_for(proposal_identity=second_identity, payload=second)
+            == b"second"
+        )
 
-        first_commitment = await protection.create(
-            proposal_reference="proposal:first",
+        first_commitment = await protection.create_for(
+            proposal_identity=first_identity,
             canonical_payload=b"first",
         )
-        second_commitment = await protection.create(
-            proposal_reference="proposal:second",
+        second_commitment = await protection.create_for(
+            proposal_identity=second_identity,
             canonical_payload=b"second",
         )
         with pytest.raises(ValueError, match="metadata does not match"):
             await protection.destroy_commitment_for(
-                proposal_reference="proposal:first",
+                proposal_identity=first_identity,
                 commitment=second_commitment,
             )
-        assert await protection.verify(
-            proposal_reference="proposal:first",
+        assert await protection.verify_for(
+            proposal_identity=first_identity,
             canonical_payload=b"first",
             commitment=first_commitment,
         )
-        assert await protection.verify(
-            proposal_reference="proposal:second",
+        assert await protection.verify_for(
+            proposal_identity=second_identity,
             canonical_payload=b"second",
             commitment=second_commitment,
         )
+
+    asyncio.run(scenario())
+
+
+def test_same_proposal_reference_in_two_tenants_cannot_cross_kms_boundary() -> None:
+    async def scenario() -> None:
+        envelopes = MemoryEnvelopeStore()
+        kms = FakeKmsClient()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=kms,
+            envelopes=envelopes,
+        )
+        first_identity = ProposalIdentity(
+            tenant_reference="tenant:first",
+            proposal_reference="proposal:shared",
+        )
+        second_identity = ProposalIdentity(
+            tenant_reference="tenant:second",
+            proposal_reference="proposal:shared",
+        )
+        first_payload = await protection.protect_for(
+            proposal_identity=first_identity,
+            canonical_payload=b"first",
+        )
+        second_payload = await protection.protect_for(
+            proposal_identity=second_identity,
+            canonical_payload=b"second",
+        )
+
+        with pytest.raises(ValueError, match="metadata does not match"):
+            await protection.destroy_payload_for(
+                proposal_identity=first_identity,
+                payload=second_payload,
+            )
+
+        assert (
+            await protection.unprotect_for(
+                proposal_identity=first_identity,
+                payload=first_payload,
+            )
+            == b"first"
+        )
+        assert (
+            await protection.unprotect_for(
+                proposal_identity=second_identity,
+                payload=second_payload,
+            )
+            == b"second"
+        )
+        assert {context["threvo-actions:tenant"] for context in kms.contexts} == {
+            "tenant:first",
+            "tenant:second",
+        }
 
     asyncio.run(scenario())
 
@@ -448,8 +535,8 @@ def test_plaintext_data_key_is_zeroed_before_store_failure_escapes() -> None:
         )
 
         with pytest.raises(RuntimeError) as caught:
-            await protection.protect(
-                proposal_reference="proposal:1",
+            await protection.protect_for(
+                proposal_identity=_proposal("proposal:1"),
                 canonical_payload=b"private",
             )
 
@@ -476,8 +563,9 @@ def test_decrypted_data_key_is_zeroed_on_authentication_failure() -> None:
             kms=kms,
             envelopes=MemoryEnvelopeStore(),
         )
-        payload = await protection.protect(
-            proposal_reference="proposal:1",
+        identity = _proposal("proposal:1")
+        payload = await protection.protect_for(
+            proposal_identity=identity,
             canonical_payload=b"private",
         )
         corrupted = payload.model_copy(
@@ -489,7 +577,7 @@ def test_decrypted_data_key_is_zeroed_on_authentication_failure() -> None:
         )
 
         with pytest.raises(ValueError) as caught:
-            await protection.unprotect(payload=corrupted)
+            await protection.unprotect_for(proposal_identity=identity, payload=corrupted)
 
         traceback = caught.value.__traceback__
         while traceback is not None:

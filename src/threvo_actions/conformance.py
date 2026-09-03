@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 from pydantic import BaseModel, TypeAdapter
 
 from .canonical import ProposalBoundCommitmentProvider, ProposalBoundProtectionCodec
-from .models import LifecycleStatus, SafeReference
+from .models import LifecycleStatus, ProposalIdentity, SafeReference
 from .receipts import AuthorityReceipt, AuthorityReceiptStatus
 from .runtime import OperationOutcome
 from .stores.base import (
@@ -1113,6 +1113,7 @@ async def assert_providers_conform(
     proposal_reference: str,
     canonical_payload: bytes,
     mutated_payload: bytes,
+    tenant_reference: str = "tenant:provider-conformance",
 ) -> None:
     """Check commitment binding and protected-snapshot round trips."""
 
@@ -1126,68 +1127,137 @@ async def assert_providers_conform(
         mismatched_proposal_reference != proposal_reference,
         "provider_distinct_proposal_references",
     )
-    commitment = await commitment_provider.create(
+    proposal_identity = ProposalIdentity(
+        tenant_reference=tenant_reference,
         proposal_reference=proposal_reference,
-        canonical_payload=canonical_payload,
     )
-    _require(
-        await commitment_provider.verify(
+    mismatched_identity = ProposalIdentity(
+        tenant_reference=tenant_reference,
+        proposal_reference=mismatched_proposal_reference,
+    )
+    cross_tenant_identity = ProposalIdentity(
+        tenant_reference=_derived_safe_reference(
+            tenant_reference,
+            purpose="provider",
+            discriminator="mismatched-tenant",
+        ),
+        proposal_reference=proposal_reference,
+    )
+    if isinstance(commitment_provider, ProposalBoundCommitmentProvider):
+        commitment = await commitment_provider.create_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+        )
+        commitment_verified = await commitment_provider.verify_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+        mutated_commitment_verified = await commitment_provider.verify_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=mutated_payload,
+            commitment=commitment,
+        )
+    else:
+        commitment = await commitment_provider.create(
+            proposal_reference=proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+        commitment_verified = await commitment_provider.verify(
             proposal_reference=proposal_reference,
             canonical_payload=canonical_payload,
             commitment=commitment,
-        ),
-        "commitment_original_payload",
-    )
-    _require(
-        not await commitment_provider.verify(
+        )
+        mutated_commitment_verified = await commitment_provider.verify(
             proposal_reference=proposal_reference,
             canonical_payload=mutated_payload,
             commitment=commitment,
-        ),
+        )
+    _require(
+        commitment_verified,
+        "commitment_original_payload",
+    )
+    _require(
+        not mutated_commitment_verified,
         "commitment_rejects_mutation",
     )
 
-    protected = await protection_codec.protect(
-        proposal_reference=proposal_reference,
-        canonical_payload=canonical_payload,
-    )
+    if isinstance(protection_codec, ProposalBoundProtectionCodec):
+        protected = await protection_codec.protect_for(
+            proposal_identity=proposal_identity,
+            canonical_payload=canonical_payload,
+        )
+        unprotected = await protection_codec.unprotect_for(
+            proposal_identity=proposal_identity,
+            payload=protected,
+        )
+    else:
+        protected = await protection_codec.protect(
+            proposal_reference=proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+        unprotected = await protection_codec.unprotect(payload=protected)
     _require(
         canonical_payload not in protected.ciphertext.encode("utf-8"),
         "protected_payload_plaintext",
     )
     _require(
-        await protection_codec.unprotect(payload=protected) == canonical_payload,
+        unprotected == canonical_payload,
         "protected_payload_round_trip",
     )
     if isinstance(protection_codec, ProposalBoundProtectionCodec):
         try:
             await protection_codec.destroy_payload_for(
-                proposal_reference=mismatched_proposal_reference,
+                proposal_identity=mismatched_identity,
                 payload=protected,
             )
         except Exception as refusal:
             del refusal
         try:
-            preserved_payload = await protection_codec.unprotect(payload=protected)
+            preserved_payload = await protection_codec.unprotect_for(
+                proposal_identity=proposal_identity,
+                payload=protected,
+            )
         except (KeyError, ValueError):
             raise ConformanceError("proposal_bound_payload_mismatch_destroyed") from None
         _require(
             preserved_payload == canonical_payload,
             "proposal_bound_payload_mismatch_changed",
         )
+        try:
+            await protection_codec.destroy_payload_for(
+                proposal_identity=cross_tenant_identity,
+                payload=protected,
+            )
+        except Exception as refusal:
+            del refusal
+        _require(
+            await protection_codec.unprotect_for(
+                proposal_identity=proposal_identity,
+                payload=protected,
+            )
+            == canonical_payload,
+            "proposal_bound_payload_cross_tenant_destroyed",
+        )
         await protection_codec.destroy_payload_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             payload=protected,
         )
         await protection_codec.destroy_payload_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             payload=protected,
         )
     else:
         await protection_codec.destroy_payload(payload=protected)
         await protection_codec.destroy_payload(payload=protected)
     try:
-        await protection_codec.unprotect(payload=protected)
+        if isinstance(protection_codec, ProposalBoundProtectionCodec):
+            await protection_codec.unprotect_for(
+                proposal_identity=proposal_identity,
+                payload=protected,
+            )
+        else:
+            await protection_codec.unprotect(payload=protected)
     except (KeyError, ValueError):
         pass
     else:
@@ -1196,35 +1266,58 @@ async def assert_providers_conform(
     if isinstance(commitment_provider, ProposalBoundCommitmentProvider):
         try:
             await commitment_provider.destroy_commitment_for(
-                proposal_reference=mismatched_proposal_reference,
+                proposal_identity=mismatched_identity,
                 commitment=commitment,
             )
         except Exception as refusal:
             del refusal
         _require(
-            await commitment_provider.verify(
-                proposal_reference=proposal_reference,
+            await commitment_provider.verify_for(
+                proposal_identity=proposal_identity,
                 canonical_payload=canonical_payload,
                 commitment=commitment,
             ),
             "proposal_bound_commitment_mismatch_destroyed",
         )
+        try:
+            await commitment_provider.destroy_commitment_for(
+                proposal_identity=cross_tenant_identity,
+                commitment=commitment,
+            )
+        except Exception as refusal:
+            del refusal
+        _require(
+            await commitment_provider.verify_for(
+                proposal_identity=proposal_identity,
+                canonical_payload=canonical_payload,
+                commitment=commitment,
+            ),
+            "proposal_bound_commitment_cross_tenant_destroyed",
+        )
         await commitment_provider.destroy_commitment_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             commitment=commitment,
         )
         await commitment_provider.destroy_commitment_for(
-            proposal_reference=proposal_reference,
+            proposal_identity=proposal_identity,
             commitment=commitment,
         )
     else:
         await commitment_provider.destroy_commitment(commitment=commitment)
         await commitment_provider.destroy_commitment(commitment=commitment)
     _require(
-        not await commitment_provider.verify(
-            proposal_reference=proposal_reference,
-            canonical_payload=canonical_payload,
-            commitment=commitment,
+        not (
+            await commitment_provider.verify_for(
+                proposal_identity=proposal_identity,
+                canonical_payload=canonical_payload,
+                commitment=commitment,
+            )
+            if isinstance(commitment_provider, ProposalBoundCommitmentProvider)
+            else await commitment_provider.verify(
+                proposal_reference=proposal_reference,
+                canonical_payload=canonical_payload,
+                commitment=commitment,
+            )
         ),
         "commitment_destroyed",
     )

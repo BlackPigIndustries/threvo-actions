@@ -9,7 +9,7 @@ from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, JsonValue, StringConstraints, TypeAdapter
 
-from .models import ExperimentalModel, SafeReference
+from .models import ExperimentalModel, ProposalIdentity, SafeReference
 
 JsonObject = dict[str, JsonValue]
 OpaquePayload = Annotated[str, StringConstraints(min_length=1, max_length=1_048_576)]
@@ -61,16 +61,16 @@ class CommitmentProvider(Protocol):
 
 @runtime_checkable
 class ProposalBoundCommitmentProvider(Protocol):
-    """Commitment provider whose erasure authenticates proposal ownership."""
+    """Commitment provider bound to a complete tenant-scoped proposal identity."""
 
-    async def create(
-        self, *, proposal_reference: str, canonical_payload: bytes
+    async def create_for(
+        self, *, proposal_identity: ProposalIdentity, canonical_payload: bytes
     ) -> KeyedCommitment: ...
 
-    async def verify(
+    async def verify_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         canonical_payload: bytes,
         commitment: KeyedCommitment,
     ) -> bool: ...
@@ -78,7 +78,7 @@ class ProposalBoundCommitmentProvider(Protocol):
     async def destroy_commitment_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         commitment: KeyedCommitment,
     ) -> None: ...
 
@@ -100,18 +100,20 @@ class ProtectionCodec(Protocol):
 
 @runtime_checkable
 class ProposalBoundProtectionCodec(Protocol):
-    """Protection codec whose erasure authenticates proposal ownership."""
+    """Protection codec bound to a complete tenant-scoped proposal identity."""
 
-    async def protect(
-        self, *, proposal_reference: str, canonical_payload: bytes
+    async def protect_for(
+        self, *, proposal_identity: ProposalIdentity, canonical_payload: bytes
     ) -> ProtectedPayload: ...
 
-    async def unprotect(self, *, payload: ProtectedPayload) -> bytes: ...
+    async def unprotect_for(
+        self, *, proposal_identity: ProposalIdentity, payload: ProtectedPayload
+    ) -> bytes: ...
 
     async def destroy_payload_for(
         self,
         *,
-        proposal_reference: str,
+        proposal_identity: ProposalIdentity,
         payload: ProtectedPayload,
     ) -> None: ...
 
