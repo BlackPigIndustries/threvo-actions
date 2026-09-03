@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+import threvo_actions.experimental.application as application_module
 from threvo_actions.canonical import (
     CommitmentProvider,
     KeyedCommitment,
@@ -35,6 +36,7 @@ from threvo_actions.models import (
 from threvo_actions.registry import (
     AuthorizationPort,
     AuthorizationResult,
+    DefinitionConformanceError,
     GovernedExecutorPort,
     PreparationPort,
     PreparedAction,
@@ -435,11 +437,30 @@ def test_recipe_failure_preserves_the_host_exception_for_diagnostics() -> None:
     assert "fail" in {frame.name for frame in traceback.extract_tb(captured.value.__traceback__)}
 
 
-def test_definition_nonconforming_issue_code_remains_compatible() -> None:
+def test_definition_nonconforming_issue_code_is_reserved_and_inspectable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     error = ActionApplicationError(ActionIssueCode.DEFINITION_NONCONFORMING)
+    failure = DefinitionConformanceError("host definition diagnostic")
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
 
     assert error.code is ActionIssueCode.DEFINITION_NONCONFORMING
     assert str(error) == "compiled action definition is nonconforming"
+    assert (
+        ActionIssueCode.DEFINITION_NONCONFORMING.value
+        in application.inspect(registered).issue_codes
+    )
+
+    monkeypatch.setattr(application_module, "ActionDefinition", Mock(side_effect=failure))
+    with (
+        pytest.raises(DefinitionConformanceError) as captured,
+        application.bind(registered, dependencies=Dependencies()),
+    ):
+        pass
+
+    assert captured.value is failure
 
 
 def test_binding_rejects_none_for_a_required_component() -> None:
