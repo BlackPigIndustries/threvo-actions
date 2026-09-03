@@ -103,6 +103,12 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     assert 'release=$RELEASE_TAG; candidate_source=$SOURCE_COMMIT"' in workflow
     assert 'grep -Fxc -- "$expected_promotion_gate" adoption-evidence.md' in workflow
     assert "release-distributions" in workflow
+    assert "Require immutable release tag ruleset" in workflow
+    assert "Revalidate the signed tag immediately before GitHub release" in workflow
+    assert workflow.count("github.rest.git.getRef") == 4
+    assert workflow.index(
+        "Revalidate the signed tag immediately before GitHub release"
+    ) < workflow.index("gh release create")
 
 
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
