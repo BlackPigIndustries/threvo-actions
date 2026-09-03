@@ -72,6 +72,17 @@ def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
     assert "| Registration runtime | duplicate action type and catalog state |" in design
 
 
+def test_gradual_reveal_methodology_defines_comparative_loc_scoring() -> None:
+    methodology = (ROOT / "docs" / "integration-surface-methodology.md").read_text()
+
+    assert "Definition/composition wiring" in methodology
+    assert "Shared first-integration cost" in methodology
+    assert "Marginal action cost" in methodology
+    assert "absolute_loc_delta = C - E" in methodology
+    assert "reduction_percentage = ((E - C) / E) * 100" in methodology
+    assert "complete marginal eligible-host LOC" in methodology
+
+
 def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
     worksheet = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
 
