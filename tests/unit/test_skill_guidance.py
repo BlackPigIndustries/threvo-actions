@@ -58,3 +58,11 @@ def test_skill_prefers_the_namespaced_gradual_reveal_surface() -> None:
     assert "ActionSpec" in skill
     assert "ScopedActionToolBinding" in skill
     assert "Prefer `Action[" not in skill
+
+
+def test_skill_documents_the_binding_exception_trust_boundary() -> None:
+    skill = " ".join((SKILL_ROOT / "SKILL.md").read_text().split())
+
+    assert "preserve their original exception and traceback" in skill
+    assert "return a stable content-safe host error" in skill
+    assert "never forward arbitrary exception text" in skill
