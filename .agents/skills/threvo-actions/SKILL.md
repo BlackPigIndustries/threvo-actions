@@ -36,22 +36,24 @@ successful HTTP response.
 
 ## Choose the authoring surface
 
-- Prefer the experimental `ActionApplication` plus a strict `ActionSpec` for a
-  new integration. Register a typed `ActionRecipe` explicitly, freeze the
-  catalog, and bind a dependency container from a fresh host operation scope.
-  Durable services may be shared references inside that container. This
-  gradual-reveal surface compiles to the same expert runtime and cannot grant
-  policy.
+- Use the experimental `ActionApplication` plus a strict `ActionSpec` only when
+  the application pins an exact patch release, reruns its equivalence tests
+  against the expert runtime before every patch upgrade, and reviews migration
+  notes before every minor-line upgrade. Register a typed `ActionRecipe`
+  explicitly, freeze the catalog, and bind a dependency container from a fresh
+  host operation scope. Durable services may be shared references inside that
+  container. This gradual-reveal surface compiles to the same expert runtime
+  and cannot grant policy.
+- Otherwise use the supported `Action[Command, Snapshot, Preview, Result]` when
+  one host object already owns every action port. Build `ActionDefinition`
+  directly when the host owns the ports as separate expert-level adapters. Do
+  not introduce a second lifecycle.
 - Treat `ActionApplication.bind()` as trusted host composition. Recipe,
   definition, and runtime-construction failures preserve their original
   exception and traceback for the author. Catch them at the host API or agent
   boundary, log them under host policy, and return a stable content-safe host
   error; never forward arbitrary exception text, tracebacks, causes, or locals
   to an untrusted caller or model.
-- Use `Action[Command, Snapshot, Preview, Result]` when one host object already
-  owns every action port. Build `ActionDefinition` directly when the host owns
-  the ports as separate expert-level adapters. Do not introduce a second
-  lifecycle.
 - Call `application.inspect(handle)` for static, allowlisted configuration
   inspection. It reports closed boundary roles and invariants, not model class
   names; it does not contact stores, run recipes, or report readiness.

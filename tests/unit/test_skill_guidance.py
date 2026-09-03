@@ -60,13 +60,31 @@ def test_documented_conformance_helpers_are_importable() -> None:
         assert callable(getattr(conformance, name))
 
 
-def test_skill_prefers_the_namespaced_gradual_reveal_surface() -> None:
+def test_skill_gates_the_experimental_gradual_reveal_surface() -> None:
     skill = (SKILL_ROOT / "SKILL.md").read_text()
+    authoring = (SKILL_ROOT / "references" / "authoring.md").read_text()
 
     assert "ActionApplication" in skill
     assert "ActionSpec" in skill
     assert "ScopedActionToolBinding" in skill
-    assert "Prefer `Action[" not in skill
+    assert "exact patch release" in skill
+    assert "reruns its equivalence tests" in skill
+    assert "before every patch upgrade" in skill
+    assert "before every minor-line upgrade" in skill
+    assert "Otherwise use the supported `Action[" in skill
+    assert re.search(
+        r"Minor-line upgrades require an\s+explicit migration review",
+        authoring,
+    )
+
+
+def test_authoring_reference_uses_the_keyword_only_prepare_contract() -> None:
+    authoring = (SKILL_ROOT / "references" / "authoring.md").read_text()
+
+    assert "action.prepare(...)" not in authoring
+    assert "tenant_reference=tenant_reference" in authoring
+    assert "command=command" in authoring
+    assert "requesting_principal=requesting_principal" in authoring
 
 
 def test_skill_documents_the_binding_exception_trust_boundary() -> None:
