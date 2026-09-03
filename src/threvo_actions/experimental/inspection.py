@@ -5,15 +5,12 @@
 
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from ..models import ActionType, EffectKind, SafeReference
-
-_PUBLIC_MODEL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$", flags=re.ASCII)
 
 
 class InspectionModel(BaseModel):
@@ -24,21 +21,9 @@ class InspectionModel(BaseModel):
 
 class BoundaryModelInspection(InspectionModel):
     role: Literal["command", "private_snapshot", "display_preview", "result"]
-    name: SafeReference
     strict: Literal[True] = True
     frozen: Literal[True] = True
     extra: Literal["forbid"] = "forbid"
-
-    @classmethod
-    def from_model(
-        cls,
-        *,
-        role: Literal["command", "private_snapshot", "display_preview", "result"],
-        model: type[BaseModel],
-    ) -> BoundaryModelInspection:
-        name = model.__name__
-        public_name = name if _PUBLIC_MODEL_NAME.fullmatch(name) is not None else "unavailable"
-        return cls(role=role, name=public_name)
 
 
 class ActionSettingsInspection(InspectionModel):

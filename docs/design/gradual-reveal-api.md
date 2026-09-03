@@ -169,9 +169,10 @@ facts; it never grants preparation, decision, execution, read, or erasure.
 ## Inspection and readiness
 
 `inspect()` is a pure, static, allowlisted projection. It may expose deliberate
-public labels, model identities expressed without module paths, immutable safe
+public labels, closed boundary-model roles and invariants, immutable safe
 settings, source categories, ownership facts, and stable issue codes. It does
-not serialize definitions or dependencies and performs no I/O.
+not expose developer-controlled model class names, serialize definitions or
+dependencies, or perform I/O.
 
 Existing adapter-specific readiness APIs remain unchanged. `0.1.4` adds no
 generic live-probe composition, and neither static inspection nor a readiness
