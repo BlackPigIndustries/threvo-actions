@@ -8,7 +8,6 @@ so the registration, inspection, and operation flow are easy to see.
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 from decimal import Decimal
 
 from examples.refund.app import TENANT, build_refund_application
@@ -64,7 +63,7 @@ async def main() -> None:
     # --8<-- [end:drift]
     # --8<-- [start:execute-and-verify]
     accepted = await demo.execute(prepared.proposal_reference)
-    demo.clock.advance(timedelta(seconds=5))
+    demo.clock.advance(demo.specification.verification_delay)
     verified = await demo.reconcile(prepared.proposal_reference)
     print(accepted.outcome, verified.outcome, verified.safe_result)
     # --8<-- [end:execute-and-verify]
