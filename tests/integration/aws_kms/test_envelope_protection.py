@@ -26,6 +26,10 @@ def _context_bytes(context: Mapping[str, str]) -> bytes:
     return json.dumps(context, sort_keys=True, separators=(",", ":")).encode()
 
 
+def _flip_last_byte(value: bytes) -> bytes:
+    return value[:-1] + bytes((value[-1] ^ 1,))
+
+
 def test_import_without_cryptography_extra_has_a_clear_install_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,7 +158,7 @@ def test_payload_metadata_and_ciphertext_are_authenticated() -> None:
         corrupted = payload.model_copy(
             update={
                 "ciphertext": base64.b64encode(
-                    base64.b64decode(payload.ciphertext, validate=True)[:-1] + b"x"
+                    _flip_last_byte(base64.b64decode(payload.ciphertext, validate=True))
                 ).decode("ascii")
             }
         )
@@ -415,7 +419,7 @@ def test_decrypted_data_key_is_zeroed_on_authentication_failure() -> None:
         corrupted = payload.model_copy(
             update={
                 "ciphertext": base64.b64encode(
-                    base64.b64decode(payload.ciphertext, validate=True)[:-1] + b"x"
+                    _flip_last_byte(base64.b64decode(payload.ciphertext, validate=True))
                 ).decode("ascii")
             }
         )
