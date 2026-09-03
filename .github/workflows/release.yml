@@ -247,6 +247,40 @@ jobs:
           test -n "$CANDIDATE_RUN_ID"
           printf '%s\n' "$CANDIDATE_SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
           printf '%s\n' "$ADOPTION_RECORD_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
+      - name: Require immutable release tag ruleset
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const summaries = await github.request('GET /repos/{owner}/{repo}/rulesets', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const summary = summaries.data.find(
+              ruleset => ruleset.name === 'Protect release tags'
+                && ruleset.target === 'tag'
+                && ruleset.enforcement === 'active',
+            );
+            if (!summary) {
+              core.setFailed('The active Protect release tags ruleset is required.');
+              return;
+            }
+            const detail = await github.request(
+              'GET /repos/{owner}/{repo}/rulesets/{ruleset_id}',
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ruleset_id: summary.id,
+              },
+            );
+            const includes = detail.data.conditions?.ref_name?.include ?? [];
+            const ruleTypes = new Set((detail.data.rules ?? []).map(rule => rule.type));
+            if (
+              !includes.includes('refs/tags/v*')
+              || !ruleTypes.has('update')
+              || !ruleTypes.has('deletion')
+            ) {
+              core.setFailed('Release tags must reject updates and deletion.');
+            }
       - name: Require a successful candidate qualification run
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
@@ -510,10 +544,9 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
-      - name: Verify PyPI bytes and record release provenance
+      - name: Verify PyPI bytes and stage release provenance
         env:
           ADOPTION_RECORD_DIGEST: ${{ inputs.adoption_record_digest }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           python scripts/verify_index_artifacts.py \
@@ -526,6 +559,35 @@ jobs:
             > release/ADOPTION-EVIDENCE.md
           printf '%s  %s\n' "$ADOPTION_RECORD_DIGEST" release/ADOPTION-EVIDENCE.md \
             | sha256sum --check --strict
+      - name: Revalidate the signed tag immediately before GitHub release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_COMMIT: ${{ inputs.candidate_source_commit }}
+        with:
+          script: |
+            const ref = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `tags/${process.env.RELEASE_TAG}`,
+            });
+            if (ref.data.object.type !== 'tag') {
+              core.setFailed('Release tag must remain annotated and signed.');
+              return;
+            }
+            const tag = await github.rest.git.getTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_sha: ref.data.object.sha,
+            });
+            if (!tag.data.verification?.verified || tag.data.object.sha !== process.env.SOURCE_COMMIT) {
+              core.setFailed('Release tag identity changed before GitHub release creation.');
+            }
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
           gh release create "$RELEASE_TAG" \
             release/packages/* release/SHA256SUMS release/CANDIDATE.json \
             release/ADOPTION-EVIDENCE.md \

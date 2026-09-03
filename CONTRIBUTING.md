@@ -47,6 +47,11 @@ does not resolve to that exact commit. Do not approve a release environment as
 a substitute for branch promotion, candidate qualification, or adoption
 evidence.
 
+The repository must keep an active `Protect release tags` tag ruleset targeting
+`refs/tags/v*` and restricting both updates and deletions. Promotion checks the
+live ruleset and revalidates the signed tag immediately before each public
+publication boundary, including GitHub Release creation.
+
 Behavior changes require the smallest focused failing test before production
 code. Do not add `# type: ignore`, `cast(Any, ...)`, or `-> Any` to silence a
 type error. A genuinely dynamic boundary needs an inline `why:` explanation.
