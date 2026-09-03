@@ -54,6 +54,10 @@ successful HTTP response.
   boundary, log them under host policy, and return a stable content-safe host
   error; never forward arbitrary exception text, tracebacks, causes, or locals
   to an untrusted caller or model.
+- For `ScopedActionToolBinding`, provide `binding_failure_handler` when the host
+  needs private diagnostics. The integration returns `binding_unavailable` for
+  composition failures and `operation_outcome_unknown` for scope cleanup
+  failures; models must not retry either result.
 - Call `application.inspect(handle)` for static, allowlisted configuration
   inspection. It reports closed boundary roles and invariants, not model class
   names; it does not contact stores, run recipes, or report readiness.

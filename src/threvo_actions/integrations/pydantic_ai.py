@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -79,7 +79,9 @@ class ActionAgentContext(ExperimentalModel):
 
 
 class IntegrationOutcome(StrEnum):
+    BINDING_UNAVAILABLE = "binding_unavailable"
     INVALID_CONTINUATION = "invalid_continuation"
+    OPERATION_OUTCOME_UNKNOWN = "operation_outcome_unknown"
     PREPARATION_DENIED = "preparation_denied"
     PREPARED_NOT_VISIBLE = "prepared_not_visible"
 
@@ -118,6 +120,18 @@ class InlineAuthorityHandler(Protocol[DepsContraT]):
     ) -> bool | Awaitable[bool]: ...
 
 
+class ActionToolFailureHandler(Protocol):
+    """Host-controlled diagnostics for failures hidden from a model caller."""
+
+    def __call__(
+        self,
+        failure: BaseException,
+        *,
+        action_type: ActionType,
+        tool_name: str,
+    ) -> None: ...
+
+
 class _ContinuationMetadata(ExperimentalModel):
     proposal_reference: SafeReference
     tool_name: SafeReference
@@ -130,6 +144,23 @@ class _BuildableBinding(Protocol[DepsContraT]):
     def name(self) -> str: ...
 
     def build_tool(self, runtime: ActionRuntime | None) -> Tool[DepsContraT]: ...
+
+
+def _report_tool_failure(
+    handler: ActionToolFailureHandler | None,
+    failure: BaseException,
+    *,
+    action_type: ActionType,
+    tool_name: str,
+) -> None:
+    if handler is None:
+        return
+    with suppress(Exception):
+        handler(failure, action_type=action_type, tool_name=tool_name)
+
+
+def _safe_failure(outcome: IntegrationOutcome) -> ActionToolResult:
+    return ActionToolResult(outcome=outcome)
 
 
 def _tool_result(result: ActionOperationResult) -> ActionToolResult:
@@ -383,6 +414,7 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
     context_resolver: ActionContextResolver[DepsT]
     name: str
     description: str
+    binding_failure_handler: ActionToolFailureHandler | None = None
 
     def __post_init__(self) -> None:
         if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
@@ -397,12 +429,22 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
         context_resolver = self.context_resolver
         tool_name = self.name
         operations = _FixedActionOperations(runtime=runtime, definition=definition)
+        binding_failure_handler = self.binding_failure_handler
 
         async def financial_action_tool(
             ctx: RunContext[DepsT],
             **arguments: object,
         ) -> ActionToolResult:
-            trusted = context_resolver(ctx.deps)
+            try:
+                trusted = context_resolver(ctx.deps)
+            except Exception as failure:
+                _report_tool_failure(
+                    binding_failure_handler,
+                    failure,
+                    action_type=definition.action_type,
+                    tool_name=tool_name,
+                )
+                return _safe_failure(IntegrationOutcome.BINDING_UNAVAILABLE)
             outcome = await _invoke_action_tool(
                 approved=ctx.tool_call_approved,
                 continuation_value=ctx.tool_call_metadata,
@@ -442,6 +484,7 @@ class ScopedActionToolBinding(
     context_resolver: ActionContextResolver[ScopedDepsT]
     name: str
     description: str
+    binding_failure_handler: ActionToolFailureHandler | None = None
 
     def __post_init__(self) -> None:
         if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
@@ -457,24 +500,66 @@ class ScopedActionToolBinding(
         context_resolver = self.context_resolver
         command_model = application._command_model_for(action)
         tool_name = self.name
+        binding_failure_handler = self.binding_failure_handler
 
         async def financial_action_tool(
             ctx: RunContext[DepsT],
             **arguments: object,
         ) -> ActionToolResult:
-            async with dependency_scope(ctx.deps) as dependencies:
+            stack = AsyncExitStack()
+            try:
+                dependencies = await stack.enter_async_context(dependency_scope(ctx.deps))
                 trusted = context_resolver(dependencies)
-                with application.bind(action, dependencies=dependencies) as bound:
-                    outcome = await _invoke_action_tool(
-                        approved=ctx.tool_call_approved,
-                        continuation_value=ctx.tool_call_metadata,
-                        arguments=arguments,
-                        command_model=command_model,
+                bound = stack.enter_context(application.bind(action, dependencies=dependencies))
+            except Exception as failure:
+                _report_tool_failure(
+                    binding_failure_handler,
+                    failure,
+                    action_type=action.action_type,
+                    tool_name=tool_name,
+                )
+                try:
+                    await stack.__aexit__(type(failure), failure, failure.__traceback__)
+                except Exception as cleanup_failure:
+                    _report_tool_failure(
+                        binding_failure_handler,
+                        cleanup_failure,
                         action_type=action.action_type,
-                        operations=bound,
-                        trusted=trusted,
                         tool_name=tool_name,
                     )
+                return _safe_failure(IntegrationOutcome.BINDING_UNAVAILABLE)
+            try:
+                outcome = await _invoke_action_tool(
+                    approved=ctx.tool_call_approved,
+                    continuation_value=ctx.tool_call_metadata,
+                    arguments=arguments,
+                    command_model=command_model,
+                    action_type=action.action_type,
+                    operations=bound,
+                    trusted=trusted,
+                    tool_name=tool_name,
+                )
+            except BaseException as failure:
+                try:
+                    await stack.__aexit__(type(failure), failure, failure.__traceback__)
+                except Exception as cleanup_failure:
+                    _report_tool_failure(
+                        binding_failure_handler,
+                        cleanup_failure,
+                        action_type=action.action_type,
+                        tool_name=tool_name,
+                    )
+                raise
+            try:
+                await stack.aclose()
+            except Exception as failure:
+                _report_tool_failure(
+                    binding_failure_handler,
+                    failure,
+                    action_type=action.action_type,
+                    tool_name=tool_name,
+                )
+                return _safe_failure(IntegrationOutcome.OPERATION_OUTCOME_UNKNOWN)
             if isinstance(outcome, _ContinuationMetadata):
                 raise ApprovalRequired(metadata=outcome.model_dump(mode="json"))
             return outcome
@@ -595,6 +680,7 @@ __all__ = [
     "ActionCapability",
     "ActionContextResolver",
     "ActionToolBinding",
+    "ActionToolFailureHandler",
     "ActionToolResult",
     "DeferredActionRequest",
     "InlineAuthorityHandler",

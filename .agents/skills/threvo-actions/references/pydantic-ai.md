@@ -42,6 +42,7 @@ binding = ScopedActionToolBinding(
     context_resolver=action_context,
     name="release_payment",
     description="Prepare a payment release and show a safe preview.",
+    binding_failure_handler=record_private_binding_failure,
 )
 actions = ActionCapability[RequestDependencies](bindings=[binding])
 agent = Agent(
@@ -61,9 +62,13 @@ paths are rejected before preparation because converting them through a Python
 `action_dependency_scope` is a host async context-manager factory. It must
 open fresh transaction/request dependencies for every prepare and deferred
 resume. The capability exits that scope successfully before raising
-`ApprovalRequired`; real exceptions and cancellation leave through the
-exceptional path. Existing expert integrations may retain `ActionToolBinding`
-with an explicit fixed `ActionRuntime`.
+`ApprovalRequired`; operation exceptions and cancellation leave through the
+exceptional path. Dependency, context, recipe, and scope-cleanup failures are
+sent only to the optional host-controlled `binding_failure_handler`; the model
+receives `binding_unavailable` or `operation_outcome_unknown` without exception
+text, causes, tracebacks, or locals. Do not retry those outcomes from the model.
+Existing expert integrations may retain `ActionToolBinding` with an explicit
+fixed `ActionRuntime`.
 
 If preparation succeeds but the evidence consumer cannot read the resulting
 proposal, the capability returns `prepared_not_visible` without its reference,

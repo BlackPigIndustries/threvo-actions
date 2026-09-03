@@ -30,6 +30,7 @@ from threvo_actions.integrations.pydantic_ai import (
     ActionAgentContext,
     ActionCapability,
     ActionToolBinding,
+    ActionToolFailureHandler,
     InlineAuthorityHandler,
     ScopedActionToolBinding,
 )
@@ -42,7 +43,7 @@ from threvo_actions.runtime import ActionRuntime
 from threvo_actions.stores.memory import MemoryActionStore
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
     from contextlib import AbstractAsyncContextManager
 
     from threvo_actions.registry import ActionDefinition
@@ -209,7 +210,15 @@ def build_stack(
     )
 
 
-def build_scoped_stack(*, freeze_application: bool = True) -> ScopedActionStack:
+def build_scoped_stack(
+    *,
+    freeze_application: bool = True,
+    recipe_bind: Callable[
+        [ScopedDependencies],
+        ActionComponents[Command, PrivateSnapshot, Preview, Result],
+    ] = scoped_components,
+    binding_failure_handler: ActionToolFailureHandler | None = None,
+) -> ScopedActionStack:
     store = MemoryActionStore()
     clock = MutableClock()
     events = CapturingEvents()
@@ -245,7 +254,7 @@ def build_scoped_stack(*, freeze_application: bool = True) -> ScopedActionStack:
             authority_audience=action.authority_audience,
             authority_channel_assurance=action.authority_channel_assurance,
         ),
-        ActionRecipe(bind=scoped_components),
+        ActionRecipe(bind=recipe_bind),
     )
     if freeze_application:
         application.freeze()
@@ -266,6 +275,7 @@ def build_scoped_stack(*, freeze_application: bool = True) -> ScopedActionStack:
                 context_resolver=resolve_scoped_context,
                 name="refund",
                 description="Prepare a refund for an order after showing a safe preview.",
+                binding_failure_handler=binding_failure_handler,
             )
         ]
     )

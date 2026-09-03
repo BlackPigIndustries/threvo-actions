@@ -22,6 +22,9 @@ and uses Semantic Versioning for the supported surface described in
   remains unknown.
 - Wrapped-key erasure now requires an atomic tenant/proposal-bound conditional
   delete, so stale reads cannot falsely report cryptographic erasure complete.
+- Scoped Pydantic AI bindings now keep recipe and dependency-scope diagnostics
+  behind an optional host hook while returning stable, content-safe outcomes to
+  the model.
 - Plaintext KMS data-key buffers are overwritten before later I/O or
   authentication failures can escape through library traceback frames.
 

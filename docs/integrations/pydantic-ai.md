@@ -54,6 +54,15 @@ from the source distribution.
 6. When verification is delayed or still uncertain, the host schedules a later
    reconciliation and reports completion only after a `verified` outcome.
 
+`ScopedActionToolBinding` is also the content-safe boundary around trusted host
+composition. Dependency entry, context resolution, recipe binding, and binding
+cleanup failures are never forwarded to the model. An optional
+`binding_failure_handler` receives the original exception and traceback under
+host logging policy. The tool returns `binding_unavailable` when composition
+never completed, or `operation_outcome_unknown` when scope cleanup failed after
+an operation ran. Models must not retry either outcome; the host owns diagnosis
+and reconciliation.
+
 If preparation succeeds but the current evidence consumer cannot read the new
 proposal, the tool returns `prepared_not_visible` without a proposal reference,
 lifecycle status, or preview. This is distinct from `preparation_denied`: the
@@ -117,8 +126,9 @@ inline handler without calling `record_authority()` still leaves the proposal
 - Schedule later reconciliation through the same registered action and fresh
   host dependency scope when the capability returns `verification_pending`.
 - Raise `ApprovalRequired` only after the prepare scope exits successfully so
-  a host transaction can commit. Real exceptions and cancellation must leave
-  through the exceptional scope path and roll back.
+  a host transaction can commit. Operation exceptions and cancellation leave
+  through the exceptional scope path. Composition failures are reported only
+  through the host-controlled diagnostic hook and a stable safe tool outcome.
 
 Existing applications may continue to use `ActionToolBinding` with a fixed
 expert runtime. Registering an `ActionRecipe` never exposes a tool by itself;
