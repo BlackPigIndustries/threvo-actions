@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import importlib
 import sys
-from typing import get_type_hints
+from types import SimpleNamespace
+from typing import cast, get_type_hints
 
 import pytest
 from examples.docs.pydantic_ai_agent import (
@@ -13,11 +14,17 @@ from examples.docs.pydantic_ai_agent import (
     seed_demo,
 )
 from examples.refund.app import TENANT, build_refund_application
-from pydantic_ai import Agent, DeferredToolRequests
+from pydantic_ai import Agent, DeferredToolRequests, ModelRetry, RunContext
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import AgentInfo, FunctionModel
-from tests.integration.pydantic_ai.support import AgentDeps, build_stack
+from tests.integration.pydantic_ai.support import (
+    AgentDeps,
+    build_scoped_stack,
+    build_stack,
+    resolve_context,
+    resolve_scoped_context,
+)
 
 from threvo_actions.integrations.pydantic_ai import (
     ActionCapability,
@@ -84,6 +91,66 @@ def test_from_schema_arguments_are_still_validated_by_the_command_model() -> Non
         assert result.output == "invalid arguments were refused"
         assert await stack.store.get("tenant:a", "proposal:1") is None
         assert stack.host.executor_calls == 0
+
+    asyncio.run(scenario())
+
+
+def test_invalid_arguments_do_not_survive_in_model_retry_exception_graph() -> None:
+    async def scenario() -> None:
+        fixed_stack = build_stack()
+        scoped_stack = build_scoped_stack()
+        tools = (
+            ActionToolBinding(
+                definition=fixed_stack.action,
+                context_resolver=resolve_context,
+                name="fixed_refund",
+                description="Prepare a refund through fixed dependencies.",
+            ).build_tool(fixed_stack.runtime),
+            ScopedActionToolBinding(
+                application=scoped_stack.application,
+                action=scoped_stack.registered,
+                dependency_scope=scoped_stack.scope_factory,
+                context_resolver=resolve_scoped_context,
+                name="scoped_refund",
+                description="Prepare a refund through scoped dependencies.",
+            ).build_tool(None),
+        )
+        sensitive_value = "sk-test-sensitive-input"  # noqa: S105 -- synthetic canary
+
+        for tool in tools:
+            context = cast(
+                "RunContext[AgentDeps]",
+                SimpleNamespace(
+                    deps=AgentDeps("tenant:a"),
+                    tool_call_approved=False,
+                    tool_call_metadata=None,
+                ),
+            )
+            with pytest.raises(ModelRetry) as captured:
+                await tool.function(
+                    context,
+                    order_reference=42,
+                    token=sensitive_value,
+                )
+
+            error = captured.value
+            assert str(error) == (
+                "Financial action arguments do not match the declared command schema."
+            )
+            assert sensitive_value not in repr(error)
+            assert error.__cause__ is None
+            assert error.__context__ is None
+            current_traceback = error.__traceback__
+            while current_traceback is not None:
+                frame = current_traceback.tb_frame
+                if frame.f_code.co_filename.endswith("threvo_actions/integrations/pydantic_ai.py"):
+                    assert sensitive_value not in repr(frame.f_locals)
+                current_traceback = current_traceback.tb_next
+
+        assert await fixed_stack.store.get("tenant:a", "proposal:1") is None
+        assert await scoped_stack.store.get("tenant:a", "proposal:1") is None
+        assert len(scoped_stack.scope_factory.exited) == 1
+        assert scoped_stack.scope_factory.exited[0][1] is ModelRetry
 
     asyncio.run(scenario())
 
