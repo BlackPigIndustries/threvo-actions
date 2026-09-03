@@ -31,6 +31,8 @@ and uses Semantic Versioning for the supported surface described in
   failures, and cancellation after both key and proposal persistence.
 - Model-boundary qualification now drives invalid sensitive arguments through
   the real Pydantic AI dispatcher and checks the generated retry prompt.
+- Experimental binding tests now verify that runtime-construction failures
+  preserve the host exception and traceback for trusted diagnostics.
 
 ### Security
 

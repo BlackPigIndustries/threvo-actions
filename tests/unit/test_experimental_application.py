@@ -463,6 +463,32 @@ def test_definition_nonconforming_issue_code_is_reserved_and_inspectable(
     assert captured.value is failure
 
 
+def test_runtime_construction_failure_preserves_host_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = RuntimeError("tenant:secret runtime diagnostic")
+
+    def fail_runtime(**components: object) -> None:
+        del components
+        raise failure
+
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
+
+    monkeypatch.setattr(application_module, "ActionRuntime", fail_runtime)
+    with (
+        pytest.raises(RuntimeError) as captured,
+        application.bind(registered, dependencies=Dependencies()),
+    ):
+        pass
+
+    assert captured.value is failure
+    assert "fail_runtime" in {
+        frame.name for frame in traceback.extract_tb(captured.value.__traceback__)
+    }
+
+
 def test_binding_rejects_none_for_a_required_component() -> None:
     def incomplete(
         dependencies: Dependencies,
