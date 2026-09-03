@@ -53,6 +53,13 @@ def test_quickstart_is_small_and_described_as_source_distribution_code() -> None
     assert "Copy the file below" not in guide
 
 
+def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
+    design = (ROOT / "docs" / "design" / "gradual-reveal-api.md").read_text()
+
+    assert "actions.bind(refund, dependencies=request_deps)" in design
+    assert "actions.bind(refund, deps=" not in design
+
+
 def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
     worksheet = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
 
