@@ -46,6 +46,7 @@ class FakeKmsClient:
         self._master_keys = {self.alias_target: os.urandom(32)}
         self._plaintext = plaintext
         self.contexts: list[dict[str, str]] = []
+        self.generated_key_ids: list[str] = []
         self.last_decrypted_plaintext: bytearray | None = None
 
     def repoint_alias(self) -> None:
@@ -60,7 +61,7 @@ class FakeKmsClient:
         number_of_bytes: int,
     ) -> GeneratedDataKey:
         assert number_of_bytes == 32
-        del key_id
+        self.generated_key_ids.append(key_id)
         plaintext = self._plaintext or os.urandom(number_of_bytes)
         nonce = os.urandom(12)
         context = dict(encryption_context)
@@ -204,6 +205,25 @@ def test_resolved_key_id_survives_alias_repointing() -> None:
 
         assert envelope.key_id.endswith("key/one")
         assert await protection.unprotect(payload=payload) == b"private"
+
+    asyncio.run(scenario())
+
+
+def test_configured_key_id_is_forwarded_to_generate_data_key() -> None:
+    async def scenario() -> None:
+        kms = FakeKmsClient()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=kms,
+            envelopes=MemoryEnvelopeStore(),
+        )
+
+        await protection.protect(
+            proposal_reference="proposal:1",
+            canonical_payload=b"private",
+        )
+
+        assert kms.generated_key_ids == ["alias/threvo-actions"]
 
     asyncio.run(scenario())
 
