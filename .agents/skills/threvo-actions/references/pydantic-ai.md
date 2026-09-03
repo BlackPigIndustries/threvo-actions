@@ -54,6 +54,9 @@ agent = Agent(
 
 The command model is the model-visible tool schema. Tenant, user, authority,
 private snapshot, executor, and verifier must not be tool arguments.
+Encode `Decimal` command fields as JSON strings. Numeric JSON values at those
+paths are rejected before preparation because converting them through a Python
+`float` can lose precision. Fields explicitly declared as `float` remain valid.
 
 `action_dependency_scope` is a host async context-manager factory. It must
 open fresh transaction/request dependencies for every prepare and deferred
