@@ -80,11 +80,13 @@ proposal and receipt compatibility. Existing names remain available through
 the announced retirement window unless an immediate security or correctness
 failure requires fail-closed removal.
 
-The stable promotion decision is separate from support. It requires either a second real
-production action or an external design partner, the independent-human absolute
-DX gates, and completed post-adoption safety evidence. Promotion is always an
-explicit documented release; it never occurs merely because the 120-day window
-elapsed.
+The stable promotion decision is separate from support. It requires either a
+second real production action or an external design partner, the
+independent-human absolute DX gates, and completed post-adoption safety
+evidence. Bind those proofs to a dedicated
+[stable-promotion entry](testing/gradual-reveal-adoption.md#stable-promotion-entries)
+in the append-only ledger. Promotion is always an explicit documented release;
+it never occurs merely because the 120-day window elapsed.
 
 PostgreSQL is the reference durable adapter. MySQL and SQLite remain supported
 at their documented tiers, but new authoring-layer work does not imply new
