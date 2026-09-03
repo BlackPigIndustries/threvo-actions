@@ -65,6 +65,13 @@ resume. The capability exits that scope successfully before raising
 exceptional path. Existing expert integrations may retain `ActionToolBinding`
 with an explicit fixed `ActionRuntime`.
 
+If preparation succeeds but the evidence consumer cannot read the resulting
+proposal, the capability returns `prepared_not_visible` without its reference,
+status, or preview. This is not `preparation_denied`: the proposal is durable
+and remains subject to the host's expiry, retention, and operator-reconciliation
+policies. Do not expose the hidden proposal through model output or continuation
+metadata.
+
 ## Deferred authority
 
 A real approval often spans requests or users:

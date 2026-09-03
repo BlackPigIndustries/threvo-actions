@@ -81,6 +81,7 @@ class ActionAgentContext(ExperimentalModel):
 class IntegrationOutcome(StrEnum):
     INVALID_CONTINUATION = "invalid_continuation"
     PREPARATION_DENIED = "preparation_denied"
+    PREPARED_NOT_VISIBLE = "prepared_not_visible"
 
 
 class ActionToolResult(ExperimentalModel):
@@ -337,14 +338,16 @@ async def _invoke_action_tool(
             return ActionToolResult(outcome=IntegrationOutcome.INVALID_CONTINUATION)
         return _tool_result(result)
 
+    command: CommandT | None
     try:
         if _contains_json_float_for_decimal(command_model, arguments):
             raise ValueError("Decimal fields require JSON string values")
         command = command_model.model_validate_json(json.dumps(arguments))
-    except (TypeError, ValueError) as exc:
-        raise ModelRetry(
-            "Financial action arguments do not match the declared command schema."
-        ) from exc
+    except (TypeError, ValueError):
+        command = None
+    if command is None:
+        arguments.clear()
+        raise ModelRetry("Financial action arguments do not match the declared command schema.")
     try:
         prepared = await operations.prepare(
             tenant_reference=trusted.tenant_reference,
@@ -363,7 +366,7 @@ async def _invoke_action_tool(
             ),
         )
     except ProposalNotFoundError:
-        return ActionToolResult(outcome=IntegrationOutcome.PREPARATION_DENIED)
+        return ActionToolResult(outcome=IntegrationOutcome.PREPARED_NOT_VISIBLE)
     return _ContinuationMetadata(
         proposal_reference=prepared.proposal_reference,
         tool_name=tool_name,

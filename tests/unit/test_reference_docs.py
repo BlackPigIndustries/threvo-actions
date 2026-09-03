@@ -51,15 +51,46 @@ def test_leakage_example_uses_the_public_safe_argument_contract() -> None:
     assert "forbidden_values=" not in guide
 
 
-def test_quickstart_is_small_and_described_as_source_distribution_code() -> None:
+def test_quickstarts_distinguish_copy_paste_from_the_source_tour() -> None:
     quickstart = (ROOT / "examples/docs/quickstart.py").read_text()
+    installed_quickstart = (ROOT / "examples/docs/installed_quickstart.py").read_text()
     guide = (ROOT / "docs/getting-started/first-action.md").read_text()
+    release = (ROOT / ".github/workflows/release.yml").read_text()
 
     assert sum(bool(line.strip()) for line in quickstart.splitlines()) < 100
     assert "demo.clock.advance(demo.specification.verification_delay)" in quickstart
+    assert "from examples." not in installed_quickstart
+    assert "import examples." not in installed_quickstart
+    assert "installed_quickstart.py" in release
+    assert 'mkdir "$consumer_root/wheel-quickstart"' in release
     assert "source distribution" in guide
     assert "production-shaped" in guide
-    assert "Copy the file below" not in guide
+    assert "Copy the file below" in guide
+
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "uv run python examples/docs/installed_quickstart.py" not in ci
+    assert "name: Verify installed-wheel quickstart" in ci
+    assert "uv pip install \\" in ci
+    assert '--python "$quickstart_root/venv/bin/python"' in ci
+    assert "wheel=$(find dist -maxdepth 1 -name '*.whl' -print -quit)" in ci
+    assert '            "$wheel"' in ci
+    assert 'cd "$quickstart_root"' in ci
+
+
+def test_installed_quickstart_minimizes_its_display_preview() -> None:
+    quickstart = import_module("examples.docs.installed_quickstart")
+
+    assert set(quickstart.CategorizePreview.model_fields) == {
+        "expense_reference",
+        "category",
+    }
+    assert "previous_category" in quickstart.CategorizeSnapshot.model_fields
+
+
+def test_examples_index_links_to_the_installed_wheel_quickstart() -> None:
+    index = (ROOT / "docs" / "examples" / "index.md").read_text()
+
+    assert "[Installed-wheel quickstart](../getting-started/first-action.md)" in index
 
 
 def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:

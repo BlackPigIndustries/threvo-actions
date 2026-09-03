@@ -157,6 +157,42 @@ def test_invalid_arguments_exit_the_scope_exceptionally_without_persisting() -> 
     asyncio.run(scenario())
 
 
+def test_scoped_preparation_reports_when_the_new_proposal_is_not_visible() -> None:
+    async def scenario() -> None:
+        stack = build_scoped_stack()
+        stack.host.read_allowed = False
+        observed: list[list[ModelMessage]] = []
+        agent = Agent(
+            _model(observed),
+            deps_type=AgentDeps,
+            output_type=[str, DeferredToolRequests],
+            capabilities=[stack.capability],
+        )
+
+        with override_allow_model_requests(False):
+            completed = await agent.run("refund", deps=AgentDeps("tenant:a"))
+
+        assert completed.output == "done"
+        tool_results = [
+            part.content
+            for message in observed[-1]
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart) and isinstance(part.content, ActionToolResult)
+        ]
+        assert len(tool_results) == 1
+        assert tool_results[0].outcome is IntegrationOutcome.PREPARED_NOT_VISIBLE
+        assert tool_results[0].proposal_reference is None
+        assert tool_results[0].lifecycle_status is None
+        assert tool_results[0].display_preview == {}
+        assert tool_results[0].safe_result is None
+        assert tool_results[0].fresh_proposal_reference is None
+        assert await stack.store.get("tenant:a", "proposal:1") is not None
+        assert stack.scope_factory.exited == [(stack.scope_factory.entered[0], None)]
+
+    asyncio.run(scenario())
+
+
 def test_scoped_continuation_rechecks_the_fresh_authenticated_tenant() -> None:
     async def scenario() -> None:
         stack = build_scoped_stack()

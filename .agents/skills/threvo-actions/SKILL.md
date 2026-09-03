@@ -48,6 +48,12 @@ successful HTTP response.
   one host object already owns every action port. Build `ActionDefinition`
   directly when the host owns the ports as separate expert-level adapters. Do
   not introduce a second lifecycle.
+- Treat `ActionApplication.bind()` as trusted host composition. Recipe,
+  definition, and runtime-construction failures preserve their original
+  exception and traceback for the author. Catch them at the host API or agent
+  boundary, log them under host policy, and return a stable content-safe host
+  error; never forward arbitrary exception text, tracebacks, causes, or locals
+  to an untrusted caller or model.
 - Call `application.inspect(handle)` for static, allowlisted configuration
   inspection. It reports closed boundary roles and invariants, not model class
   names; it does not contact stores, run recipes, or report readiness.

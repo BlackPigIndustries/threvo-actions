@@ -13,7 +13,27 @@ operation scoped.
     with the supported `Action` facade or construct `ActionDefinition`
     directly. All paths use the same runtime and lifecycle.
 
-## Run the tour
+## Copy-paste the installed-wheel example
+
+Install the core wheel, copy the file below into an empty directory, and run
+it. It imports only `threvo_actions` and the Python standard library:
+
+```bash
+python -m pip install "threvo-actions==0.1.4"
+python installed_quickstart.py
+```
+
+??? example "Copy the file below as `installed_quickstart.py`"
+
+    ```python
+    --8<-- "examples/docs/installed_quickstart.py"
+    ```
+
+This first program deliberately stops after safe preparation: its host denies
+authority and execution. `EphemeralProtection` and `MemoryActionStore` are
+explicit test helpers, not production custody or persistence.
+
+## Run the production-shaped source tour
 
 The source distribution contains a 68-line executable tour:
 
@@ -21,10 +41,9 @@ The source distribution contains a 68-line executable tour:
 uv run python -m examples.docs.quickstart
 ```
 
-It imports the complete, production-shaped refund host from
-`examples/refund/`. That separation is intentional: the tour shows the API
-journey, while the reference application shows every security and business
-boundary without pretending they fit in a copy-paste snippet.
+It imports the complete, production-shaped refund host from `examples/refund/`.
+That separation keeps the full lifecycle readable while the installed-wheel
+example above remains self-contained.
 
 ??? example "Show the executable tour"
 

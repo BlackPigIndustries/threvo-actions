@@ -38,6 +38,15 @@ def test_pydantic_ai_skill_uses_the_published_versioned_extra() -> None:
     assert "THREVO_ACTIONS_REF" not in reference
 
 
+def test_pydantic_ai_skill_documents_hidden_durable_proposals() -> None:
+    reference = " ".join((SKILL_ROOT / "references" / "pydantic-ai.md").read_text().split())
+
+    assert "returns `prepared_not_visible`" in reference
+    assert "proposal is durable" in reference
+    assert "expiry, retention, and operator-reconciliation policies" in reference
+    assert "Do not expose the hidden proposal" in reference
+
+
 def test_documented_conformance_helpers_are_importable() -> None:
     conformance = import_module("threvo_actions.conformance")
 
@@ -76,3 +85,11 @@ def test_authoring_reference_uses_the_keyword_only_prepare_contract() -> None:
     assert "tenant_reference=tenant_reference" in authoring
     assert "command=command" in authoring
     assert "requesting_principal=requesting_principal" in authoring
+
+
+def test_skill_documents_the_binding_exception_trust_boundary() -> None:
+    skill = " ".join((SKILL_ROOT / "SKILL.md").read_text().split())
+
+    assert "preserve their original exception and traceback" in skill
+    assert "return a stable content-safe host error" in skill
+    assert "never forward arbitrary exception text" in skill
