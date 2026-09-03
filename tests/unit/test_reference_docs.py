@@ -67,5 +67,8 @@ def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
         "RFC 8785",
         "UTF-8",
         "excludes `entry_digest`",
+        "candidate run ID",
+        "Workflow-built wheel",
+        "workflow-built source-distribution",
     ):
         assert requirement in worksheet
