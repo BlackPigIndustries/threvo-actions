@@ -56,6 +56,7 @@ def test_quickstart_is_small_and_described_as_source_distribution_code() -> None
     guide = (ROOT / "docs/getting-started/first-action.md").read_text()
 
     assert sum(bool(line.strip()) for line in quickstart.splitlines()) < 100
+    assert "demo.clock.advance(demo.specification.verification_delay)" in quickstart
     assert "source distribution" in guide
     assert "production-shaped" in guide
     assert "Copy the file below" not in guide
