@@ -310,7 +310,8 @@ jobs:
             > adoption-evidence.md
           printf '%s  %s\n' "$ADOPTION_RECORD_DIGEST" adoption-evidence.md \
             | sha256sum --check --strict
-          grep -F 'Promotion gate: **passed**' adoption-evidence.md
+          expected_promotion_gate="Promotion gate: **passed**; release=$RELEASE_TAG; candidate_source=$SOURCE_COMMIT"
+          test "$(grep -Fxc -- "$expected_promotion_gate" adoption-evidence.md)" -eq 1
           uv run --no-project python scripts/verify_release.py \
             --tag "$RELEASE_TAG" \
             --verify-candidate release \
