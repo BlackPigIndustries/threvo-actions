@@ -9,7 +9,7 @@ is not enough: refunds, supplier bank-detail changes, payment releases, ledger
 postings, credit-limit changes, and similar financial effects.
 
 ```bash
-python -m pip install "threvo-actions==0.1.3"
+python -m pip install "threvo-actions==0.1.4"
 ```
 
 Install an exact patch version so runtime attribution and compatibility are
@@ -24,7 +24,7 @@ typed ports.
 
 | Feature | What it prevents or makes visible |
 | --- | --- |
-| [Typed Action authoring](features/action-contracts.md) | A concise authoring facade compiles to the same explicit runtime definition. |
+| [Typed action authoring](features/action-contracts.md) | Namespaced gradual reveal and expert paths compile to the same explicit runtime definition. |
 | [Confirm-first authority](features/confirm-first.md) | A model, client, or framework approval cannot execute a financial effect by itself. |
 | [Live drift refusal](features/drift-and-idempotency.md) | An approval cannot be reused after material business state changes. |
 | [Semantic effect admission](features/drift-and-idempotency.md) | Competing proposals for the same host-defined effect cannot both enter execution. |
@@ -84,11 +84,9 @@ uv run python -m examples.docs.quickstart
 Expected output:
 
 ```text
-prepared
-{'summary': 'Refund order ORD-42', 'amount': {'amount': '42.50', 'currency': 'EUR'}}
-verification_pending
-verified
-{'provider_reference': 'psp-refund:42'}
+namespace='example.payments' name='refund' version=1
+{'order_reference': 'order:42', 'amount': {'amount': '30.00', 'currency': 'EUR'}}
+verification_pending verified {'provider_refund_reference': 'psp-refund-0001', 'refunded': {'amount': '30.00', 'currency': 'EUR'}}
 ['proposal', 'authority', 'execution', 'execution', 'verification']
 ```
 
@@ -98,8 +96,9 @@ the [coding-agent skill](integrations/coding-agents.md), or jump to the
 
 !!! warning "Know the compatibility boundary"
 
-    The documented Python API and CLI are supported throughout `0.1.x`.
-    Interoperability formats remain experimental. The package is not a payment
+    The root Python API and CLI are supported throughout `0.1.x`. The
+    namespaced gradual-reveal API and interoperability formats remain
+    experimental under their documented windows. The package is not a payment
     protocol, compliance certification, policy engine, or distributed
     exactly-once system. Read [versioning](versioning.md) and [guarantees and
     limitations](guarantees-and-limitations.md) before production evaluation.

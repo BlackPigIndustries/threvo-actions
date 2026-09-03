@@ -29,7 +29,7 @@ For an application that installs a wheel or source distribution, prefer the
 skill bundled with that exact installation:
 
 ```bash
-python -m pip install "threvo-actions==0.1.3"
+python -m pip install "threvo-actions==0.1.4"
 THREVO_ACTIONS_SKILL_DIR=$(threvo-actions skill path) || exit 1
 npx skills add "$THREVO_ACTIONS_SKILL_DIR" \
   --skill threvo-actions --agent '*' --yes

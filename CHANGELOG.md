@@ -6,6 +6,31 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-02
+
+### Added
+
+- An explicitly experimental `threvo_actions.experimental` namespace with
+  strict typed action specifications, explicit registration, frozen catalogs,
+  operation-scoped dependency binding, and allowlisted static inspection.
+- A dependency-scoped Pydantic AI binding that rebuilds trusted host resources
+  for preparation and deferred resume while preserving the fixed-runtime path.
+- A documented 120-day experimental support and retirement review window plus
+  reproducible expert/candidate DX worksheets.
+
+### Changed
+
+- The refund, supplier-destination, lifecycle, database, and Pydantic AI
+  examples now exercise the gradual-reveal surface. The executable quickstart
+  is 68 non-blank lines and points to the complete production-shaped host.
+- Release automation builds one reviewed candidate artifact and promotes those
+  exact bytes through TestPyPI and PyPI after signed-tag verification.
+
+### Fixed
+
+- Pydantic AI tool arguments are validated in JSON mode, preserving strict
+  boundary models while accepting JSON encodings such as decimal strings.
+
 ## [0.1.3] - 2026-09-01
 
 ### Added
@@ -125,7 +150,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.0...v0.1.1

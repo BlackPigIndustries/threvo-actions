@@ -584,10 +584,8 @@ def test_payment_rejects_destination_evidence_and_binds_verified_destination_ver
             REQUESTER_IDENTITY,
         )
         with pytest.raises(ProposalNotFoundError):
-            await example.application.runtime.record_authority(
-                example.application.payment_definition,
-                evidence=destination_evidence,
-                authenticated_authority=destination_evidence.authority,
+            await example.application.record_payment_evidence(
+                destination_evidence,
                 proposal_reference=payment.proposal_reference,
             )
         authorized = await example.application.record_payment_authority(

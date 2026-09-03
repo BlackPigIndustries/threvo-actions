@@ -15,24 +15,27 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from urllib.parse import unquote, urlsplit
 
 import aiomysql
 
-from examples.docs.quickstart import (
-    AGENT,
-    CONSUMER,
-    MANAGER,
+from examples.refund.app import (
+    FINANCE_MANAGER,
+    PROPOSING_AGENT,
     REQUESTER,
     TENANT,
-    RefundCommand,
-    build_demo,
+    MutableClock,
+    build_refund_application,
 )
+from examples.refund.domain import PaymentOrder, RefundCommand
 from threvo_actions import (
-    ActionRuntime,
     AuthorityDecision,
     AuthorityEvidence,
+    EvidenceConsumer,
+    Money,
     OperationOutcome,
     ReadContext,
 )
@@ -43,11 +46,6 @@ from threvo_actions.stores.mysql import MySQLActionStore, MySQLRetentionStore
 class Identifiers:
     def new(self, prefix: str) -> str:
         return f"{prefix}:{uuid.uuid4()}"
-
-
-class SystemClock:
-    def now(self) -> datetime:
-        return datetime.now(UTC)
 
 
 def connection_settings(dsn: str) -> dict[str, object]:
@@ -75,65 +73,78 @@ async def main() -> None:
     try:
         await migrate_mysql(pool)
         store = MySQLActionStore(pool)
-        clock = SystemClock()
-        definition = build_demo().action
-        runtime = ActionRuntime(
+        clock = MutableClock(datetime.now(UTC))
+        demo = build_refund_application()
+        demo.ledger.add(
+            PaymentOrder(
+                order_reference="ORD-MYSQL-42",
+                payment_reference="payment:mysql:42",
+                customer_contact="private@example.test",
+                captured=Money(amount=Decimal("100.00"), currency="EUR"),
+                refunded=Money(amount=Decimal("20.00"), currency="EUR"),
+            )
+        )
+        dependencies = replace(
+            demo.dependencies,
             store=store,
             retention_store=MySQLRetentionStore(pool),
             clock=clock,
             identifiers=Identifiers(),
         )
-
-        prepared = await runtime.prepare(
-            definition,
-            tenant_reference=TENANT,
-            command=RefundCommand(order_reference="ORD-MYSQL-42"),
-            requesting_principal=REQUESTER,
-            proposing_agent=AGENT,
-        )
-        record = await store.get(TENANT, prepared.proposal_reference)
-        if record is None or record.commitment is None:
-            raise RuntimeError("prepared proposal was not persisted")
-
-        authorized = await runtime.record_authority(
-            definition,
-            evidence=AuthorityEvidence(
+        with demo.actions.bind(demo.refund, dependencies=dependencies) as action:
+            prepared = await action.prepare(
                 tenant_reference=TENANT,
-                action_type=definition.action_type,
-                proposal_instance_reference=prepared.proposal_reference,
-                semantic_effect_reference=record.semantic_effect_reference,
-                authority=MANAGER,
-                audience=(definition.authority_audience,),
-                decision=AuthorityDecision.APPROVE,
-                proposal_commitment=record.commitment.digest,
-                channel_assurance=definition.authority_channel_assurance,
-                issued_at=clock.now(),
-                expires_at=clock.now() + timedelta(minutes=5),
-            ),
-            authenticated_authority=MANAGER,
-        )
-        if authorized.outcome is not OperationOutcome.AUTHORIZED:
-            raise RuntimeError(f"authority failed: {authorized.outcome}")
+                command=RefundCommand(
+                    intent_reference="intent:refund:mysql:42",
+                    order_reference="ORD-MYSQL-42",
+                    amount=Money(amount=Decimal("30.00"), currency="EUR"),
+                ),
+                requesting_principal=REQUESTER,
+                proposing_agent=PROPOSING_AGENT,
+            )
+            record = await store.get(TENANT, prepared.proposal_reference)
+            if record is None or record.commitment is None:
+                raise RuntimeError("prepared proposal was not persisted")
 
-        executed = await runtime.execute(
-            definition,
-            tenant_reference=TENANT,
-            proposal_reference=prepared.proposal_reference,
-        )
-        if executed.outcome is not OperationOutcome.VERIFICATION_PENDING:
-            raise RuntimeError(f"execution failed: {executed.outcome}")
-        verified = await runtime.reconcile(
-            definition,
-            tenant_reference=TENANT,
-            proposal_reference=prepared.proposal_reference,
-        )
-        if verified.outcome is not OperationOutcome.VERIFIED:
-            raise RuntimeError(f"verification failed: {verified.outcome}")
-        view = await runtime.read(
-            definition,
-            proposal_reference=prepared.proposal_reference,
-            context=ReadContext(tenant_reference=TENANT, consumer=CONSUMER),
-        )
+            authorized = await action.record_authority(
+                evidence=AuthorityEvidence(
+                    tenant_reference=TENANT,
+                    action_type=demo.specification.action_type,
+                    proposal_instance_reference=prepared.proposal_reference,
+                    semantic_effect_reference=record.semantic_effect_reference,
+                    authority=FINANCE_MANAGER,
+                    audience=(demo.specification.authority_audience,),
+                    decision=AuthorityDecision.APPROVE,
+                    proposal_commitment=record.commitment.digest,
+                    channel_assurance=demo.specification.authority_channel_assurance,
+                    issued_at=clock.now(),
+                    expires_at=clock.now() + timedelta(minutes=5),
+                ),
+                authenticated_authority=FINANCE_MANAGER,
+            )
+            if authorized.outcome is not OperationOutcome.AUTHORIZED:
+                raise RuntimeError(f"authority failed: {authorized.outcome}")
+
+            executed = await action.execute(
+                tenant_reference=TENANT,
+                proposal_reference=prepared.proposal_reference,
+            )
+            if executed.outcome is not OperationOutcome.VERIFICATION_PENDING:
+                raise RuntimeError(f"execution failed: {executed.outcome}")
+            clock.advance(demo.specification.verification_delay)
+            verified = await action.reconcile(
+                tenant_reference=TENANT,
+                proposal_reference=prepared.proposal_reference,
+            )
+            if verified.outcome is not OperationOutcome.VERIFIED:
+                raise RuntimeError(f"verification failed: {verified.outcome}")
+            view = await action.read(
+                proposal_reference=prepared.proposal_reference,
+                context=ReadContext(
+                    tenant_reference=TENANT,
+                    consumer=EvidenceConsumer(reference="operator:auditor"),
+                ),
+            )
 
         print(verified.outcome)
         print(f"stored revision: {view.revision}")

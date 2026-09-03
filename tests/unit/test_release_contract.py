@@ -9,11 +9,36 @@ from importlib import import_module
 from pathlib import Path
 
 import pytest
-from scripts.verify_release import _assert_no_private_context, _publication_source_paths
+from scripts.verify_release import (
+    _assert_no_private_context,
+    _publication_source_paths,
+    record_candidate,
+    verify_candidate,
+    verify_metadata,
+)
 
 import threvo_actions
+import threvo_actions.experimental as experimental
 
 ROOT = Path(__file__).parents[2]
+
+
+def _workflow_run_bodies(workflow: str) -> tuple[str, ...]:
+    lines = workflow.splitlines()
+    bodies: list[str] = []
+    for index, line in enumerate(lines):
+        match = re.match(r"^(?P<indent>\s*)(?:-\s+)?run:\s*(?P<inline>.*)$", line)
+        if match is None:
+            continue
+        indent = len(match.group("indent"))
+        body = [match.group("inline")]
+        for following in lines[index + 1 :]:
+            following_indent = len(following) - len(following.lstrip())
+            if following.strip() and following_indent <= indent:
+                break
+            body.append(following)
+        bodies.append("\n".join(body))
+    return tuple(bodies)
 
 
 def test_release_metadata_is_consistent() -> None:
@@ -24,6 +49,101 @@ def test_release_metadata_is_consistent() -> None:
     assert project["version"] == threvo_actions.__version__
     assert f'version: "{threvo_actions.__version__}"' in skill
     assert f"## [{threvo_actions.__version__}] - " in changelog
+
+
+def test_experimental_authoring_surface_stays_namespaced() -> None:
+    expected = {
+        "ActionApplication",
+        "ActionApplicationError",
+        "ActionComponents",
+        "ActionInspection",
+        "ActionIssueCode",
+        "ActionOwnershipInspection",
+        "ActionRecipe",
+        "ActionSettingsInspection",
+        "ActionSpec",
+        "BoundaryModelInspection",
+        "BoundAction",
+        "DependencyScopeFactory",
+        "RegisteredAction",
+    }
+
+    assert set(experimental.__all__) == expected
+    assert expected.isdisjoint(threvo_actions.__all__)
+
+
+def test_experimental_compatibility_window_is_explicit() -> None:
+    versioning = (ROOT / "docs/versioning.md").read_text()
+
+    for requirement in (
+        "threvo_actions.experimental",
+        "120 days",
+        "support",
+        "revision",
+        "retirement",
+        "stable promotion",
+    ):
+        assert requirement in versioning
+
+
+def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "workflow_dispatch:" in workflow
+    assert 'tags: ["v[0-9]+.[0-9]+.[0-9]+"]' not in workflow
+    assert workflow.count("uv build") == 1
+    assert "CANDIDATE.json" in workflow
+    assert "candidate-source-commit" in workflow
+    assert "getWorkflowRun" in workflow
+    assert "Candidate qualification did not pass" in workflow
+    assert "name: release-review" in workflow
+    assert "must point to the candidate source commit" in workflow
+    assert "sha256sum --check --strict" in workflow
+    assert "Promotion gate: **passed**" in workflow
+    assert "release-distributions" in workflow
+
+
+def test_release_dispatch_values_never_enter_shell_source() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "${{ inputs.release_tag }}" not in "\n".join(_workflow_run_bodies(workflow))
+    assert workflow.count("^v[0-9]+\\.[0-9]+\\.[0-9]+$") == 2
+
+
+@pytest.mark.parametrize(
+    "release_tag",
+    (
+        "v0.1.4$(touch injected)",
+        "v0.1.4`touch injected`",
+        'v0.1.4"; touch injected; echo "',
+        "v0.1.4\ninvalid",
+    ),
+)
+def test_release_verifier_rejects_tag_shell_metacharacters(release_tag: str) -> None:
+    with pytest.raises(ValueError, match="tag does not match package version"):
+        verify_metadata(expected_tag=release_tag)
+
+
+def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
+    release = tmp_path / "release"
+    packages = release / "packages"
+    packages.mkdir(parents=True)
+    wheel = packages / "threvo_actions-0.1.4-py3-none-any.whl"
+    source = packages / "threvo_actions-0.1.4.tar.gz"
+    wheel.write_bytes(b"wheel")
+    source.write_bytes(b"source")
+    (release / "SHA256SUMS").write_text(
+        f"{hashlib.sha256(wheel.read_bytes()).hexdigest()}  {wheel.name}\n"
+        f"{hashlib.sha256(source.read_bytes()).hexdigest()}  {source.name}\n"
+    )
+    commit = "a" * 40
+
+    record_candidate(release, source_commit=commit, release_tag="v0.1.4")
+    verify_candidate(release, source_commit=commit, release_tag="v0.1.4")
+
+    wheel.write_bytes(b"changed")
+    with pytest.raises(ValueError, match="digest differs"):
+        verify_candidate(release, source_commit=commit, release_tag="v0.1.4")
 
 
 def test_release_requires_tag_commit_to_already_be_on_main() -> None:

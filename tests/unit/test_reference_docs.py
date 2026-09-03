@@ -41,3 +41,28 @@ def test_leakage_example_uses_the_public_safe_argument_contract() -> None:
     assert "forbidden_literals={" in guide
     assert "corpus=" not in guide
     assert "forbidden_values=" not in guide
+
+
+def test_quickstart_is_small_and_described_as_source_distribution_code() -> None:
+    quickstart = (ROOT / "examples/docs/quickstart.py").read_text()
+    guide = (ROOT / "docs/getting-started/first-action.md").read_text()
+
+    assert sum(bool(line.strip()) for line in quickstart.splitlines()) < 100
+    assert "source distribution" in guide
+    assert "production-shaped" in guide
+    assert "Copy the file below" not in guide
+
+
+def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
+    worksheet = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    for requirement in (
+        "Expert baseline",
+        "Candidate attempts",
+        "all nine",
+        "source commit",
+        "wheel SHA-256",
+        "previous entry digest",
+        "independent participant",
+    ):
+        assert requirement in worksheet

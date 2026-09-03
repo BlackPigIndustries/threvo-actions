@@ -23,6 +23,13 @@ from threvo_actions.canonical import (
     canonicalize_v1,
     commitment_payload_v1,
 )
+from threvo_actions.experimental import (
+    ActionApplication,
+    ActionComponents,
+    ActionRecipe,
+    ActionSpec,
+    RegisteredAction,
+)
 from threvo_actions.models import (
     ActionType,
     AuthoritativeTarget,
@@ -35,7 +42,6 @@ from threvo_actions.models import (
 )
 from threvo_actions.receipts import ExternalReference
 from threvo_actions.registry import (
-    ActionDefinition,
     AuthorityEvaluation,
     AuthorizationResult,
     DecisionContext,
@@ -49,8 +55,10 @@ from threvo_actions.registry import (
     VerificationResult,
     VerificationStatus,
 )
-from threvo_actions.runtime import ActionOperationResult, ActionRuntime
 from threvo_actions.stores.memory import MemoryActionStore
+
+if TYPE_CHECKING:
+    from threvo_actions.runtime import ActionOperationResult
 
 from .domain import (
     BankDestination,
@@ -977,52 +985,111 @@ class PaymentPorts:
         return False
 
 
+@dataclass(frozen=True)
+class SupplierActionDependencies:
+    store: MemoryActionStore
+    clock: ExampleClock
+    identifiers: SequenceIdentifiers
+    secrets: VaultedExampleSecrets
+    destination_ports: DestinationPorts
+    payment_ports: PaymentPorts
+
+
+def destination_components(
+    dependencies: SupplierActionDependencies,
+) -> ActionComponents[
+    DestinationChangeCommand,
+    DestinationChangeSnapshot,
+    DestinationChangePreview,
+    DestinationChangeResult,
+]:
+    ports = dependencies.destination_ports
+    return ActionComponents(
+        preparation=ports,
+        authorization=ports,
+        authority_evaluator=ports,
+        state_resolver=ports,
+        executor=ports,
+        verifier=ports,
+        commitment_provider=dependencies.secrets,
+        protection_codec=dependencies.secrets,
+        retention=ports,
+        store=dependencies.store,
+        retention_store=dependencies.store,
+        clock=dependencies.clock,
+        identifiers=dependencies.identifiers,
+    )
+
+
+def payment_components(
+    dependencies: SupplierActionDependencies,
+) -> ActionComponents[PaymentCommand, PaymentSnapshot, PaymentPreview, PaymentResult]:
+    ports = dependencies.payment_ports
+    return ActionComponents(
+        preparation=ports,
+        authorization=ports,
+        authority_evaluator=ports,
+        state_resolver=ports,
+        executor=ports,
+        verifier=ports,
+        commitment_provider=dependencies.secrets,
+        protection_codec=dependencies.secrets,
+        retention=ports,
+        store=dependencies.store,
+        retention_store=dependencies.store,
+        clock=dependencies.clock,
+        identifiers=dependencies.identifiers,
+    )
+
+
 class SupplierDestinationApplication:
     def __init__(
         self,
         *,
-        runtime: ActionRuntime,
+        actions: ActionApplication[SupplierActionDependencies],
+        dependencies: SupplierActionDependencies,
+        destination_action: RegisteredAction[
+            DestinationChangeCommand,
+            DestinationChangeSnapshot,
+            DestinationChangePreview,
+            DestinationChangeResult,
+        ],
+        payment_action: RegisteredAction[
+            PaymentCommand,
+            PaymentSnapshot,
+            PaymentPreview,
+            PaymentResult,
+        ],
         store: MemoryActionStore,
         clock: ExampleClock,
         secrets: VaultedExampleSecrets,
         identifiers: SequenceIdentifiers,
         extractions: VersionedExtractionRegistry,
         oob_verifications: OOBVerificationRegistry,
-        destination_definition: ActionDefinition[
-            DestinationChangeCommand,
-            DestinationChangeSnapshot,
-            DestinationChangePreview,
-            DestinationChangeResult,
-        ],
-        payment_definition: ActionDefinition[
-            PaymentCommand,
-            PaymentSnapshot,
-            PaymentPreview,
-            PaymentResult,
-        ],
     ) -> None:
-        self.runtime = runtime
+        self.actions = actions
+        self.dependencies = dependencies
+        self.destination_action = destination_action
+        self.payment_action = payment_action
         self.store = store
         self.clock = clock
         self.secrets = secrets
         self.identifiers = identifiers
         self.extractions = extractions
         self.oob_verifications = oob_verifications
-        self.destination_definition = destination_definition
-        self.payment_definition = payment_definition
 
     async def prepare_destination(
         self,
         command: DestinationChangeCommand,
         identity: InitiatorIdentity,
     ) -> ActionOperationResult:
-        return await self.runtime.prepare(
-            self.destination_definition,
-            tenant_reference=identity.tenant_reference,
-            command=command,
-            requesting_principal=RequestingPrincipal(reference=identity.principal_reference),
-            proposing_agent=ProposingAgent(reference="agent:payables-assistant"),
-        )
+        with self.actions.bind(self.destination_action, dependencies=self.dependencies) as bound:
+            return await bound.prepare(
+                tenant_reference=identity.tenant_reference,
+                command=command,
+                requesting_principal=RequestingPrincipal(reference=identity.principal_reference),
+                proposing_agent=ProposingAgent(reference="agent:payables-assistant"),
+            )
 
     async def register_oob_verification(
         self,
@@ -1092,17 +1159,17 @@ class SupplierDestinationApplication:
             raise LookupError("verification not found")
         evidence = await self._evidence(
             tenant_reference=identity.tenant_reference,
-            action_type=self.destination_definition.action_type,
-            authority_audience=self.destination_definition.authority_audience,
+            action_type=DESTINATION_ACTION,
+            authority_audience=INITIATOR_AUDIENCE,
             proposal_reference=proposal_reference,
             principal_reference=identity.principal_reference,
             channel_assurance="out_of_band_exact_match",
         )
-        return await self.runtime.record_authority(
-            self.destination_definition,
-            evidence=evidence,
-            authenticated_authority=evidence.authority,
-        )
+        with self.actions.bind(self.destination_action, dependencies=self.dependencies) as bound:
+            return await bound.record_authority(
+                evidence=evidence,
+                authenticated_authority=evidence.authority,
+            )
 
     async def execute_destination(
         self, proposal_reference: str, identity: InitiatorIdentity
@@ -1110,13 +1177,13 @@ class SupplierDestinationApplication:
         await self._authorize_trigger(
             proposal_reference,
             identity,
-            action_type=self.destination_definition.action_type,
+            action_type=DESTINATION_ACTION,
         )
-        return await self.runtime.execute(
-            self.destination_definition,
-            tenant_reference=identity.tenant_reference,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.destination_action, dependencies=self.dependencies) as bound:
+            return await bound.execute(
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal_reference,
+            )
 
     async def reconcile_destination(
         self, proposal_reference: str, identity: InitiatorIdentity
@@ -1124,24 +1191,24 @@ class SupplierDestinationApplication:
         await self._authorize_trigger(
             proposal_reference,
             identity,
-            action_type=self.destination_definition.action_type,
+            action_type=DESTINATION_ACTION,
         )
-        return await self.runtime.reconcile(
-            self.destination_definition,
-            tenant_reference=identity.tenant_reference,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.destination_action, dependencies=self.dependencies) as bound:
+            return await bound.reconcile(
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal_reference,
+            )
 
     async def prepare_payment(
         self, command: PaymentCommand, identity: InitiatorIdentity
     ) -> ActionOperationResult:
-        return await self.runtime.prepare(
-            self.payment_definition,
-            tenant_reference=identity.tenant_reference,
-            command=command,
-            requesting_principal=RequestingPrincipal(reference=identity.principal_reference),
-            proposing_agent=ProposingAgent(reference="agent:payables-assistant"),
-        )
+        with self.actions.bind(self.payment_action, dependencies=self.dependencies) as bound:
+            return await bound.prepare(
+                tenant_reference=identity.tenant_reference,
+                command=command,
+                requesting_principal=RequestingPrincipal(reference=identity.principal_reference),
+                proposing_agent=ProposingAgent(reference="agent:payables-assistant"),
+            )
 
     async def record_payment_authority(
         self,
@@ -1152,17 +1219,29 @@ class SupplierDestinationApplication:
         del submission
         evidence = await self._evidence(
             tenant_reference=identity.tenant_reference,
-            action_type=self.payment_definition.action_type,
-            authority_audience=self.payment_definition.authority_audience,
+            action_type=PAYMENT_ACTION,
+            authority_audience=INITIATOR_AUDIENCE,
             proposal_reference=proposal_reference,
             principal_reference=identity.principal_reference,
             channel_assurance="authenticated_session",
         )
-        return await self.runtime.record_authority(
-            self.payment_definition,
-            evidence=evidence,
-            authenticated_authority=evidence.authority,
+        return await self.record_payment_evidence(
+            evidence,
+            proposal_reference=proposal_reference,
         )
+
+    async def record_payment_evidence(
+        self,
+        evidence: AuthorityEvidence,
+        *,
+        proposal_reference: str | None = None,
+    ) -> ActionOperationResult:
+        with self.actions.bind(self.payment_action, dependencies=self.dependencies) as bound:
+            return await bound.record_authority(
+                evidence=evidence,
+                authenticated_authority=evidence.authority,
+                proposal_reference=proposal_reference,
+            )
 
     async def execute_payment(
         self, proposal_reference: str, identity: InitiatorIdentity
@@ -1170,13 +1249,13 @@ class SupplierDestinationApplication:
         await self._authorize_trigger(
             proposal_reference,
             identity,
-            action_type=self.payment_definition.action_type,
+            action_type=PAYMENT_ACTION,
         )
-        return await self.runtime.execute(
-            self.payment_definition,
-            tenant_reference=identity.tenant_reference,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.payment_action, dependencies=self.dependencies) as bound:
+            return await bound.execute(
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal_reference,
+            )
 
     async def reconcile_payment(
         self, proposal_reference: str, identity: InitiatorIdentity
@@ -1184,13 +1263,13 @@ class SupplierDestinationApplication:
         await self._authorize_trigger(
             proposal_reference,
             identity,
-            action_type=self.payment_definition.action_type,
+            action_type=PAYMENT_ACTION,
         )
-        return await self.runtime.reconcile(
-            self.payment_definition,
-            tenant_reference=identity.tenant_reference,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.payment_action, dependencies=self.dependencies) as bound:
+            return await bound.reconcile(
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal_reference,
+            )
 
     async def _destination_snapshot(
         self, tenant_reference: str, proposal_reference: str
@@ -1324,29 +1403,19 @@ async def build_example() -> SupplierDestinationExample:
     secrets = VaultedExampleSecrets()
     clock = ExampleClock()
     store = MemoryActionStore()
-    runtime = ActionRuntime(
-        store=store,
-        retention_store=store,
-        clock=clock,
-        identifiers=identifiers,
-    )
     destination_ports = DestinationPorts(transport, identifiers, extractions)
     payment_ports = PaymentPorts(transport, identifiers)
-    destination_definition = ActionDefinition(
+    destination_specification = ActionSpec[
+        DestinationChangeCommand,
+        DestinationChangeSnapshot,
+        DestinationChangePreview,
+        DestinationChangeResult,
+    ](
         action_type=DESTINATION_ACTION,
         command_model=DestinationChangeCommand,
         private_snapshot_model=DestinationChangeSnapshot,
         display_preview_model=DestinationChangePreview,
         result_model=DestinationChangeResult,
-        preparation=destination_ports,
-        authorization=destination_ports,
-        authority_evaluator=destination_ports,
-        state_resolver=destination_ports,
-        executor=destination_ports,
-        verifier=destination_ports,
-        commitment_provider=secrets,
-        protection_codec=secrets,
-        retention=destination_ports,
         proposal_ttl=timedelta(minutes=10),
         verification_delay=timedelta(0),
         max_verification_attempts=3,
@@ -1357,21 +1426,17 @@ async def build_example() -> SupplierDestinationExample:
         authority_audience=INITIATOR_AUDIENCE,
         authority_channel_assurance="out_of_band_exact_match",
     )
-    payment_definition = ActionDefinition(
+    payment_specification = ActionSpec[
+        PaymentCommand,
+        PaymentSnapshot,
+        PaymentPreview,
+        PaymentResult,
+    ](
         action_type=PAYMENT_ACTION,
         command_model=PaymentCommand,
         private_snapshot_model=PaymentSnapshot,
         display_preview_model=PaymentPreview,
         result_model=PaymentResult,
-        preparation=payment_ports,
-        authorization=payment_ports,
-        authority_evaluator=payment_ports,
-        state_resolver=payment_ports,
-        executor=payment_ports,
-        verifier=payment_ports,
-        commitment_provider=secrets,
-        protection_codec=secrets,
-        retention=payment_ports,
         proposal_ttl=timedelta(minutes=10),
         verification_delay=timedelta(0),
         max_verification_attempts=3,
@@ -1382,16 +1447,35 @@ async def build_example() -> SupplierDestinationExample:
         authority_audience=INITIATOR_AUDIENCE,
         authority_channel_assurance="authenticated_session",
     )
+    dependencies = SupplierActionDependencies(
+        store=store,
+        clock=clock,
+        identifiers=identifiers,
+        secrets=secrets,
+        destination_ports=destination_ports,
+        payment_ports=payment_ports,
+    )
+    actions = ActionApplication[SupplierActionDependencies]()
+    destination_action = actions.register(
+        destination_specification,
+        ActionRecipe(bind=destination_components),
+    )
+    payment_action = actions.register(
+        payment_specification,
+        ActionRecipe(bind=payment_components),
+    )
+    actions.freeze()
     application = SupplierDestinationApplication(
-        runtime=runtime,
+        actions=actions,
+        dependencies=dependencies,
+        destination_action=destination_action,
+        payment_action=payment_action,
         store=store,
         clock=clock,
         secrets=secrets,
         identifiers=identifiers,
         extractions=extractions,
         oob_verifications=OOBVerificationRegistry(),
-        destination_definition=destination_definition,
-        payment_definition=payment_definition,
     )
     initiator_authenticator = InitiatorAuthenticator(
         {

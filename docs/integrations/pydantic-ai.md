@@ -5,7 +5,7 @@ model can propose a command and see a safe preview, but it cannot create
 financial authority or bypass the runtime.
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.1.3"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
 ```
 
 The integration is tested against `pydantic-ai-slim==2.33.0`. It installs no
@@ -27,9 +27,9 @@ executor calls: 1
 
 ## Complete agent
 
-This file imports the [quickstart action](../getting-started/first-action.md),
-which contains the host ports and runtime. Both files are executable in the
-repository.
+This file imports the production-shaped refund reference application used by
+the [quickstart](../getting-started/first-action.md). Both files are executable
+from the source distribution.
 
 ```python
 --8<-- "examples/docs/pydantic_ai_agent.py"
@@ -37,15 +37,17 @@ repository.
 
 ## What the integration does
 
-1. `ActionToolBinding` exposes only `RefundCommand` as the model-visible schema.
+1. `ScopedActionToolBinding` exposes only `RefundCommand` as the model-visible
+   schema and enters a fresh host-owned dependency scope for every call.
    Tenant, requester, evidence consumer, authority, private state, executor,
    and verifier are not tool arguments.
 2. The first tool call prepares a proposal and raises Pydantic AI's deferred
    approval request with safe metadata.
 3. The host authority handler authenticates and authorizes the confirmer, then
    records bound `AuthorityEvidence` in the action runtime.
-4. Pydantic AI resumes the tool call. The capability resolves trusted context
-   again and asks the runtime to execute the stored proposal.
+4. Pydantic AI resumes the tool call in a later dependency scope. The
+   capability resolves trusted context again, binds the registered action, and
+   executes the durable proposal. No prior bound runtime is reusable.
 5. If execution is immediately due for verification, the capability performs
    one reconciliation attempt and returns a display-safe `ActionToolResult`.
 
@@ -100,8 +102,15 @@ inline handler without calling `record_authority()` still leaves the proposal
 - Do not use `ToolApproved.override_args` to change a prepared action.
 - Render previews and results from the stored proposal, not model prose.
 - Treat only `verified` as authoritative completion.
-- Schedule later `runtime.reconcile()` calls when the capability returns
-  `verification_pending`.
+- Schedule later reconciliation through the same registered action and fresh
+  host dependency scope when the capability returns `verification_pending`.
+- Raise `ApprovalRequired` only after the prepare scope exits successfully so
+  a host transaction can commit. Real exceptions and cancellation must leave
+  through the exceptional scope path and roll back.
+
+Existing applications may continue to use `ActionToolBinding` with a fixed
+expert runtime. Registering an `ActionRecipe` never exposes a tool by itself;
+tool exposure remains an explicit integration decision.
 
 See the [Pydantic AI API reference](../reference/pydantic-ai.md) for every
 integration type.

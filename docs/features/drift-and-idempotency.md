@@ -6,7 +6,7 @@ execution, the runtime asks the host to resolve current state again.
 ## Refuse material drift
 
 ```python
---8<-- "examples/docs/quickstart.py:drift"
+--8<-- "examples/refund/app.py:host-resolve"
 ```
 
 If `materially_drifted=True`, the original proposal becomes `stale` and the

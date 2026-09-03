@@ -42,6 +42,24 @@ def test_parse_published_artifacts_rejects_unapproved_download_host() -> None:
         verifier.parse_published_artifacts(payload)
 
 
+def test_parse_published_artifacts_keeps_repository_hosts_separate() -> None:
+    payload = {
+        "urls": [
+            {
+                "filename": "threvo_actions-0.1.4-py3-none-any.whl",
+                "url": "https://files.pythonhosted.org/packages/artifact.whl",
+                "digests": {"sha256": "a" * 64},
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="approved HTTPS host"):
+        verifier.parse_published_artifacts(
+            payload,
+            allowed_file_hosts=verifier.INDEX_FILE_HOSTS["test.pypi.org"],
+        )
+
+
 def test_verify_index_artifacts_matches_metadata_and_raw_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

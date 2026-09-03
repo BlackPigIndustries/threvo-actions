@@ -11,20 +11,21 @@ examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
 integrations, and the full API reference.
 
 > [!IMPORTANT]
-> Version `0.1.3` supports its documented Python API and CLI throughout the
-> `0.1.x` line. Receipt serialization, canonicalization, database schemas, and
-> the example cross-service envelope remain experimental interoperability
-> surfaces. Read the [versioning policy](docs/versioning.md) before upgrading.
+> Version `0.1.4` supports its root Python API and CLI throughout the `0.1.x`
+> line. The namespaced gradual-reveal API, receipt serialization,
+> canonicalization, database schemas, and the example cross-service envelope
+> remain experimental. Read the [versioning policy](docs/versioning.md) before
+> upgrading.
 
 ## Installation
 
 Python 3.11 through 3.13 is supported.
 
 ```bash
-python -m pip install "threvo-actions==0.1.3"
+python -m pip install "threvo-actions==0.1.4"
 ```
 
-Install only after the signed `v0.1.3` tag completes the TestPyPI and PyPI
+Install only after the signed `v0.1.4` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
@@ -33,10 +34,10 @@ optional. SQLite uses the Python standard library and is included in the base
 installation:
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.3"
-python -m pip install "threvo-actions[mysql]==0.1.3"
-python -m pip install "threvo-actions[sqlalchemy]==0.1.3"
-python -m pip install "threvo-actions[pydantic-ai]==0.1.3"
+python -m pip install "threvo-actions[postgres]==0.1.4"
+python -m pip install "threvo-actions[mysql]==0.1.4"
+python -m pip install "threvo-actions[sqlalchemy]==0.1.4"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
 ```
 
 The distribution also bundles an Agent Skills-compatible guide for coding
@@ -55,8 +56,10 @@ and global installation options.
 
 The package provides strict, immutable Pydantic v2 boundary models plus an
 ordinary-Python confirm-first runtime and concurrency-correct in-memory store.
-Applications can author one typed `Action` and compile it to the public
-`ActionDefinition` used by the runtime. Its explicit ports own
+New integrations can use the namespaced experimental `ActionApplication` and
+`ActionSpec` surface with fresh operation-scoped dependencies. Existing hosts
+can author one typed `Action` or build the public `ActionDefinition` directly.
+All three paths compile to the same expert runtime. Its explicit ports own
 preparation, live authorization, authority evaluation, state re-resolution,
 atomic execution, authoritative verification, snapshot protection, keyed
 commitments, and retention decisions.

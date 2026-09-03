@@ -49,3 +49,12 @@ def test_documented_conformance_helpers_are_importable() -> None:
         "assert_no_sensitive_data",
     ):
         assert callable(getattr(conformance, name))
+
+
+def test_skill_prefers_the_namespaced_gradual_reveal_surface() -> None:
+    skill = (SKILL_ROOT / "SKILL.md").read_text()
+
+    assert "ActionApplication" in skill
+    assert "ActionSpec" in skill
+    assert "ScopedActionToolBinding" in skill
+    assert "Prefer `Action[" not in skill

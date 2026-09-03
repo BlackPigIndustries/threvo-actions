@@ -279,16 +279,33 @@ def assert_definition_conforms(
 ) -> None:
     """Reject declared model shapes that cannot satisfy the runtime boundary."""
 
+    assert_boundary_models_conform(
+        command_model=definition.command_model,
+        private_snapshot_model=definition.private_snapshot_model,
+        display_preview_model=definition.display_preview_model,
+        result_model=definition.result_model,
+    )
+
+
+def assert_boundary_models_conform(
+    *,
+    command_model: type[BaseModel],
+    private_snapshot_model: type[BaseModel],
+    display_preview_model: type[BaseModel],
+    result_model: type[BaseModel],
+) -> None:
+    """Validate the model-only portion of an action definition contract."""
+
     boundary_models = (
-        ("command model", definition.command_model),
-        ("private snapshot model", definition.private_snapshot_model),
-        ("display preview model", definition.display_preview_model),
-        ("result model", definition.result_model),
+        ("command model", command_model),
+        ("private snapshot model", private_snapshot_model),
+        ("display preview model", display_preview_model),
+        ("result model", result_model),
     )
     for role, model in boundary_models:
         _assert_boundary_model_config(role=role, model=model)
 
-    float_paths = _floating_point_field_paths(definition.private_snapshot_model)
+    float_paths = _floating_point_field_paths(private_snapshot_model)
     if float_paths:
         paths = ", ".join(float_paths)
         raise DefinitionConformanceError(

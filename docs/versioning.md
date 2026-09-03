@@ -40,6 +40,8 @@ migration is one such acknowledgement; it does not affect fresh bootstrap.
 The following are not cross-implementation standards and may change in a later
 minor `0.x` release with a migration note:
 
+- the namespaced gradual-reveal authoring API in
+  `threvo_actions.experimental`;
 - `internal/v0` receipt JSON and the canonicalization profile;
 - physical PostgreSQL, MySQL, and SQLite table or procedure layout;
 - migration file internals, except that an applied migration is immutable;
@@ -49,6 +51,40 @@ minor `0.x` release with a migration note:
 Persisted rows remain upgradeable through the adapter's explicit migration
 path. An experimental wire shape must not be exchanged between independently
 versioned systems without an application-owned compatibility agreement.
+
+### Gradual-reveal compatibility window
+
+The `threvo_actions.experimental` support and evaluation window lasts 120 days
+from publication of `0.1.4`. During that window, `0.1.x` patch
+revisions may add names or make fail-closed correctness fixes, but they will not
+silently reinterpret an existing `ActionSpec`, make a valid typed recipe grant
+more authority, or move the surface into the package root. Applications must
+still pin an exact revision and re-run their action equivalence tests before
+upgrading.
+
+The support decision is evidence-driven. It requires the published DX protocol,
+production consumer equivalence, transaction and tenant isolation, rollback
+compatibility, and post-adoption qualification. Every failed or assisted
+evaluation attempt remains part of the record. The first review is due no later
+than 120 days after publication; lack of evidence does not convert the surface
+to stable by default.
+
+A revision decision may keep the namespace experimental and publish a new
+minor-line migration note. A retirement decision must name an owner, publish a
+dated migration back to `Action` or `ActionDefinition`, and preserve durable
+proposal and receipt compatibility. Existing names remain available through
+the announced retirement window unless an immediate security or correctness
+failure requires fail-closed removal.
+
+The stable promotion decision is separate from support. It requires either a second real
+production action or an external design partner, the independent-human absolute
+DX gates, and completed post-adoption safety evidence. Promotion is always an
+explicit documented release; it never occurs merely because the 120-day window
+elapsed.
+
+PostgreSQL is the reference durable adapter. MySQL and SQLite remain supported
+at their documented tiers, but new authoring-layer work does not imply new
+schema features or broaden their deployment guarantees.
 
 Each immutable packaged migration declares whether it expands or contracts the
 schema contract, whether the preceding runtime remains compatible, and whether

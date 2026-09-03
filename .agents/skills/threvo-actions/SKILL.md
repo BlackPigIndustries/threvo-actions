@@ -4,7 +4,7 @@ description: Build or integrate accountable financial actions with the threvo-ac
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.1.3"
+  version: "0.1.4"
 ---
 
 # Threvo Actions
@@ -36,11 +36,16 @@ successful HTTP response.
 
 ## Choose the authoring surface
 
-- Prefer `Action[Command, Snapshot, Preview, Result]` for a new action. It keeps
-  one typed host object while compiling to the same `ActionDefinition` used by
-  the runtime.
-- Build `ActionDefinition` directly only when the host already owns the ports
-  as separate services or adapters. Do not introduce a second lifecycle.
+- Prefer the experimental `ActionApplication` plus a strict `ActionSpec` for a
+  new integration. Register a typed `ActionRecipe` explicitly, freeze the
+  catalog, and bind fresh host dependencies for each operation. This gradual-
+  reveal surface compiles to the same expert runtime and cannot grant policy.
+- Use `Action[Command, Snapshot, Preview, Result]` when one host object already
+  owns every action port. Build `ActionDefinition` directly when the host owns
+  the ports as separate expert-level adapters. Do not introduce a second
+  lifecycle.
+- Call `application.inspect(handle)` for static, allowlisted configuration
+  inspection. It does not contact stores, run recipes, or report readiness.
 - Use `effect_kind="single"` for one indivisible effect. Use `"itemized"` only
   when the target and verifier can identify every item outcome.
 
@@ -107,8 +112,11 @@ as `AuthorityEvidence`.
 ## Add an agent framework only at the edge
 
 The core action must run without an agent framework. For Pydantic AI, use the
-optional `ActionCapability` and build `ActionAgentContext` from authenticated
-server dependencies, never tool arguments. Read
+optional `ActionCapability`. Prefer `ScopedActionToolBinding` so every prepare
+or deferred resume enters a fresh host-owned dependency scope, then build
+`ActionAgentContext` from those authenticated dependencies, never tool
+arguments. The fixed-runtime binding remains available for already composed
+expert integrations. Read
 [references/pydantic-ai.md](references/pydantic-ai.md) for the current wiring
 and deferred-resume trust boundary.
 

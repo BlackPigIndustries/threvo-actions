@@ -9,15 +9,16 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from threvo_actions import (
-    ActionDefinition,
     ActionOperationResult,
-    ActionRuntime,
+    ActionStore,
     ActionType,
     AuthoritativeTarget,
     AuthorityDecision,
     AuthorityEvaluation,
     AuthorityEvidence,
     AuthorizationResult,
+    Clock,
+    CommitmentProvider,
     ConfirmingAuthority,
     DecisionContext,
     ExecutionContext,
@@ -25,19 +26,30 @@ from threvo_actions import (
     ExecutionStatus,
     ExternalReference,
     GovernedExecutor,
+    IdentifierProvider,
     KeyedCommitment,
     MemoryActionStore,
     Money,
     PreparationContext,
     PreparedAction,
+    ProposalView,
     ProposingAgent,
     ProtectedPayload,
+    ProtectionCodec,
     ReadContext,
     RequestingPrincipal,
     ResolvedState,
+    RetentionStore,
     RuntimeEvent,
     VerificationResult,
     VerificationStatus,
+)
+from threvo_actions.experimental import (
+    ActionApplication,
+    ActionComponents,
+    ActionRecipe,
+    ActionSpec,
+    RegisteredAction,
 )
 
 from .domain import (
@@ -163,6 +175,7 @@ class RefundHost:
         self._intents: dict[str, tuple[str, Money]] = {}
         self._target_bindings: dict[str, tuple[str, str, Money]] = {}
 
+    # --8<-- [start:host-prepare]
     async def prepare(
         self, command: RefundCommand, *, context: PreparationContext
     ) -> PreparedAction[RefundSnapshot, RefundPreview]:
@@ -186,6 +199,8 @@ class RefundHost:
             order_version=order.version,
         )
         return self._prepared(snapshot)
+
+    # --8<-- [end:host-prepare]
 
     async def can_prepare(
         self, command: RefundCommand, *, context: PreparationContext
@@ -239,6 +254,7 @@ class RefundHost:
             reason_code=None if approved else "finance_manager_required",
         )
 
+    # --8<-- [start:host-resolve]
     async def resolve(
         self, snapshot: RefundSnapshot, *, context: ExecutionContext
     ) -> ResolvedState[RefundSnapshot, RefundPreview]:
@@ -270,6 +286,8 @@ class RefundHost:
             materially_drifted=drifted,
             replacement=replacement,
         )
+
+    # --8<-- [end:host-resolve]
 
     async def execute(
         self,
@@ -418,9 +436,44 @@ class RefundHost:
 
 
 @dataclass(frozen=True)
+class RefundDependencies:
+    store: ActionStore
+    retention_store: RetentionStore
+    clock: Clock
+    identifiers: IdentifierProvider
+    host: RefundHost
+    commitment_provider: CommitmentProvider
+    protection_codec: ProtectionCodec
+    events: CapturingEvents
+
+
+def refund_components(
+    dependencies: RefundDependencies,
+) -> ActionComponents[RefundCommand, RefundSnapshot, RefundPreview, RefundResult]:
+    return ActionComponents(
+        preparation=dependencies.host,
+        authorization=dependencies.host,
+        authority_evaluator=dependencies.host,
+        state_resolver=dependencies.host,
+        executor=dependencies.host,
+        verifier=dependencies.host,
+        commitment_provider=dependencies.commitment_provider,
+        protection_codec=dependencies.protection_codec,
+        retention=dependencies.host,
+        store=dependencies.store,
+        retention_store=dependencies.retention_store,
+        clock=dependencies.clock,
+        identifiers=dependencies.identifiers,
+        event_sink=dependencies.events,
+    )
+
+
+@dataclass(frozen=True)
 class RefundApplication:
-    runtime: ActionRuntime
-    action: ActionDefinition[RefundCommand, RefundSnapshot, RefundPreview, RefundResult]
+    actions: ActionApplication[RefundDependencies]
+    refund: RegisteredAction[RefundCommand, RefundSnapshot, RefundPreview, RefundResult]
+    specification: ActionSpec[RefundCommand, RefundSnapshot, RefundPreview, RefundResult]
+    dependencies: RefundDependencies
     store: MemoryActionStore
     clock: MutableClock
     host: RefundHost
@@ -429,13 +482,13 @@ class RefundApplication:
     events: CapturingEvents
 
     async def prepare(self, command: RefundCommand) -> ActionOperationResult:
-        return await self.runtime.prepare(
-            self.action,
-            tenant_reference=TENANT,
-            command=command,
-            requesting_principal=REQUESTER,
-            proposing_agent=PROPOSING_AGENT,
-        )
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.prepare(
+                tenant_reference=TENANT,
+                command=command,
+                requesting_principal=REQUESTER,
+                proposing_agent=PROPOSING_AGENT,
+            )
 
     async def approve(self, proposal_reference: str) -> ActionOperationResult:
         record = await self.store.get(TENANT, proposal_reference)
@@ -455,25 +508,42 @@ class RefundApplication:
             issued_at=now,
             expires_at=now + timedelta(minutes=5),
         )
-        return await self.runtime.record_authority(
-            self.action,
-            evidence=evidence,
-            authenticated_authority=FINANCE_MANAGER,
-        )
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.record_authority(
+                evidence=evidence,
+                authenticated_authority=FINANCE_MANAGER,
+            )
 
     async def execute(self, proposal_reference: str) -> ActionOperationResult:
-        return await self.runtime.execute(
-            self.action,
-            tenant_reference=TENANT,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.execute(
+                tenant_reference=TENANT,
+                proposal_reference=proposal_reference,
+            )
 
     async def reconcile(self, proposal_reference: str) -> ActionOperationResult:
-        return await self.runtime.reconcile(
-            self.action,
-            tenant_reference=TENANT,
-            proposal_reference=proposal_reference,
-        )
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.reconcile(
+                tenant_reference=TENANT,
+                proposal_reference=proposal_reference,
+            )
+
+    async def expire_due(self, proposal_reference: str) -> ActionOperationResult:
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.expire_due(
+                tenant_reference=TENANT,
+                proposal_reference=proposal_reference,
+            )
+
+    async def read(self, proposal_reference: str, *, context: ReadContext) -> ProposalView:
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.read(proposal_reference=proposal_reference, context=context)
+
+    async def erase(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionOperationResult:
+        with self.actions.bind(self.refund, dependencies=self.dependencies) as bound:
+            return await bound.erase(proposal_reference=proposal_reference, context=context)
 
 
 def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication:
@@ -481,21 +551,13 @@ def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication
     target = psp or FakePSP()
     host = RefundHost(ledger=ledger, psp=target, tenant_reference=TENANT)
     protection = InMemoryProtection()
-    action = ActionDefinition(
+    # --8<-- [start:action-specification]
+    specification = ActionSpec[RefundCommand, RefundSnapshot, RefundPreview, RefundResult](
         action_type=ACTION_TYPE,
         command_model=RefundCommand,
         private_snapshot_model=RefundSnapshot,
         display_preview_model=RefundPreview,
         result_model=RefundResult,
-        preparation=host,
-        authorization=host,
-        authority_evaluator=host,
-        state_resolver=host,
-        executor=host,
-        verifier=host,
-        commitment_provider=protection,
-        protection_codec=protection,
-        retention=host,
         proposal_ttl=timedelta(minutes=10),
         verification_delay=timedelta(seconds=5),
         max_verification_attempts=4,
@@ -506,19 +568,30 @@ def build_refund_application(*, psp: FakePSP | None = None) -> RefundApplication
         authority_audience=AUTHORITY_AUDIENCE,
         authority_channel_assurance=CHANNEL_ASSURANCE,
     )
+    # --8<-- [end:action-specification]
     store = MemoryActionStore()
     clock = MutableClock()
     events = CapturingEvents()
-    runtime = ActionRuntime(
+    dependencies = RefundDependencies(
         store=store,
         retention_store=store,
         clock=clock,
         identifiers=SequenceIdentifiers(),
-        event_sink=events,
+        host=host,
+        commitment_provider=protection,
+        protection_codec=protection,
+        events=events,
     )
+    # --8<-- [start:action-registration]
+    actions = ActionApplication[RefundDependencies]()
+    refund = actions.register(specification, ActionRecipe(bind=refund_components))
+    actions.freeze()
+    # --8<-- [end:action-registration]
     return RefundApplication(
-        runtime=runtime,
-        action=action,
+        actions=actions,
+        refund=refund,
+        specification=specification,
+        dependencies=dependencies,
         store=store,
         clock=clock,
         host=host,

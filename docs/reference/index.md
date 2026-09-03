@@ -6,9 +6,11 @@ database or agent framework.
 
 !!! info "Versioned support"
 
-    Version `0.1.3` freezes the documented Python imports and CLI for the
-    `0.1.x` line. Serialized interoperability forms remain experimental. See
-    [Versioning](../versioning.md).
+    Version `0.1.4` preserves the root Python imports and CLI for the `0.1.x`
+    line. The documented `threvo_actions.experimental` namespace follows its
+    separate 120-day evaluation window; it is intentionally absent from the
+    root export. Serialized interoperability forms also remain experimental.
+    See [Versioning](../versioning.md).
 
 ::: threvo_actions
     options:

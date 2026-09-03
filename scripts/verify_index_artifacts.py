@@ -18,8 +18,17 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 TEST_PYPI_JSON_TEMPLATE = "https://test.pypi.org/pypi/threvo-actions/{version}/json"
-ALLOWED_INDEX_HOSTS = frozenset({"test.pypi.org"})
-ALLOWED_FILE_HOSTS = frozenset({"test-files.pythonhosted.org"})
+PYPI_JSON_TEMPLATE = "https://pypi.org/pypi/threvo-actions/{version}/json"
+INDEX_JSON_TEMPLATES = {
+    "testpypi": TEST_PYPI_JSON_TEMPLATE,
+    "pypi": PYPI_JSON_TEMPLATE,
+}
+ALLOWED_INDEX_HOSTS = frozenset({"pypi.org", "test.pypi.org"})
+INDEX_FILE_HOSTS = {
+    "pypi.org": frozenset({"files.pythonhosted.org"}),
+    "test.pypi.org": frozenset({"test-files.pythonhosted.org"}),
+}
+ALLOWED_FILE_HOSTS = frozenset({"files.pythonhosted.org", "test-files.pythonhosted.org"})
 
 
 @dataclass(frozen=True)
@@ -46,7 +55,11 @@ def parse_manifest(path: Path) -> dict[str, str]:
     return entries
 
 
-def parse_published_artifacts(payload: object) -> dict[str, PublishedArtifact]:
+def parse_published_artifacts(
+    payload: object,
+    *,
+    allowed_file_hosts: frozenset[str] = ALLOWED_FILE_HOSTS,
+) -> dict[str, PublishedArtifact]:
     """Extract the immutable artifact identity fields from PyPI JSON."""
     root = _require_mapping(payload, "index response")
     urls = root.get("urls")
@@ -64,7 +77,7 @@ def parse_published_artifacts(payload: object) -> dict[str, PublishedArtifact]:
             raise ValueError(f"artifact {position} has an invalid identity")
         if filename in artifacts:
             raise ValueError(f"index returned duplicate artifact: {filename}")
-        _require_https_host(url, ALLOWED_FILE_HOSTS, "artifact URL")
+        _require_https_host(url, allowed_file_hosts, "artifact URL")
         artifacts[filename] = PublishedArtifact(filename, sha256.lower(), url)
     if not artifacts:
         raise ValueError("index returned no artifacts")
@@ -83,12 +96,18 @@ def verify_index_artifacts(*, version: str, release: Path, json_url: str) -> dic
             raise ValueError(f"local artifact digest differs: {filename}")
 
     _require_https_host(json_url, ALLOWED_INDEX_HOSTS, "index JSON URL")
+    index_host = urlparse(json_url).hostname
+    if index_host is None:
+        raise ValueError("index JSON URL has no host")
     payload: object = json.loads(_download(json_url))
     root = _require_mapping(payload, "index response")
     info = _require_mapping(root.get("info"), "index project metadata")
     if info.get("version") != version:
         raise ValueError("index project version differs from the requested release")
-    published = parse_published_artifacts(payload)
+    published = parse_published_artifacts(
+        payload,
+        allowed_file_hosts=INDEX_FILE_HOSTS[index_host],
+    )
     if set(published) != set(manifest):
         raise ValueError("published artifact files differ from the release manifest")
 
@@ -151,6 +170,7 @@ def _is_hex(value: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
+    parser.add_argument("--repository", choices=sorted(INDEX_JSON_TEMPLATES), default="testpypi")
     parser.add_argument("--release", type=Path, default=Path("release"))
     parser.add_argument("--attempts", type=int, default=12)
     parser.add_argument("--delay", type=float, default=10.0)
@@ -158,7 +178,7 @@ def main() -> int:
     if args.attempts < 1 or args.delay < 0:
         parser.error("attempts must be positive and delay must be non-negative")
 
-    json_url = TEST_PYPI_JSON_TEMPLATE.format(version=args.version)
+    json_url = INDEX_JSON_TEMPLATES[args.repository].format(version=args.version)
     last_error: ValueError | HTTPError | URLError | json.JSONDecodeError | None = None
     for attempt in range(1, args.attempts + 1):
         try:

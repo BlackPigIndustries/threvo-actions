@@ -4,7 +4,7 @@ Read this only when the host uses Pydantic AI. In an application, install the
 published optional extra:
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.1.3"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
 ```
 
 When contributing from a source checkout, install its locked integration
@@ -22,11 +22,11 @@ from pydantic_ai import Agent, DeferredToolRequests
 from threvo_actions.integrations.pydantic_ai import (
     ActionAgentContext,
     ActionCapability,
-    ActionToolBinding,
+    ScopedActionToolBinding,
 )
 
 
-def action_context(deps: Dependencies) -> ActionAgentContext:
+def action_context(deps: ActionDependencies) -> ActionAgentContext:
     return ActionAgentContext(
         tenant_reference=deps.authenticated_tenant_reference,
         requesting_principal=deps.requesting_principal,
@@ -35,16 +35,18 @@ def action_context(deps: Dependencies) -> ActionAgentContext:
     )
 
 
-binding = ActionToolBinding(
-    definition=action.to_definition(),
+binding = ScopedActionToolBinding(
+    application=application,
+    action=registered_action,
+    dependency_scope=action_dependency_scope,
     context_resolver=action_context,
     name="release_payment",
     description="Prepare a payment release and show a safe preview.",
 )
-actions = ActionCapability[Dependencies](runtime=runtime, bindings=[binding])
+actions = ActionCapability[RequestDependencies](bindings=[binding])
 agent = Agent(
     model,
-    deps_type=Dependencies,
+    deps_type=RequestDependencies,
     output_type=[str, DeferredToolRequests],
     capabilities=[actions],
 )
@@ -52,6 +54,13 @@ agent = Agent(
 
 The command model is the model-visible tool schema. Tenant, user, authority,
 private snapshot, executor, and verifier must not be tool arguments.
+
+`action_dependency_scope` is a host async context-manager factory. It must
+open fresh transaction/request dependencies for every prepare and deferred
+resume. The capability exits that scope successfully before raising
+`ApprovalRequired`; real exceptions and cancellation leave through the
+exceptional path. Existing expert integrations may retain `ActionToolBinding`
+with an explicit fixed `ActionRuntime`.
 
 ## Deferred authority
 
