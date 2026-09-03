@@ -70,5 +70,7 @@ def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
         "candidate run ID",
         "Workflow-built wheel",
         "workflow-built source-distribution",
+        "wall-clock, validated paused, and scored elapsed minutes",
+        "absolute gates use scored elapsed time",
     ):
         assert requirement in worksheet

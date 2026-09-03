@@ -48,17 +48,19 @@ Pending. Every attempt must record:
 | Candidate workflow | Exact GitHub Actions candidate run ID and run URL |
 | Candidate artifacts | Workflow-built wheel filename and SHA-256; workflow-built source-distribution filename and SHA-256 |
 | Fixture and methodology | Exact commits/revisions |
-| Start, end, pauses | ISO 8601 timestamps, monotonic elapsed, validated pause log |
+| Timing | ISO 8601 start/end; monotonic start/end; wall-clock, validated paused, and scored elapsed minutes; pause intervals and reasons |
 | Assistance and failures | Complete facilitator/tool assistance and failure log |
 | Acceptance | Command, output artifact, and all nine safety outcomes |
 | Wiring | Eligible files/line spans, added LOC, exclusions, and expert/candidate delta |
 | Result | Absolute gates, at least 30% wiring reduction, and pass/fail |
 
-The absolute gates are: first action at most 60 minutes; fifth action at most
-30 minutes and at most 500 eligible host lines; all nine production-safety
-conditions pass; and eligible definition/composition wiring falls by at least
-30% versus the expert baseline. Shared infrastructure and marginal action cost
-are reported separately.
+Scored elapsed minutes are the monotonic elapsed duration minus only the
+facilitator-caused pauses allowed by the methodology's clock and pause rules.
+The absolute gates use scored elapsed time: first action at most 60 minutes;
+fifth action at most 30 minutes and at most 500 eligible host lines; all nine
+production-safety conditions pass; and eligible definition/composition wiring
+falls by at least 30% versus the expert baseline. Shared infrastructure and
+marginal action cost are reported separately.
 
 ## Ledger entries
 
