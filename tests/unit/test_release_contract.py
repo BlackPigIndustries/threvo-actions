@@ -99,7 +99,9 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     assert "name: release-review" in workflow
     assert "must point to the candidate source commit" in workflow
     assert "sha256sum --check --strict" in workflow
-    assert "Promotion gate: **passed**" in workflow
+    assert 'expected_promotion_gate="Promotion gate: **passed**;' in workflow
+    assert 'release=$RELEASE_TAG; candidate_source=$SOURCE_COMMIT"' in workflow
+    assert 'grep -Fxc -- "$expected_promotion_gate" adoption-evidence.md' in workflow
     assert "release-distributions" in workflow
 
 

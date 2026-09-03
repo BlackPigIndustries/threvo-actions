@@ -3,7 +3,7 @@
 Status: **awaiting an independent participant and workflow-built `0.1.4`
 candidate**
 
-Promotion gate: **pending**
+Promotion gate: **pending**; release=v0.1.4; candidate_source=pending
 
 This is the append-only evidence ledger for the expert baseline and every
 gradual-reveal candidate attempt. A local source run, maintainer trial, or AI
@@ -26,6 +26,13 @@ must remain recoverable.
 A failed or assisted attempt stays visible. Remediation requires a new source
 commit, a rebuilt wheel, and a new independent participant. Timestamps are
 timezone-aware and include both wall-clock and monotonic elapsed time.
+
+The one top-level promotion marker is release-specific. Set it to exactly
+`Promotion gate: **passed**; release=vX.Y.Z; candidate_source=<40-character
+commit>` only when the ledger qualifies that release's exact workflow-built
+candidate. Historical entries do not contain top-level promotion markers, and
+the release workflow requires exactly one marker matching its release tag and
+candidate source commit.
 
 ## Expert baseline
 
