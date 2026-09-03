@@ -613,7 +613,14 @@ class ActionCapability(AbstractCapability[DepsT]):
         return (
             "Financial action tools prepare a proposal before they can execute. "
             "A framework approval request is not proof of financial authority. "
-            "Treat an effect as complete only when the tool outcome is verified."
+            "Interpret outcomes conservatively. Do not retry binding_unavailable or "
+            "operation_outcome_unknown; the host must diagnose or reconcile them. "
+            "For invalid_continuation, stop and ask the host for a fresh continuation. "
+            "Do not retry preparation_denied unless trusted host context changes. "
+            "prepared_not_visible means a durable proposal exists but must remain hidden; "
+            "do not retry, expose it, or continue it from model context. "
+            "verification_pending and failed_unknown are incomplete and require host "
+            "reconciliation, never a blind resend. Only verified proves completion."
         )
 
     def get_toolset(self) -> FunctionToolset[DepsT]:

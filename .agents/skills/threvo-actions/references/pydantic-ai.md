@@ -70,6 +70,14 @@ text, causes, tracebacks, or locals. Do not retry those outcomes from the model.
 Existing expert integrations may retain `ActionToolBinding` with an explicit
 fixed `ActionRuntime`.
 
+`ActionCapability` places the complete conservative outcome policy into the
+model instructions. `invalid_continuation` stops until the host provides a
+fresh continuation. Retry `preparation_denied` only after trusted host context
+changes. Never retry `binding_unavailable`, `operation_outcome_unknown`,
+`prepared_not_visible`, `verification_pending`, or `failed_unknown` from the
+model. The host diagnoses or reconciles them, and only `verified` proves
+completion.
+
 If preparation succeeds but the evidence consumer cannot read the resulting
 proposal, the capability returns `prepared_not_visible` without its reference,
 status, or preview. This is not `preparation_denied`: the proposal is durable

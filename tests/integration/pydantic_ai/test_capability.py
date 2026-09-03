@@ -121,5 +121,14 @@ def test_test_model_sees_only_the_declared_command_schema_and_safe_instructions(
         assert instruction_parts is not None
         instructions = " ".join(str(part.content) for part in instruction_parts)
         assert "framework approval request is not proof" in instructions
+        assert "binding_unavailable" in instructions
+        assert "operation_outcome_unknown" in instructions
+        assert "invalid_continuation" in instructions
+        assert "preparation_denied" in instructions
+        assert "prepared_not_visible" in instructions
+        assert "verification_pending" in instructions
+        assert "failed_unknown" in instructions
+        assert "Only verified" in instructions
+        assert "Do not retry" in instructions
 
     asyncio.run(scenario())

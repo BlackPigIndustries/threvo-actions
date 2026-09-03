@@ -21,6 +21,9 @@ and uses Semantic Versioning for the supported surface described in
 - Complete proposal-bound provider ports now receive a tenant-scoped
   `ProposalIdentity` for every operation. Wrapped-key stores implement atomic
   conditional deletion instead of a separate read/delete sequence.
+- Pydantic AI capability instructions now tell models how to stop, defer to the
+  host, or reconcile every non-success outcome instead of naming only the
+  verified completion condition.
 
 ### Security
 

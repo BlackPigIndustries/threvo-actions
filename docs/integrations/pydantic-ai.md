@@ -63,6 +63,14 @@ never completed, or `operation_outcome_unknown` when scope cleanup failed after
 an operation ran. Models must not retry either outcome; the host owns diagnosis
 and reconciliation.
 
+The capability supplies the same fail-closed outcome rules as model-visible
+instructions, rather than relying on application prompt authors to reproduce
+them. `invalid_continuation` stops the flow until the host supplies a fresh
+continuation. `preparation_denied` is retried only after trusted host context
+changes. `prepared_not_visible` remains hidden and is not continued from model
+context. `verification_pending` and `failed_unknown` require host
+reconciliation, never a blind resend. Only `verified` proves completion.
+
 If preparation succeeds but the current evidence consumer cannot read the new
 proposal, the tool returns `prepared_not_visible` without a proposal reference,
 lifecycle status, or preview. This is distinct from `preparation_denied`: the
