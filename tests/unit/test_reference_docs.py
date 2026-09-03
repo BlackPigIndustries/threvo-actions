@@ -72,5 +72,13 @@ def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
         "workflow-built source-distribution",
         "wall-clock, validated paused, and scored elapsed minutes",
         "absolute gates use scored elapsed time",
+        "Support review entries",
+        "Production consumer",
+        "Post-adoption window",
+        "no unresolved",
+        "safety anomaly",
     ):
         assert requirement in worksheet
+
+    versioning = (ROOT / "docs" / "versioning.md").read_text()
+    assert "gradual-reveal-adoption.md#support-review-entries" in versioning

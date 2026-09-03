@@ -64,10 +64,14 @@ upgrading.
 
 The support decision is evidence-driven. It requires the published DX protocol,
 production consumer equivalence, transaction and tenant isolation, rollback
-compatibility, and post-adoption qualification. Every failed or assisted
-evaluation attempt remains part of the record. The first review is due no later
-than 120 days after publication; lack of evidence does not convert the surface
-to stable by default.
+compatibility, and post-adoption qualification. Record each condition, its
+acceptance command and output, the production observation window, and the
+resulting decision in the append-only
+[gradual-reveal adoption and support ledger](testing/gradual-reveal-adoption.md#support-review-entries).
+Every failed or assisted evaluation attempt remains part of the record. The
+first review is due no later than 120 days after publication; lack of evidence,
+a failed required condition, or an unresolved safety anomaly cannot produce a
+support decision by default.
 
 A revision decision may keep the namespace experimental and publish a new
 minor-line migration note. A retirement decision must name an owner, publish a

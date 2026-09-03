@@ -62,6 +62,24 @@ production-safety conditions pass; and eligible definition/composition wiring
 falls by at least 30% versus the expert baseline. Shared infrastructure and
 marginal action cost are reported separately.
 
+## Support review entries
+
+The 120-day experimental support decision is a separate hash-linked entry in
+this ledger. It must record:
+
+| Field | Required value |
+| --- | --- |
+| Production consumer | Public identity or durable pseudonym, action type, deployment revision, pinned library version, and library source commit |
+| Consumer equivalence | Baseline and gradual-reveal fingerprints, acceptance command and complete output, and pass/fail |
+| Isolation | Transaction-coherence and tenant-isolation commands, complete outputs, and pass/fail |
+| Rollback compatibility | Tested old/new runtime versions, both proposal directions, commands, complete outputs, and pass/fail |
+| Post-adoption window | ISO 8601 start/end, action and outcome counts, verification retries, complete anomaly/failure log, and remediations |
+| Decision | Support, revise, or retire; accountable owner; decision timestamp; and pass/fail for every required condition |
+
+A support decision requires every named condition to pass and no unresolved
+safety anomaly. Missing evidence results in revise or retire, never implicit
+support. Apply the same integrity and correction rules as candidate entries.
+
 ## Ledger entries
 
 No scored entries exist. The coding-agent clean-room exercise remains formative
