@@ -1,14 +1,18 @@
 """Pydantic AI Capability for confirm-first financial actions."""
 
+# Public annotations remain runtime-resolvable for typing introspection.
+# ruff: noqa: TC001, TC003
+
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, get_args, get_origin
+from typing import Generic, Protocol, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
 
@@ -32,6 +36,7 @@ except ModuleNotFoundError as exc:
         ) from exc
     raise
 
+from ..experimental import ActionApplication, RegisteredAction
 from ..models import (
     ActionType,
     EvidenceConsumer,
@@ -41,7 +46,7 @@ from ..models import (
     RequestingPrincipal,
     SafeReference,
 )
-from ..registry import ReadContext
+from ..registry import ActionDefinition, ReadContext
 from ..runtime import (
     ActionOperationResult,
     ActionRuntime,
@@ -50,15 +55,6 @@ from ..runtime import (
     ProposalNotFoundError,
     ProposalView,
 )
-
-if TYPE_CHECKING:
-    from contextlib import AbstractAsyncContextManager
-
-    from ..experimental import (
-        ActionApplication,
-        RegisteredAction,
-    )
-    from ..registry import ActionDefinition
 
 DepsT = TypeVar("DepsT")
 ScopedDepsT = TypeVar("ScopedDepsT")
