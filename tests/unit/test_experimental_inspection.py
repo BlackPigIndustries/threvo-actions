@@ -64,12 +64,7 @@ def test_static_inspection_is_frozen_allowlisted_and_performs_no_io() -> None:
         "display_preview",
         "result",
     ]
-    assert [model.name for model in inspected.boundary_models] == [
-        "Command",
-        "PrivateSnapshot",
-        "Preview",
-        "Result",
-    ]
+    assert all(not hasattr(model, "name") for model in inspected.boundary_models)
     assert inspected.settings.proposal_ttl == timedelta(minutes=10)
     assert inspected.source == "registered_recipe"
     assert inspected.catalog_frozen
@@ -112,12 +107,15 @@ def test_inspection_uses_no_module_qualname_callable_or_dependency_content() -> 
         "tenant:private",
         "principal:private",
         "key:private",
+        "InternalSecretTokenCommand",
     )
     original_module = Command.__module__
     original_qualname = Command.__qualname__
+    original_name = Command.__name__
     try:
         Command.__module__ = forbidden[0]
         Command.__qualname__ = forbidden[1]
+        Command.__name__ = forbidden[5]
         factory = ExplosiveRecipe()
         application = ActionApplication[Dependencies]()
         registered = application.register(specification(), ActionRecipe(bind=factory))
@@ -130,6 +128,7 @@ def test_inspection_uses_no_module_qualname_callable_or_dependency_content() -> 
     finally:
         Command.__module__ = original_module
         Command.__qualname__ = original_qualname
+        Command.__name__ = original_name
 
     assert all(value not in serialized for value in forbidden)
     assert "live_readiness" in serialized

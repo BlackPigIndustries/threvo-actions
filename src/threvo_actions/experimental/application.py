@@ -410,16 +410,10 @@ class ActionApplication(Generic[DepsT]):
         return ActionInspection(
             action_type=specification.action_type,
             boundary_models=(
-                BoundaryModelInspection.from_model(
-                    role="command", model=specification.command_model
-                ),
-                BoundaryModelInspection.from_model(
-                    role="private_snapshot", model=specification.private_snapshot_model
-                ),
-                BoundaryModelInspection.from_model(
-                    role="display_preview", model=specification.display_preview_model
-                ),
-                BoundaryModelInspection.from_model(role="result", model=specification.result_model),
+                BoundaryModelInspection(role="command"),
+                BoundaryModelInspection(role="private_snapshot"),
+                BoundaryModelInspection(role="display_preview"),
+                BoundaryModelInspection(role="result"),
             ),
             settings=ActionSettingsInspection(
                 proposal_ttl=specification.proposal_ttl,
