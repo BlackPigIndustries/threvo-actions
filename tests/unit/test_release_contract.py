@@ -111,6 +111,13 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     ) < workflow.index("gh release create")
 
 
+def test_release_behaviorally_qualifies_the_installed_aws_kms_extra() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "scripts/smoke_aws_kms_artifact.py" in workflow
+    assert 'if test "$PROFILE" = "aws-kms" || test "$PROFILE" = "all"' in workflow
+
+
 def test_release_014_owner_waiver_is_explicit_and_not_reusable() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
     adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()

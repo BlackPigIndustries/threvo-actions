@@ -120,6 +120,7 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
         profile: [core, aws-kms, postgres, pydantic-ai, all]
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: release-distributions
@@ -166,6 +167,12 @@ jobs:
               ):
                   assert importlib.util.find_spec(module) is None, module
           PY
+            if test "$PROFILE" = "aws-kms" || test "$PROFILE" = "all"; then
+              cp scripts/smoke_aws_kms_artifact.py "$consumer_root/"
+              cd "$consumer_root"
+              "$consumer_root/venv/bin/python" smoke_aws_kms_artifact.py
+              cd "$GITHUB_WORKSPACE"
+            fi
           done
 
   qualify-pydantic:

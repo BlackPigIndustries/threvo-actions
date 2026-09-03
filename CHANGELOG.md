@@ -24,6 +24,9 @@ and uses Semantic Versioning for the supported surface described in
 - Pydantic AI capability instructions now tell models how to stop, defer to the
   host, or reconcile every non-success outcome instead of naming only the
   verified completion condition.
+- Release qualification now behaviorally exercises commitment, payload, and
+  erasure operations from the built AWS KMS extra on every supported Python
+  version.
 
 ### Security
 
