@@ -143,7 +143,8 @@ Each stage validates only facts it possesses:
 | Stage | Validation |
 | --- | --- |
 | Specification construction | strict/frozen boundary models, immutable semantics, timing bounds, safe references |
-| Registration | duplicate action type, recipe/spec typing relationship, catalog state |
+| Static type checking | recipe/spec model relationship and registered-handle type preservation |
+| Registration runtime | duplicate action type and catalog state |
 | Binding and compilation | complete fresh ports/providers, existing `ActionDefinition` conformance, host-specific checks |
 
 Validation failures use a closed issue-code vocabulary and content-safe
