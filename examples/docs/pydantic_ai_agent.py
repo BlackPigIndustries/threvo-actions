@@ -36,7 +36,7 @@ from examples.refund.domain import (
     RefundResult,
     RefundSnapshot,
 )
-from threvo_actions import EvidenceConsumer, Money
+from threvo_actions import EvidenceConsumer, Money, OperationOutcome
 from threvo_actions.integrations.pydantic_ai import (
     ActionAgentContext,
     ActionCapability,
@@ -103,7 +103,7 @@ def offline_model() -> FunctionModel:
             )
         if [tool.name for tool in info.function_tools] != ["refund"]:
             raise RuntimeError("the refund tool was not registered")
-        return ModelResponse(parts=[TextPart("The refund was authoritatively verified.")])
+        return ModelResponse(parts=[TextPart("The refund was submitted for verification.")])
 
     return FunctionModel(respond)
 
@@ -123,14 +123,17 @@ def seed_demo(demo: RefundApplication) -> None:
 async def main() -> None:
     demo = build_refund_application()
     seed_demo(demo)
+    proposal_reference: str | None = None
 
     async def establish_authority(
         request: DeferredActionRequest,
         *,
         deps: AgentDependencies,
     ) -> bool:
+        nonlocal proposal_reference
         # A real handler authenticates the confirmer and applies separation of
         # duties before recording evidence. Framework approval alone is not enough.
+        proposal_reference = request.proposal_reference
         await deps.demo.approve(request.proposal_reference)
         return True
 
@@ -167,6 +170,13 @@ async def main() -> None:
         )
 
     print(result.output)
+    if proposal_reference is None:
+        raise RuntimeError("the action did not produce a proposal reference")
+    demo.clock.advance(demo.specification.verification_delay)
+    verified = await demo.reconcile(proposal_reference)
+    if verified.outcome is not OperationOutcome.VERIFIED:
+        raise RuntimeError("the authoritative verifier did not confirm the refund")
+    print("The refund was authoritatively verified.")
     print(f"executor calls: {demo.host.executor_calls}")
 
 

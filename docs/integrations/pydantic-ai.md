@@ -21,6 +21,7 @@ uv run --extra pydantic-ai python -m examples.docs.pydantic_ai_agent
 Output:
 
 ```text
+The refund was submitted for verification.
 The refund was authoritatively verified.
 executor calls: 1
 ```
@@ -50,6 +51,8 @@ from the source distribution.
    executes the durable proposal. No prior bound runtime is reusable.
 5. If execution is immediately due for verification, the capability performs
    one reconciliation attempt and returns a display-safe `ActionToolResult`.
+6. When verification is delayed or still uncertain, the host schedules a later
+   reconciliation and reports completion only after a `verified` outcome.
 
 The agent is ordinary Pydantic AI:
 
