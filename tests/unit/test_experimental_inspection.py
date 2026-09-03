@@ -27,6 +27,7 @@ class ExplosiveRecipe:
         self.calls = 0
         self.dsn = "postgresql://user:password@private.example/actions"
         self.token = "sk_test_seeded_secret"  # noqa: S105  # synthetic leakage canary
+        self.captured_dependencies = SecretBearingDependencies()
 
     def __call__(
         self, dependencies: Dependencies
@@ -37,6 +38,14 @@ class ExplosiveRecipe:
 
     def __repr__(self) -> str:
         raise AssertionError("static inspection must not call repr")
+
+
+class SecretBearingDependencies(Dependencies):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tenant = "tenant:private"
+        self.principal = "principal:private"
+        self.key_handle = "key:private"
 
 
 def test_static_inspection_is_frozen_allowlisted_and_performs_no_io() -> None:
@@ -112,6 +121,10 @@ def test_inspection_uses_no_module_qualname_callable_or_dependency_content() -> 
         factory = ExplosiveRecipe()
         application = ActionApplication[Dependencies]()
         registered = application.register(specification(), ActionRecipe(bind=factory))
+
+        assert factory.captured_dependencies.tenant == forbidden[2]
+        assert factory.captured_dependencies.principal == forbidden[3]
+        assert factory.captured_dependencies.key_handle == forbidden[4]
 
         serialized = application.inspect(registered).model_dump_json()
     finally:
