@@ -146,6 +146,25 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
         verify_candidate(release, source_commit=commit, release_tag="v0.1.4")
 
 
+def test_candidate_record_requires_one_wheel_and_one_source_distribution(
+    tmp_path: Path,
+) -> None:
+    release = tmp_path / "release"
+    packages = release / "packages"
+    packages.mkdir(parents=True)
+    first = packages / "threvo_actions-0.1.4-py3-none-any.whl"
+    second = packages / "threvo_actions-0.1.4-second-py3-none-any.whl"
+    first.write_bytes(b"first wheel")
+    second.write_bytes(b"second wheel")
+    (release / "SHA256SUMS").write_text(
+        f"{hashlib.sha256(first.read_bytes()).hexdigest()}  {first.name}\n"
+        f"{hashlib.sha256(second.read_bytes()).hexdigest()}  {second.name}\n"
+    )
+
+    with pytest.raises(ValueError, match="one wheel and one source distribution"):
+        record_candidate(release, source_commit="a" * 40, release_tag="v0.1.4")
+
+
 def test_release_requires_tag_commit_to_already_be_on_main() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
 
