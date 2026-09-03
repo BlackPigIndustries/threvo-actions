@@ -6,8 +6,9 @@ import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
 
@@ -151,6 +152,50 @@ def _continuation_metadata(value: object) -> _ContinuationMetadata | None:
         return _ContinuationMetadata.model_validate(value)
     except ValidationError:
         return None
+
+
+def _contains_json_float_for_decimal(annotation: object, value: object) -> bool:
+    """Detect JSON numbers that would lose precision at Decimal boundaries."""
+    if annotation is Decimal:
+        return isinstance(value, float)
+
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if not isinstance(value, Mapping):
+            return False
+        for field_name, field in annotation.model_fields.items():
+            input_names = [field_name]
+            if isinstance(field.alias, str):
+                input_names.insert(0, field.alias)
+            if isinstance(field.validation_alias, str):
+                input_names.insert(0, field.validation_alias)
+            for input_name in input_names:
+                if input_name in value:
+                    if _contains_json_float_for_decimal(
+                        field.annotation,
+                        value[input_name],
+                    ):
+                        return True
+                    break
+        return False
+
+    origin = get_origin(annotation)
+    arguments = get_args(annotation)
+    if origin in {list, set, frozenset, Sequence} and arguments:
+        return (
+            isinstance(value, Sequence)
+            and not isinstance(value, (str, bytes))
+            and any(_contains_json_float_for_decimal(arguments[0], item) for item in value)
+        )
+    if origin is tuple and arguments and isinstance(value, Sequence):
+        if len(arguments) == 2 and arguments[1] is Ellipsis:
+            return any(_contains_json_float_for_decimal(arguments[0], item) for item in value)
+        return any(
+            _contains_json_float_for_decimal(item_annotation, item)
+            for item_annotation, item in zip(arguments, value, strict=False)
+        )
+    if origin in {dict, Mapping} and len(arguments) == 2 and isinstance(value, Mapping):
+        return any(_contains_json_float_for_decimal(arguments[1], item) for item in value.values())
+    return any(_contains_json_float_for_decimal(item, value) for item in arguments)
 
 
 class _ActionOperations(Protocol[CommandContraT]):
@@ -297,6 +342,8 @@ async def _invoke_action_tool(
         return _tool_result(result)
 
     try:
+        if _contains_json_float_for_decimal(command_model, arguments):
+            raise ValueError("Decimal fields require JSON string values")
         command = command_model.model_validate_json(json.dumps(arguments))
     except (TypeError, ValueError) as exc:
         raise ModelRetry(
