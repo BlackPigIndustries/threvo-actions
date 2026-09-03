@@ -62,6 +62,12 @@ more authority, or move the surface into the package root. Applications must
 still pin an exact revision and re-run their action equivalence tests before
 upgrading.
 
+Documentation and bundled agent guidance recommend this namespace only
+conditionally: the consumer must pin an exact patch, own those equivalence
+tests, and perform an explicit migration review before a minor-line upgrade.
+Consumers that cannot accept those obligations should use the supported
+`Action` or `ActionDefinition` surface.
+
 The support decision is evidence-driven. It requires the published DX protocol,
 production consumer equivalence, transaction and tenant isolation, rollback
 compatibility, and post-adoption qualification. Record each condition, its
