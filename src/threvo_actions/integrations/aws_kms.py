@@ -170,18 +170,19 @@ class AwsKmsEnvelopeProtection(
             ).hexdigest()
         finally:
             _zero_key(generated.plaintext)
+        commitment = KeyedCommitment(
+            algorithm=_ALGORITHM,
+            key_handle=handle,
+            key_version=key_version,
+            digest=digest,
+        )
         await self._store_key(
             handle=handle,
             generated=generated,
             proposal_reference=proposal_reference,
             purpose="commitment",
         )
-        return KeyedCommitment(
-            algorithm=_ALGORITHM,
-            key_handle=handle,
-            key_version=key_version,
-            digest=digest,
-        )
+        return commitment
 
     async def verify(
         self,
@@ -256,18 +257,19 @@ class AwsKmsEnvelopeProtection(
             )
         finally:
             _zero_key(generated.plaintext)
+        protected = ProtectedPayload(
+            codec=_CODEC,
+            key_handle=handle,
+            key_version=key_version,
+            ciphertext=base64.b64encode(ciphertext).decode("ascii"),
+        )
         await self._store_key(
             handle=handle,
             generated=generated,
             proposal_reference=proposal_reference,
             purpose="payload",
         )
-        return ProtectedPayload(
-            codec=_CODEC,
-            key_handle=handle,
-            key_version=key_version,
-            ciphertext=base64.b64encode(ciphertext).decode("ascii"),
-        )
+        return protected
 
     async def unprotect(self, *, payload: ProtectedPayload) -> bytes:
         if payload.codec != _CODEC:

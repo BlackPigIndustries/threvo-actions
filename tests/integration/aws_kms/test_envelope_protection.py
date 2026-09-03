@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from pydantic import ValidationError
 
 from threvo_actions.conformance import assert_providers_conform
 from threvo_actions.integrations.aws_kms import (
@@ -229,6 +230,26 @@ def test_empty_payload_round_trips() -> None:
         )
 
         assert await protection.unprotect(payload=payload) == b""
+
+    asyncio.run(scenario())
+
+
+def test_invalid_protected_payload_does_not_persist_an_orphaned_key() -> None:
+    async def scenario() -> None:
+        envelopes = MemoryEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+
+        with pytest.raises(ValidationError, match="at most 1048576"):
+            await protection.protect(
+                proposal_reference="proposal:oversized",
+                canonical_payload=b"x" * 786_405,
+            )
+
+        assert envelopes.entries == {}
 
     asyncio.run(scenario())
 
