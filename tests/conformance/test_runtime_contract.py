@@ -52,6 +52,7 @@ from threvo_actions.registry import VerificationResult, VerificationStatus
 from threvo_actions.stores.memory import MemoryActionStore
 
 if TYPE_CHECKING:
+    from threvo_actions.canonical import KeyedCommitment, ProtectedPayload
     from threvo_actions.registry import ActionDefinition
     from threvo_actions.runtime import ActionOperationResult, ActionRuntime
     from threvo_actions.stores.base import StoredProposal
@@ -286,6 +287,28 @@ class NoOpCommitmentDestruction(DeterministicSecrets):
         del commitment
 
 
+class ProposalBlindPayloadDestruction(DeterministicSecrets):
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_reference: str,
+        payload: ProtectedPayload,
+    ) -> None:
+        del proposal_reference
+        await self.destroy_payload(payload=payload)
+
+
+class ProposalBlindCommitmentDestruction(DeterministicSecrets):
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_reference: str,
+        commitment: KeyedCommitment,
+    ) -> None:
+        del proposal_reference
+        await self.destroy_commitment(commitment=commitment)
+
+
 @pytest.mark.parametrize(
     ("providers", "failure"),
     [
@@ -294,6 +317,35 @@ class NoOpCommitmentDestruction(DeterministicSecrets):
     ],
 )
 def test_provider_contract_catches_no_op_destruction(
+    providers: DeterministicSecrets,
+    failure: str,
+) -> None:
+    with pytest.raises(ConformanceError, match=failure):
+        asyncio.run(
+            assert_providers_conform(
+                commitment_provider=providers,
+                protection_codec=providers,
+                proposal_reference=f"proposal:{failure}",
+                canonical_payload=b'{"account":"private-one"}',
+                mutated_payload=b'{"account":"private-two"}',
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("providers", "failure"),
+    [
+        (
+            ProposalBlindPayloadDestruction(),
+            "proposal_bound_payload_mismatch_destroyed",
+        ),
+        (
+            ProposalBlindCommitmentDestruction(),
+            "proposal_bound_commitment_mismatch_destroyed",
+        ),
+    ],
+)
+def test_provider_contract_catches_proposal_blind_destruction(
     providers: DeterministicSecrets,
     failure: str,
 ) -> None:

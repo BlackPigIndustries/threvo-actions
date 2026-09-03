@@ -1117,6 +1117,15 @@ async def assert_providers_conform(
     """Check commitment binding and protected-snapshot round trips."""
 
     _require(canonical_payload != mutated_payload, "provider_distinct_payloads")
+    mismatched_proposal_reference = _derived_safe_reference(
+        proposal_reference,
+        purpose="provider",
+        discriminator="mismatched-proposal",
+    )
+    _require(
+        mismatched_proposal_reference != proposal_reference,
+        "provider_distinct_proposal_references",
+    )
     commitment = await commitment_provider.create(
         proposal_reference=proposal_reference,
         canonical_payload=canonical_payload,
@@ -1151,6 +1160,21 @@ async def assert_providers_conform(
         "protected_payload_round_trip",
     )
     if isinstance(protection_codec, ProposalBoundProtectionCodec):
+        try:
+            await protection_codec.destroy_payload_for(
+                proposal_reference=mismatched_proposal_reference,
+                payload=protected,
+            )
+        except Exception as refusal:
+            del refusal
+        try:
+            preserved_payload = await protection_codec.unprotect(payload=protected)
+        except (KeyError, ValueError):
+            raise ConformanceError("proposal_bound_payload_mismatch_destroyed") from None
+        _require(
+            preserved_payload == canonical_payload,
+            "proposal_bound_payload_mismatch_changed",
+        )
         await protection_codec.destroy_payload_for(
             proposal_reference=proposal_reference,
             payload=protected,
@@ -1170,6 +1194,21 @@ async def assert_providers_conform(
         raise ConformanceError("protected_payload_destroyed")
 
     if isinstance(commitment_provider, ProposalBoundCommitmentProvider):
+        try:
+            await commitment_provider.destroy_commitment_for(
+                proposal_reference=mismatched_proposal_reference,
+                commitment=commitment,
+            )
+        except Exception as refusal:
+            del refusal
+        _require(
+            await commitment_provider.verify(
+                proposal_reference=proposal_reference,
+                canonical_payload=canonical_payload,
+                commitment=commitment,
+            ),
+            "proposal_bound_commitment_mismatch_destroyed",
+        )
         await commitment_provider.destroy_commitment_for(
             proposal_reference=proposal_reference,
             commitment=commitment,
