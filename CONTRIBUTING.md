@@ -29,13 +29,23 @@ Production releases come from `main`, never directly from `develop`:
 
 1. Merge the release commit from `develop` into `main` and push `main`.
 2. Verify the protected `main` checks at that exact commit.
-3. Create and push the signed version tag on that commit.
-4. Let `release.yml` build once, verify TestPyPI, and publish the same
-   artifacts to PyPI.
+3. Dispatch `release.yml` from `main` with `operation=candidate` and the exact
+   release tag. Record the successful candidate workflow run ID, source commit,
+   and workflow-built wheel and source-distribution digests.
+4. Complete the adoption evidence against those exact candidate artifacts.
+5. Create and push the signed version tag on the candidate source commit only
+   after the candidate qualification succeeds.
+6. Dispatch `release.yml` with `operation=promote`, the candidate workflow run
+   ID and source commit, and the current adoption-record digest. Approve the
+   protected release environments only after their evidence checks pass. The
+   workflow promotes the candidate bytes through TestPyPI and PyPI without a
+   rebuild.
 
-The release workflow fails before building or publishing when the tagged
-commit is not already contained in `origin/main`. Do not approve a PyPI
-environment deployment as a substitute for this branch promotion.
+The release workflow fails before building or publishing when the candidate
+source commit is not already contained in `origin/main`, or when the signed tag
+does not resolve to that exact commit. Do not approve a release environment as
+a substitute for branch promotion, candidate qualification, or adoption
+evidence.
 
 Behavior changes require the smallest focused failing test before production
 code. Do not add `# type: ignore`, `cast(Any, ...)`, or `-> Any` to silence a
