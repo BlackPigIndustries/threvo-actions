@@ -226,9 +226,13 @@ def test_preparation_does_not_project_a_proposal_without_current_read_access() -
 
         assert completed.output == "done"
         result = _result(observed)
-        assert result.outcome is IntegrationOutcome.PREPARATION_DENIED
+        assert result.outcome is IntegrationOutcome.PREPARED_NOT_VISIBLE
         assert result.proposal_reference is None
+        assert result.lifecycle_status is None
         assert result.display_preview == {}
+        assert result.safe_result is None
+        assert result.fresh_proposal_reference is None
+        assert await stack.store.get("tenant:a", "proposal:1") is not None
         assert stack.host.executor_calls == 0
 
     asyncio.run(scenario())
