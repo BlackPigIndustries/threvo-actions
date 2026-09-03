@@ -20,7 +20,8 @@ line:
   `threvo_actions.readiness`, and official profiles in
   `threvo_actions.store_security`;
 - documented Pydantic AI names in
-  `threvo_actions.integrations.pydantic_ai`; and
+  `threvo_actions.integrations.pydantic_ai`;
+- names listed in `threvo_actions.integrations.aws_kms.__all__`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
 
 A patch release may add optional fields with safe defaults, new enum members

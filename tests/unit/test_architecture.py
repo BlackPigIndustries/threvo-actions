@@ -10,7 +10,11 @@ import threvo_actions
 CORE_ROOT = Path(__file__).parents[2] / "src" / "threvo_actions"
 REPOSITORY_ROOT = Path(__file__).parents[2]
 ALLOWED_EXTERNAL_IMPORTS = {"pydantic"}
-ALLOWED_OPTIONAL_IMPORTS = {Path("cli.py"): {"aiomysql", "asyncpg"}}
+ALLOWED_OPTIONAL_IMPORTS = {
+    Path("cli.py"): {"aiomysql", "asyncpg"},
+    Path("integrations/aws_kms.py"): {"cryptography"},
+    Path("integrations/pydantic_ai.py"): {"pydantic_ai"},
+}
 HISTORICAL_CLEAN_ROOM_REPORT = Path("docs/testing/clean-room-adoption-2026-08-30.md")
 
 
@@ -29,8 +33,6 @@ def test_core_has_no_optional_or_host_dependency_imports() -> None:
             allowed = ALLOWED_EXTERNAL_IMPORTS | ALLOWED_OPTIONAL_IMPORTS.get(
                 path.relative_to(CORE_ROOT), set()
             )
-            if path.relative_to(CORE_ROOT).parts[0] == "integrations":
-                allowed = allowed | {"pydantic_ai"}
             unexpected.update(
                 root
                 for root in roots

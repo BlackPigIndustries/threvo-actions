@@ -24,6 +24,22 @@ The core package depends only on Pydantic and the Python standard library.
 
 ## Optional integrations
 
+=== "AWS KMS protection"
+
+    This page documents unreleased API. Maintainers evaluating the reviewed
+    source checkout can install its locked extra with:
+
+    ```bash
+    uv sync --extra aws-kms --locked
+    ```
+
+    The immutable `0.1.4` release predates this integration. Do not attempt to
+    install its AWS KMS extra from PyPI. The first release that contains the
+    extra will add its exact-version installation command. The extra installs
+    the AES-GCM dependency, not an AWS SDK. Adapt the host's existing async
+    KMS client and durable wrapped-key store to the small typed ports in the
+    [AWS KMS guide](../integrations/aws-kms.md).
+
 === "PostgreSQL"
 
     ```bash

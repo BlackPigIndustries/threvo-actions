@@ -17,7 +17,17 @@ from .authority import (
     AuthorityEvidence,
     validate_authority_evidence,
 )
-from .canonical import canonicalize_v1, commitment_payload_v1, model_json_object
+from .canonical import (
+    CommitmentProviderPort,
+    KeyedCommitment,
+    ProposalBoundCommitmentProvider,
+    ProposalBoundProtectionCodec,
+    ProtectedPayload,
+    ProtectionCodecPort,
+    canonicalize_v1,
+    commitment_payload_v1,
+    model_json_object,
+)
 from .models import (
     ConfirmingAuthority,
     ExperimentalModel,
@@ -64,6 +74,36 @@ ResultT = TypeVar("ResultT", bound=BaseModel)
 
 JsonObject = dict[str, JsonValue]
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _destroy_payload(
+    codec: ProtectionCodecPort,
+    *,
+    proposal_reference: str,
+    payload: ProtectedPayload,
+) -> None:
+    if isinstance(codec, ProposalBoundProtectionCodec):
+        await codec.destroy_payload_for(
+            proposal_reference=proposal_reference,
+            payload=payload,
+        )
+        return
+    await codec.destroy_payload(payload=payload)
+
+
+async def _destroy_commitment(
+    provider: CommitmentProviderPort,
+    *,
+    proposal_reference: str,
+    commitment: KeyedCommitment,
+) -> None:
+    if isinstance(provider, ProposalBoundCommitmentProvider):
+        await provider.destroy_commitment_for(
+            proposal_reference=proposal_reference,
+            commitment=commitment,
+        )
+        return
+    await provider.destroy_commitment(commitment=commitment)
 
 
 class Clock(Protocol):
@@ -742,9 +782,17 @@ class ActionRuntime:
         protected = record.protected_private_snapshot
         commitment = record.commitment
         if protected is not None:
-            await definition.protection_codec.destroy_payload(payload=protected)
+            await _destroy_payload(
+                definition.protection_codec,
+                proposal_reference=proposal_reference,
+                payload=protected,
+            )
         if commitment is not None:
-            await definition.commitment_provider.destroy_commitment(commitment=commitment)
+            await _destroy_commitment(
+                definition.commitment_provider,
+                proposal_reference=proposal_reference,
+                commitment=commitment,
+            )
         if not await self._retention_store.complete_erasure(
             tenant_reference=record.tenant_reference,
             proposal_reference=record.proposal_reference,
@@ -824,11 +872,19 @@ class ActionRuntime:
             cleanup_failures: list[tuple[str, str]] = []
             if protected is not None:
                 try:
-                    await definition.protection_codec.destroy_payload(payload=protected)
+                    await _destroy_payload(
+                        definition.protection_codec,
+                        proposal_reference=proposal_reference,
+                        payload=protected,
+                    )
                 except BaseException as cleanup_failure:
                     cleanup_failures.append(("payload", type(cleanup_failure).__name__))
             try:
-                await definition.commitment_provider.destroy_commitment(commitment=commitment)
+                await _destroy_commitment(
+                    definition.commitment_provider,
+                    proposal_reference=proposal_reference,
+                    commitment=commitment,
+                )
             except BaseException as cleanup_failure:
                 cleanup_failures.append(("commitment", type(cleanup_failure).__name__))
             if cleanup_failures:
@@ -1183,7 +1239,11 @@ class ActionRuntime:
 
     async def _required(self, tenant_reference: str, proposal_reference: str) -> StoredProposal:
         record = await self._store.get(tenant_reference, proposal_reference)
-        if record is None:
+        if (
+            record is None
+            or record.tenant_reference != tenant_reference
+            or record.proposal_reference != proposal_reference
+        ):
             raise ProposalNotFoundError
         return record
 

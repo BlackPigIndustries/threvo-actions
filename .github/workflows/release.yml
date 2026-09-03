@@ -76,7 +76,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: >-
-          uv sync --extra dev --extra mysql --extra pydantic-ai
+          uv sync --extra aws-kms --extra dev --extra mysql --extra pydantic-ai
           --extra postgres --extra docs --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -118,7 +118,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        profile: [core, postgres, pydantic-ai, all]
+        profile: [core, aws-kms, postgres, pydantic-ai, all]
     steps:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
@@ -135,9 +135,10 @@ jobs:
         run: |
           case "$PROFILE" in
             core) profile_extras="" ;;
+            aws-kms) profile_extras="[aws-kms]" ;;
             postgres) profile_extras="[postgres]" ;;
             pydantic-ai) profile_extras="[pydantic-ai]" ;;
-            all) profile_extras="[mysql,postgres,pydantic-ai]" ;;
+            all) profile_extras="[aws-kms,mysql,postgres,pydantic-ai]" ;;
             *) exit 1 ;;
           esac
           for artifact in release/packages/*.whl release/packages/*.tar.gz; do
@@ -153,8 +154,16 @@ jobs:
 
           assert threvo_actions.__version__ == "${RELEASE_TAG#v}"
           assert "ActionApplication" not in threvo_actions.__all__
+          if "$PROFILE" in ("aws-kms", "all"):
+              import threvo_actions.integrations.aws_kms
           if "$PROFILE" == "core":
-              for module in ("aiomysql", "asyncpg", "pydantic_ai", "sqlalchemy"):
+              for module in (
+                  "aiomysql",
+                  "asyncpg",
+                  "cryptography",
+                  "pydantic_ai",
+                  "sqlalchemy",
+              ):
                   assert importlib.util.find_spec(module) is None, module
           PY
           done

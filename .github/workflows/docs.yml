@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: actions/configure-pages@v5
-      - run: uv sync --extra docs --extra pydantic-ai --locked
+      - run: uv sync --extra aws-kms --extra docs --extra pydantic-ai --locked
       - run: uv run python scripts/verify_release.py
       - run: uv run mkdocs build --strict
       - uses: actions/upload-pages-artifact@v4

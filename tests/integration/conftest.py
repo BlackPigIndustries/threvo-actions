@@ -14,6 +14,8 @@ def _provides(module_name: str, attribute: str | None = None) -> bool:
 
 
 collect_ignore: list[str] = []
+if not _provides("cryptography.hazmat.primitives.ciphers.aead", "AESGCM"):
+    collect_ignore.append("aws_kms")
 if not _provides("asyncpg"):
     collect_ignore.append("postgres")
 if not _provides("aiomysql"):
