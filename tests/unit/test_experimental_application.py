@@ -434,6 +434,27 @@ def test_recipe_failure_is_reported_without_host_exception_content() -> None:
     assert captured.value.__context__ is None
 
 
+def test_binding_rejects_none_for_a_required_component() -> None:
+    def incomplete(
+        dependencies: Dependencies,
+    ) -> ActionComponents[Command, PrivateSnapshot, Preview, Result]:
+        components = _components(dependencies)
+        object.__setattr__(components, "authorization", None)
+        return components
+
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), ActionRecipe(bind=incomplete))
+    application.freeze()
+
+    with (
+        pytest.raises(ActionApplicationError) as captured,
+        application.bind(registered, dependencies=Dependencies()),
+    ):
+        pass
+
+    assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
+
+
 def test_scope_exit_releases_library_references_to_borrowed_dependencies() -> None:
     application = ActionApplication[Dependencies]()
     registered = application.register(specification(), bound_recipe())

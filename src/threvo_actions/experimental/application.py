@@ -173,6 +173,20 @@ class ActionComponents(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     runtime_revision: str | None = None
 
 
+_REQUIRED_COMPONENT_FIELDS = (
+    "preparation",
+    "authorization",
+    "authority_evaluator",
+    "state_resolver",
+    "executor",
+    "verifier",
+    "commitment_provider",
+    "protection_codec",
+    "retention",
+    "store",
+)
+
+
 @dataclass(frozen=True)
 class ActionRecipe(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     """Trusted host code that maps fresh dependencies to operation components."""
@@ -467,7 +481,10 @@ class ActionApplication(Generic[DepsT]):
             components = recipe.bind(dependencies)
         except Exception:
             components = None
-        if not isinstance(components, ActionComponents):
+        if not isinstance(components, ActionComponents) or any(
+            getattr(components, field_name, None) is None
+            for field_name in _REQUIRED_COMPONENT_FIELDS
+        ):
             raise ActionApplicationError(ActionIssueCode.INCOMPLETE_BINDING)
 
         definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT] | None
