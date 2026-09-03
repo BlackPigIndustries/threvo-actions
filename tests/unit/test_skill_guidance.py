@@ -39,9 +39,7 @@ def test_pydantic_ai_skill_uses_the_published_versioned_extra() -> None:
 
 
 def test_pydantic_ai_skill_documents_hidden_durable_proposals() -> None:
-    reference = " ".join(
-        (SKILL_ROOT / "references" / "pydantic-ai.md").read_text().split()
-    )
+    reference = " ".join((SKILL_ROOT / "references" / "pydantic-ai.md").read_text().split())
 
     assert "returns `prepared_not_visible`" in reference
     assert "proposal is durable" in reference
