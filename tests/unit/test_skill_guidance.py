@@ -65,3 +65,12 @@ def test_skill_gates_the_experimental_gradual_reveal_surface() -> None:
         r"Minor-line upgrades require an\s+explicit migration review",
         authoring,
     )
+
+
+def test_authoring_reference_uses_the_keyword_only_prepare_contract() -> None:
+    authoring = (SKILL_ROOT / "references" / "authoring.md").read_text()
+
+    assert "action.prepare(...)" not in authoring
+    assert "tenant_reference=tenant_reference" in authoring
+    assert "command=command" in authoring
+    assert "requesting_principal=requesting_principal" in authoring

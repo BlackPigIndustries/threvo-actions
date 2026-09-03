@@ -28,7 +28,11 @@ payment = actions.register(
 actions.freeze()
 
 with actions.bind(payment, dependencies=request_dependencies) as action:
-    prepared = await action.prepare(...)
+    prepared = await action.prepare(
+        tenant_reference=tenant_reference,
+        command=command,
+        requesting_principal=requesting_principal,
+    )
 ```
 
 The recipe must return fresh `ActionComponents` for the current operation.
