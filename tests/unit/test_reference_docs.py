@@ -64,5 +64,8 @@ def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
         "wheel SHA-256",
         "previous entry digest",
         "independent participant",
+        "RFC 8785",
+        "UTF-8",
+        "excludes `entry_digest`",
     ):
         assert requirement in worksheet
