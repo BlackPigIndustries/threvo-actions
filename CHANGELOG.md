@@ -20,6 +20,8 @@ and uses Semantic Versioning for the supported surface described in
 - Proposal and wrapped-key writes now reconcile lost acknowledgements through
   authoritative read-back and preserve possibly-live keys when persistence
   remains unknown.
+- Wrapped-key erasure now requires an atomic tenant/proposal-bound conditional
+  delete, so stale reads cannot falsely report cryptographic erasure complete.
 - Plaintext KMS data-key buffers are overwritten before later I/O or
   authentication failures can escape through library traceback frames.
 

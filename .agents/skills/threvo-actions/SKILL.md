@@ -146,6 +146,8 @@ visibility so acknowledgement-lost writes can be reconciled. Treat
 `ProposalPersistenceOutcomeUnknownError` and
 `WrappedDataKeyPersistenceOutcomeUnknownError` as operator reconciliation
 signals; do not retry preparation blindly or destroy possibly-live keys.
+Wrapped-key erasure must use the store's atomic `delete_if_matches` result;
+only `deleted` or authoritative `already_absent` permits completion.
 
 At minimum prove:
 

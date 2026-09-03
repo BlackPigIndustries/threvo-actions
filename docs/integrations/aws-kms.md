@@ -57,11 +57,14 @@ must:
 - restrict reads and deletes to the action runtime and retention identities;
 - preserve the tenant reference, proposal reference, purpose, resolved key
   identifier, and KMS ciphertext blob exactly;
-- make deletion idempotent; and
+- atomically delete only a complete matching tenant/proposal binding and return
+  `deleted`, authoritative `already_absent`, or `mismatch`; and
 - apply deletion and backup-retention policy to every copy of a wrapped key.
 
-Deleting the stored wrapped data key is the proposal-scoped crypto-erasure
-operation. It makes the retained commitment or payload unusable without
+An authoritative `WrappedDataKeyStore.delete_if_matches()` outcome is the
+proposal-scoped crypto-erasure operation. The adapter never treats a preceding
+cache or replica miss as proof of absence. A confirmed deletion makes the
+retained commitment or payload unusable without
 deleting the shared KMS key. A backup that can restore the wrapped key can also
 restore decryptability, so backup expiry is part of the erasure claim.
 
@@ -95,6 +98,10 @@ payload envelope raises `KeyError`, matching the provider conformance contract
 after erasure. KMS transport, authorization, and availability failures propagate
 to the host; they are not misreported as a digest mismatch or successful
 erasure.
+
+Deletion transport or store failures propagate and leave runtime erasure
+pending. A retry is safe: a confirmed earlier delete becomes authoritative
+`already_absent`, while mismatched metadata remains a refusal.
 
 If `put()` raises after storing a wrapped key, the adapter reads the same random
 handle back and continues only when the complete envelope matches. If that

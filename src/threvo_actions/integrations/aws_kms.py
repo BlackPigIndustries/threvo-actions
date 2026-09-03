@@ -9,6 +9,7 @@ import hmac
 import secrets
 from asyncio import CancelledError
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
 from pydantic import AfterValidator, ConfigDict, Field, StringConstraints, TypeAdapter
@@ -83,6 +84,14 @@ class WrappedDataKey(ExperimentalModel):
     ciphertext: Annotated[bytes, Field(min_length=1, repr=False)]
 
 
+class WrappedDataKeyDeleteOutcome(StrEnum):
+    """Authoritative result of atomic proposal-bound wrapped-key deletion."""
+
+    DELETED = "deleted"
+    ALREADY_ABSENT = "already_absent"
+    MISMATCH = "mismatch"
+
+
 class KmsDataKeyClient(Protocol):
     """Minimal async port a host adapts to its AWS KMS client.
 
@@ -114,6 +123,7 @@ __all__ = [
     "KmsDataKeyClient",
     "KmsKeyIdentifier",
     "WrappedDataKey",
+    "WrappedDataKeyDeleteOutcome",
     "WrappedDataKeyPersistenceOutcomeUnknownError",
     "WrappedDataKeyStore",
 ]
@@ -130,7 +140,14 @@ class WrappedDataKeyStore(Protocol):
 
     async def get(self, *, key_handle: str) -> WrappedDataKey | None: ...
 
-    async def delete(self, *, key_handle: str) -> None: ...
+    async def delete_if_matches(
+        self,
+        *,
+        key_handle: str,
+        proposal_identity: ProposalIdentity,
+        purpose: EnvelopePurpose,
+        key_version: str,
+    ) -> WrappedDataKeyDeleteOutcome: ...
 
 
 class WrappedDataKeyPersistenceOutcomeUnknownError(RuntimeError):
@@ -464,17 +481,20 @@ class AwsKmsEnvelopeProtection(
         purpose: EnvelopePurpose,
         proposal_identity: ProposalIdentity,
     ) -> None:
-        envelope = await self._envelopes.get(key_handle=key_handle)
-        if envelope is None:
-            return
-        if not self._matches(
-            envelope,
+        outcome = await self._envelopes.delete_if_matches(
+            key_handle=key_handle,
             proposal_identity=proposal_identity,
             purpose=purpose,
             key_version=key_version,
+        )
+        if outcome in (
+            WrappedDataKeyDeleteOutcome.DELETED,
+            WrappedDataKeyDeleteOutcome.ALREADY_ABSENT,
         ):
+            return
+        if outcome is WrappedDataKeyDeleteOutcome.MISMATCH:
             raise ValueError("key envelope metadata does not match the protected value")
-        await self._envelopes.delete(key_handle=key_handle)
+        raise ValueError("wrapped data-key store returned an invalid deletion outcome")
 
     @staticmethod
     def _matches(

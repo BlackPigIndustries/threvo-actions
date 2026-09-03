@@ -17,6 +17,7 @@ from threvo_actions.integrations.aws_kms import (
     AwsKmsEnvelopeProtection,
     GeneratedDataKey,
     WrappedDataKey,
+    WrappedDataKeyDeleteOutcome,
     WrappedDataKeyPersistenceOutcomeUnknownError,
 )
 from threvo_actions.models import ProposalIdentity
@@ -130,8 +131,26 @@ class MemoryEnvelopeStore:
     async def get(self, *, key_handle: str) -> WrappedDataKey | None:
         return self.entries.get(key_handle)
 
-    async def delete(self, *, key_handle: str) -> None:
-        self.entries.pop(key_handle, None)
+    async def delete_if_matches(
+        self,
+        *,
+        key_handle: str,
+        proposal_identity: ProposalIdentity,
+        purpose: str,
+        key_version: str,
+    ) -> WrappedDataKeyDeleteOutcome:
+        envelope = self.entries.get(key_handle)
+        if envelope is None:
+            return WrappedDataKeyDeleteOutcome.ALREADY_ABSENT
+        if (
+            envelope.tenant_reference != proposal_identity.tenant_reference
+            or envelope.proposal_reference != proposal_identity.proposal_reference
+            or envelope.purpose != purpose
+            or envelope.key_version != key_version
+        ):
+            return WrappedDataKeyDeleteOutcome.MISMATCH
+        del self.entries[key_handle]
+        return WrappedDataKeyDeleteOutcome.DELETED
 
 
 def test_kms_envelope_protection_satisfies_the_provider_contract() -> None:
@@ -341,8 +360,9 @@ def test_supported_kms_module_contract_is_explicit() -> None:
         "GeneratedDataKey",
         "KmsDataKeyClient",
         "KmsKeyIdentifier",
-        "WrappedDataKeyPersistenceOutcomeUnknownError",
         "WrappedDataKey",
+        "WrappedDataKeyDeleteOutcome",
+        "WrappedDataKeyPersistenceOutcomeUnknownError",
         "WrappedDataKeyStore",
     }
     assert all(hasattr(aws_kms, name) for name in aws_kms.__all__)
@@ -387,7 +407,7 @@ def test_commitment_is_bound_to_the_proposal_and_stored_envelope() -> None:
             canonical_payload=b'{"account":"private"}',
             commitment=commitment,
         )
-        await envelopes.delete(key_handle=commitment.key_handle)
+        envelopes.entries.pop(commitment.key_handle)
         assert not await protection.verify_for(
             proposal_identity=identity,
             canonical_payload=b'{"account":"private"}',
@@ -517,6 +537,94 @@ def test_same_proposal_reference_in_two_tenants_cannot_cross_kms_boundary() -> N
             "tenant:first",
             "tenant:second",
         }
+
+    asyncio.run(scenario())
+
+
+def test_stale_envelope_read_cannot_falsely_complete_key_destruction() -> None:
+    class StaleReadEnvelopeStore(MemoryEnvelopeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.return_stale_miss = False
+
+        async def get(self, *, key_handle: str) -> WrappedDataKey | None:
+            if self.return_stale_miss:
+                return None
+            return await super().get(key_handle=key_handle)
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:stale-read")
+        envelopes = StaleReadEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+        payload = await protection.protect_for(
+            proposal_identity=identity,
+            canonical_payload=b"private",
+        )
+        envelopes.return_stale_miss = True
+
+        await protection.destroy_payload_for(
+            proposal_identity=identity,
+            payload=payload,
+        )
+
+        assert payload.key_handle not in envelopes.entries
+
+    asyncio.run(scenario())
+
+
+def test_wrapped_key_delete_failure_is_retryable_and_never_reported_absent() -> None:
+    class FailOnceDeleteEnvelopeStore(MemoryEnvelopeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fail_once = True
+
+        async def delete_if_matches(
+            self,
+            *,
+            key_handle: str,
+            proposal_identity: ProposalIdentity,
+            purpose: str,
+            key_version: str,
+        ) -> WrappedDataKeyDeleteOutcome:
+            if self.fail_once:
+                self.fail_once = False
+                raise RuntimeError("delete acknowledgement unknown")
+            return await super().delete_if_matches(
+                key_handle=key_handle,
+                proposal_identity=proposal_identity,
+                purpose=purpose,
+                key_version=key_version,
+            )
+
+    async def scenario() -> None:
+        identity = _proposal("proposal:delete-retry")
+        envelopes = FailOnceDeleteEnvelopeStore()
+        protection = AwsKmsEnvelopeProtection(
+            key_id="alias/threvo-actions",
+            kms=FakeKmsClient(),
+            envelopes=envelopes,
+        )
+        payload = await protection.protect_for(
+            proposal_identity=identity,
+            canonical_payload=b"private",
+        )
+
+        with pytest.raises(RuntimeError, match="delete acknowledgement unknown"):
+            await protection.destroy_payload_for(
+                proposal_identity=identity,
+                payload=payload,
+            )
+        assert payload.key_handle in envelopes.entries
+
+        await protection.destroy_payload_for(
+            proposal_identity=identity,
+            payload=payload,
+        )
+        assert payload.key_handle not in envelopes.entries
 
     asyncio.run(scenario())
 
