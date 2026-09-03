@@ -46,6 +46,7 @@ class FakeKmsClient:
         self._master_keys = {self.alias_target: os.urandom(32)}
         self._plaintext = plaintext
         self.contexts: list[dict[str, str]] = []
+        self.last_decrypted_plaintext: bytearray | None = None
 
     def repoint_alias(self) -> None:
         self.alias_target = "arn:aws:kms:eu-west-1:123456789012:key/two"
@@ -81,13 +82,16 @@ class FakeKmsClient:
         key_id: str,
         ciphertext: bytes,
         encryption_context: Mapping[str, str],
-    ) -> bytes:
+    ) -> bytearray:
         nonce, encrypted = ciphertext[:12], ciphertext[12:]
-        return AESGCM(self._master_keys[key_id]).decrypt(
-            nonce,
-            encrypted,
-            _context_bytes(encryption_context),
+        self.last_decrypted_plaintext = bytearray(
+            AESGCM(self._master_keys[key_id]).decrypt(
+                nonce,
+                encrypted,
+                _context_bytes(encryption_context),
+            )
         )
+        return self.last_decrypted_plaintext
 
 
 class MemoryEnvelopeStore:
@@ -378,9 +382,10 @@ def test_decrypted_data_key_is_zeroed_on_authentication_failure() -> None:
     canary = b"0123456789abcdef0123456789abcdef"
 
     async def scenario() -> None:
+        kms = FakeKmsClient(plaintext=canary)
         protection = AwsKmsEnvelopeProtection(
             key_id="alias/threvo-actions",
-            kms=FakeKmsClient(plaintext=canary),
+            kms=kms,
             envelopes=MemoryEnvelopeStore(),
         )
         payload = await protection.protect(
@@ -405,5 +410,6 @@ def test_decrypted_data_key_is_zeroed_on_authentication_failure() -> None:
                     if isinstance(value, bytearray):
                         assert bytes(value) != canary
             traceback = traceback.tb_next
+        assert kms.last_decrypted_plaintext == bytearray(32)
 
     asyncio.run(scenario())

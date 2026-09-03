@@ -346,17 +346,17 @@ class AwsKmsEnvelopeProtection(
         )
 
     async def _decrypt_key(self, key_handle: str, envelope: WrappedDataKey) -> bytearray:
-        key = bytearray(
-            await self._kms.decrypt_data_key(
-                key_id=envelope.key_id,
-                ciphertext=envelope.ciphertext,
-                encryption_context=_encryption_context(
-                    key_handle=key_handle,
-                    proposal_reference=envelope.proposal_reference,
-                    purpose=envelope.purpose,
-                ),
-            )
+        decrypted = await self._kms.decrypt_data_key(
+            key_id=envelope.key_id,
+            ciphertext=envelope.ciphertext,
+            encryption_context=_encryption_context(
+                key_handle=key_handle,
+                proposal_reference=envelope.proposal_reference,
+                purpose=envelope.purpose,
+            ),
         )
+        key = decrypted if isinstance(decrypted, bytearray) else bytearray(decrypted)
+        del decrypted
         if len(key) != _DATA_KEY_BYTES:
             _zero_key(key)
             raise ValueError("KMS data key must contain exactly 32 plaintext bytes")
