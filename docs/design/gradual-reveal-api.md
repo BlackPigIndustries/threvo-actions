@@ -80,7 +80,7 @@ Direct callers already inside a request or unit of work bind one registered
 handle to one fresh `DepsT`:
 
 ```python
-with actions.bind(refund, deps=request_deps) as bound:
+with actions.bind(refund, dependencies=request_deps) as bound:
     prepared = await bound.prepare(...)
 ```
 
