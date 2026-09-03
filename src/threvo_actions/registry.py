@@ -8,7 +8,7 @@ from typing import Generic, Literal, Protocol, TypeVar, cast, get_args, get_orig
 from pydantic import AwareDatetime, BaseModel, JsonValue, TypeAdapter, model_validator
 
 from .authority import AuthorityBinding, AuthorityEvidence
-from .canonical import CommitmentProvider, ProtectionCodec
+from .canonical import CommitmentProviderPort, ProtectionCodecPort
 from .models import (
     ActionType,
     AuthoritativeTarget,
@@ -241,8 +241,8 @@ class ActionDefinition(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     state_resolver: StateResolverPort[PrivateSnapshotT, PreviewT]
     executor: GovernedExecutorPort[PrivateSnapshotT, ResultT]
     verifier: VerifierPort[ResultT]
-    commitment_provider: CommitmentProvider
-    protection_codec: ProtectionCodec
+    commitment_provider: CommitmentProviderPort
+    protection_codec: ProtectionCodecPort
     retention: RetentionPort
     proposal_ttl: timedelta
     executor_identity: GovernedExecutor

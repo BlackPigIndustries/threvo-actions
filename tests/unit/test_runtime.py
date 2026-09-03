@@ -213,6 +213,40 @@ class DeterministicSecrets:
         self.destroyed_payloads.add(payload.key_handle)
 
 
+class ProposalBoundSecrets(DeterministicSecrets):
+    def __init__(self) -> None:
+        super().__init__()
+        self.bound_destroyed: list[tuple[str, str]] = []
+
+    async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None:
+        del commitment
+        raise AssertionError("runtime used the unbound commitment erasure port")
+
+    async def destroy_payload(self, *, payload: ProtectedPayload) -> None:
+        del payload
+        raise AssertionError("runtime used the unbound payload erasure port")
+
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_reference: str,
+        commitment: KeyedCommitment,
+    ) -> None:
+        assert commitment.key_handle == f"commitment:{proposal_reference}"
+        self.bound_destroyed.append(("commitment", proposal_reference))
+        self.destroyed_commitments.add(commitment.key_handle)
+
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_reference: str,
+        payload: ProtectedPayload,
+    ) -> None:
+        assert payload.key_handle == f"payload:{proposal_reference}"
+        self.bound_destroyed.append(("payload", proposal_reference))
+        self.destroyed_payloads.add(payload.key_handle)
+
+
 class FailOnceOnCommitmentDestroy(DeterministicSecrets):
     def __init__(self) -> None:
         super().__init__()
@@ -1285,6 +1319,32 @@ def test_erasure_destroys_only_one_proposals_private_and_commitment_material() -
         assert second_record is not None
         assert second_record.protected_private_snapshot is not None
         assert second_record.commitment is not None
+
+    asyncio.run(scenario())
+
+
+def test_runtime_prefers_proposal_bound_erasure_ports() -> None:
+    async def scenario() -> None:
+        runtime, _, _, _ = runtime_parts()
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+        prepared = await prepare(runtime, action)
+        context = ReadContext(
+            tenant_reference="tenant:a",
+            consumer=EvidenceConsumer(reference="retention:officer"),
+        )
+
+        await runtime.erase(
+            action,
+            proposal_reference=prepared.proposal_reference,
+            context=context,
+        )
+
+        assert secrets.bound_destroyed == [
+            ("payload", prepared.proposal_reference),
+            ("commitment", prepared.proposal_reference),
+        ]
 
     asyncio.run(scenario())
 

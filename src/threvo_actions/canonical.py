@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import unicodedata
-from typing import Annotated, Protocol
+from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, JsonValue, StringConstraints, TypeAdapter
 
@@ -59,6 +59,30 @@ class CommitmentProvider(Protocol):
     async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None: ...
 
 
+@runtime_checkable
+class ProposalBoundCommitmentProvider(Protocol):
+    """Commitment provider whose erasure authenticates proposal ownership."""
+
+    async def create(
+        self, *, proposal_reference: str, canonical_payload: bytes
+    ) -> KeyedCommitment: ...
+
+    async def verify(
+        self,
+        *,
+        proposal_reference: str,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool: ...
+
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_reference: str,
+        commitment: KeyedCommitment,
+    ) -> None: ...
+
+
 class ProtectionCodec(Protocol):
     """Host-owned protection boundary for canonical private snapshots.
 
@@ -72,6 +96,28 @@ class ProtectionCodec(Protocol):
     async def unprotect(self, *, payload: ProtectedPayload) -> bytes: ...
 
     async def destroy_payload(self, *, payload: ProtectedPayload) -> None: ...
+
+
+@runtime_checkable
+class ProposalBoundProtectionCodec(Protocol):
+    """Protection codec whose erasure authenticates proposal ownership."""
+
+    async def protect(
+        self, *, proposal_reference: str, canonical_payload: bytes
+    ) -> ProtectedPayload: ...
+
+    async def unprotect(self, *, payload: ProtectedPayload) -> bytes: ...
+
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_reference: str,
+        payload: ProtectedPayload,
+    ) -> None: ...
+
+
+CommitmentProviderPort = CommitmentProvider | ProposalBoundCommitmentProvider
+ProtectionCodecPort = ProtectionCodec | ProposalBoundProtectionCodec
 
 
 def model_json_object(model: BaseModel) -> JsonObject:

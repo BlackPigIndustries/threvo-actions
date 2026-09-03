@@ -26,6 +26,7 @@ Repository = "https://github.com/BlackPigIndustries/threvo-actions"
 threvo-actions = "threvo_actions.cli:main"
 
 [project.optional-dependencies]
+aws-kms = ["cryptography>=44.0.0"]
 mysql = ["aiomysql>=0.3.2,<1", "cryptography>=44.0.0"]
 postgres = ["asyncpg>=0.30.0,<1"]
 sqlalchemy = [

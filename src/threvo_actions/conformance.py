@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from pydantic import BaseModel, TypeAdapter
 
+from .canonical import ProposalBoundCommitmentProvider, ProposalBoundProtectionCodec
 from .models import LifecycleStatus, SafeReference
 from .receipts import AuthorityReceipt, AuthorityReceiptStatus
 from .runtime import OperationOutcome
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from .authority import AuthorityEvidence
-    from .canonical import CommitmentProvider, ProtectionCodec
+    from .canonical import CommitmentProviderPort, ProtectionCodecPort
     from .runtime import ActionOperationResult
     from .stores.base import ActionStore, RetentionStore, StoredProposal
 
@@ -1107,8 +1108,8 @@ async def _require_update_rejected(
 
 async def assert_providers_conform(
     *,
-    commitment_provider: CommitmentProvider,
-    protection_codec: ProtectionCodec,
+    commitment_provider: CommitmentProviderPort,
+    protection_codec: ProtectionCodecPort,
     proposal_reference: str,
     canonical_payload: bytes,
     mutated_payload: bytes,
@@ -1149,8 +1150,18 @@ async def assert_providers_conform(
         await protection_codec.unprotect(payload=protected) == canonical_payload,
         "protected_payload_round_trip",
     )
-    await protection_codec.destroy_payload(payload=protected)
-    await protection_codec.destroy_payload(payload=protected)
+    if isinstance(protection_codec, ProposalBoundProtectionCodec):
+        await protection_codec.destroy_payload_for(
+            proposal_reference=proposal_reference,
+            payload=protected,
+        )
+        await protection_codec.destroy_payload_for(
+            proposal_reference=proposal_reference,
+            payload=protected,
+        )
+    else:
+        await protection_codec.destroy_payload(payload=protected)
+        await protection_codec.destroy_payload(payload=protected)
     try:
         await protection_codec.unprotect(payload=protected)
     except (KeyError, ValueError):
@@ -1158,8 +1169,18 @@ async def assert_providers_conform(
     else:
         raise ConformanceError("protected_payload_destroyed")
 
-    await commitment_provider.destroy_commitment(commitment=commitment)
-    await commitment_provider.destroy_commitment(commitment=commitment)
+    if isinstance(commitment_provider, ProposalBoundCommitmentProvider):
+        await commitment_provider.destroy_commitment_for(
+            proposal_reference=proposal_reference,
+            commitment=commitment,
+        )
+        await commitment_provider.destroy_commitment_for(
+            proposal_reference=proposal_reference,
+            commitment=commitment,
+        )
+    else:
+        await commitment_provider.destroy_commitment(commitment=commitment)
+        await commitment_provider.destroy_commitment(commitment=commitment)
     _require(
         not await commitment_provider.verify(
             proposal_reference=proposal_reference,

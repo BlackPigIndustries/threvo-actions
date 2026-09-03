@@ -6,6 +6,20 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Added
+
+- An optional AWS KMS envelope-protection integration with proposal-bound
+  destruction ports, per-artifact data keys, durable wrapped-key metadata, and
+  release-artifact qualification for the new extra.
+
+### Security
+
+- The runtime now accepts complete proposal-bound commitment and protection
+  contracts, preventing an authorized erasure from deleting another
+  proposal's wrapped key after whole-artifact substitution.
+- Plaintext KMS data-key buffers are overwritten before later I/O or
+  authentication failures can escape through library traceback frames.
+
 ## [0.1.4] - 2026-09-02
 
 ### Added
