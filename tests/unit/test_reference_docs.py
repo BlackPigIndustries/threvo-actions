@@ -34,6 +34,14 @@ def test_explicit_reference_members_exist_in_the_declared_module() -> None:
     assert checked
 
 
+def test_readiness_reference_distinguishes_inspection_from_startup_gating() -> None:
+    guide = (ROOT / "docs" / "reference" / "readiness.md").read_text()
+
+    assert "may report applied and pending" in guide
+    assert "do not validate the application's credential boundary" in guide
+    assert "readiness checks uniquely combine" in guide
+
+
 def test_leakage_example_uses_the_public_safe_argument_contract() -> None:
     guide = (ROOT / "docs" / "testing" / "conformance.md").read_text()
 
