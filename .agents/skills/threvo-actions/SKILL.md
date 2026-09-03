@@ -45,7 +45,8 @@ successful HTTP response.
   the ports as separate expert-level adapters. Do not introduce a second
   lifecycle.
 - Call `application.inspect(handle)` for static, allowlisted configuration
-  inspection. It does not contact stores, run recipes, or report readiness.
+  inspection. It reports closed boundary roles and invariants, not model class
+  names; it does not contact stores, run recipes, or report readiness.
 - Use `effect_kind="single"` for one indivisible effect. Use `"itemized"` only
   when the target and verifier can identify every item outcome.
 
