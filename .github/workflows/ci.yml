@@ -28,7 +28,6 @@ jobs:
       - run: uv run bandit -q -c pyproject.toml -r src examples benchmarks scripts
       - run: uv run pip-audit
       - run: uv run mkdocs build --strict
-      - run: uv run python examples/docs/installed_quickstart.py
       - run: uv run python -m examples.docs.quickstart
       - run: uv run python -m examples.docs.lifecycle_scenarios
       - run: uv run python -m examples.docs.pydantic_ai_agent
@@ -193,6 +192,17 @@ jobs:
           python-version: "3.13"
       - run: uv build
       - run: uv run python scripts/verify_release.py --dist dist
+      - name: Verify installed-wheel quickstart
+        run: |
+          quickstart_root=$(mktemp -d)
+          uv venv "$quickstart_root/venv"
+          wheel=$(find dist -maxdepth 1 -name '*.whl' -print -quit)
+          uv pip install \
+            --python "$quickstart_root/venv/bin/python" \
+            "$wheel"
+          cp examples/docs/installed_quickstart.py "$quickstart_root/"
+          cd "$quickstart_root"
+          "$quickstart_root/venv/bin/python" installed_quickstart.py
       - name: Verify distribution contents
         run: |
           python - <<'PY'

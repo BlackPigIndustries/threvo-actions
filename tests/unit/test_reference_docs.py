@@ -67,6 +67,15 @@ def test_quickstarts_distinguish_copy_paste_from_the_source_tour() -> None:
     assert "production-shaped" in guide
     assert "Copy the file below" in guide
 
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "uv run python examples/docs/installed_quickstart.py" not in ci
+    assert "name: Verify installed-wheel quickstart" in ci
+    assert "uv pip install \\" in ci
+    assert '--python "$quickstart_root/venv/bin/python"' in ci
+    assert "wheel=$(find dist -maxdepth 1 -name '*.whl' -print -quit)" in ci
+    assert '            "$wheel"' in ci
+    assert 'cd "$quickstart_root"' in ci
+
 
 def test_installed_quickstart_minimizes_its_display_preview() -> None:
     quickstart = import_module("examples.docs.installed_quickstart")
