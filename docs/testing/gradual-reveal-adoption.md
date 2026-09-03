@@ -80,6 +80,23 @@ A support decision requires every named condition to pass and no unresolved
 safety anomaly. Missing evidence results in revise or retire, never implicit
 support. Apply the same integrity and correction rules as candidate entries.
 
+## Stable promotion entries
+
+Moving any experimental name into the supported package root requires another
+hash-linked decision entry with:
+
+| Field | Required value |
+| --- | --- |
+| Qualifying adoption | Either the second production action's durable identity, deployment revision, observation window, and outcomes, or an external design partner's identity or durable pseudonym and independence statement |
+| Independent DX proof | Expert-baseline and passing candidate entry digests, with each absolute and comparative gate result |
+| Post-adoption safety proof | Passing support-review entry digest and confirmation that its observation window has no unresolved safety anomaly |
+| Promoted contract | Exact experimental names proposed for root export, compatibility commitment, migration note, accountable owner, and target release |
+| Decision | Pass/fail for each prerequisite, decision timestamp, and promote, revise, or retain-experimental result |
+
+The entry fails closed if any referenced digest is missing, any prerequisite is
+failed, or either qualifying adoption path lacks its required identity and
+observation evidence.
+
 ## Ledger entries
 
 No scored entries exist. The coding-agent clean-room exercise remains formative
