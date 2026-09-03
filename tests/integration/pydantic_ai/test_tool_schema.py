@@ -15,7 +15,13 @@ from examples.docs.pydantic_ai_agent import (
 )
 from examples.refund.app import TENANT, build_refund_application
 from pydantic_ai import Agent, DeferredToolRequests, ModelRetry, RunContext
-from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+)
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from tests.integration.pydantic_ai.support import (
@@ -146,6 +152,69 @@ def test_invalid_arguments_do_not_survive_in_model_retry_exception_graph() -> No
                 if frame.f_code.co_filename.endswith("threvo_actions/integrations/pydantic_ai.py"):
                     assert sensitive_value not in repr(frame.f_locals)
                 current_traceback = current_traceback.tb_next
+
+        assert await fixed_stack.store.get("tenant:a", "proposal:1") is None
+        assert await scoped_stack.store.get("tenant:a", "proposal:1") is None
+        assert len(scoped_stack.scope_factory.exited) == 1
+        assert scoped_stack.scope_factory.exited[0][1] is ModelRetry
+
+    asyncio.run(scenario())
+
+
+def test_real_agent_dispatch_keeps_invalid_arguments_out_of_retry_prompts() -> None:
+    async def scenario() -> None:
+        fixed_stack = build_stack()
+        scoped_stack = build_scoped_stack()
+        sensitive_value = "sk-test-sensitive-input"  # noqa: S105 -- synthetic canary
+
+        for capability in (fixed_stack.capability, scoped_stack.capability):
+            calls = 0
+
+            def model(messages: list[object], info: AgentInfo) -> ModelResponse:
+                nonlocal calls
+                calls += 1
+                assert [tool.name for tool in info.function_tools] == ["refund"]
+                if calls == 1:
+                    return ModelResponse(
+                        parts=[
+                            ToolCallPart(
+                                "refund",
+                                {
+                                    "order_reference": 42,
+                                    "token": sensitive_value,
+                                },
+                                tool_call_id="call:invalid:dispatcher",
+                            )
+                        ]
+                    )
+                retry_parts = [
+                    part
+                    for message in messages
+                    if isinstance(message, ModelRequest)
+                    for part in message.parts
+                    if isinstance(part, RetryPromptPart)
+                ]
+                assert len(retry_parts) == 1
+                assert str(retry_parts[0].content) == (
+                    "Financial action arguments do not match the declared command schema."
+                )
+                assert sensitive_value not in repr(retry_parts[0])
+                return ModelResponse(parts=[TextPart("invalid arguments were refused")])
+
+            agent = Agent(
+                FunctionModel(model),
+                deps_type=AgentDeps,
+                output_type=[str, DeferredToolRequests],
+                capabilities=[capability],
+            )
+            with override_allow_model_requests(False):
+                result = await agent.run(
+                    "refund order 42",
+                    deps=AgentDeps("tenant:a"),
+                )
+
+            assert result.output == "invalid arguments were refused"
+            assert calls == 2
 
         assert await fixed_stack.store.get("tenant:a", "proposal:1") is None
         assert await scoped_stack.store.get("tenant:a", "proposal:1") is None

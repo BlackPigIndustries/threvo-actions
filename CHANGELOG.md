@@ -29,6 +29,8 @@ and uses Semantic Versioning for the supported surface described in
   version.
 - Ambiguous-store coverage now includes wrapped-key read failures, deletion
   failures, and cancellation after both key and proposal persistence.
+- Model-boundary qualification now drives invalid sensitive arguments through
+  the real Pydantic AI dispatcher and checks the generated retry prompt.
 
 ### Security
 
