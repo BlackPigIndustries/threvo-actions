@@ -12,10 +12,16 @@ agent run cannot pass the independent-human gate.
 ## Integrity rules
 
 Each entry records its canonical JSON SHA-256 and the previous entry digest.
-The first entry uses `genesis`. Never edit or replace an earlier entry. A
-correction is a new entry that identifies the superseded digest. The candidate
-source commit, wheel SHA-256, source-distribution SHA-256, fixture commit,
-methodology revision, and acceptance-command output must remain recoverable.
+Canonicalize the entry object with RFC 8785 JSON Canonicalization Scheme (JCS),
+encode the resulting JSON as UTF-8 without a byte-order mark or trailing
+newline, and record the lowercase SHA-256 hex digest of those bytes. The
+canonical object includes `previous_entry_digest` and every evidence field but
+excludes `entry_digest` itself. Evidence values must not contain JSON
+floating-point numbers. The first entry uses `genesis`. Never edit or replace
+an earlier entry. A correction is a new entry that identifies the superseded
+digest. The candidate source commit, wheel SHA-256, source-distribution
+SHA-256, fixture commit, methodology revision, and acceptance-command output
+must remain recoverable.
 
 A failed or assisted attempt stays visible. Remediation requires a new source
 commit, a rebuilt wheel, and a new independent participant. Timestamps are
