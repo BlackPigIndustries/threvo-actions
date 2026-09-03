@@ -92,8 +92,8 @@ class RecordingScopeFactory:
         self.identifiers = identifiers
         self.host = host
         self.secrets = secrets
-        self.entered: list[int] = []
-        self.exited: list[tuple[int, type[BaseException] | None]] = []
+        self.entered: list[ScopedDependencies] = []
+        self.exited: list[tuple[ScopedDependencies, type[BaseException] | None]] = []
         self.fail_commit = False
 
     def __call__(
@@ -112,15 +112,14 @@ class RecordingScopeFactory:
             host=self.host,
             secrets=self.secrets,
         )
-        scope_id = id(scoped)
-        self.entered.append(scope_id)
+        self.entered.append(scoped)
         try:
             yield scoped
         except BaseException as exc:
-            self.exited.append((scope_id, type(exc)))
+            self.exited.append((scoped, type(exc)))
             raise
         else:
-            self.exited.append((scope_id, None))
+            self.exited.append((scoped, None))
             if self.fail_commit:
                 raise RuntimeError("scope commit failed")
 
