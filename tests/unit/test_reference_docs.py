@@ -78,6 +78,12 @@ def test_installed_quickstart_minimizes_its_display_preview() -> None:
     assert "previous_category" in quickstart.CategorizeSnapshot.model_fields
 
 
+def test_examples_index_links_to_the_installed_wheel_quickstart() -> None:
+    index = (ROOT / "docs" / "examples" / "index.md").read_text()
+
+    assert "[Installed-wheel quickstart](../getting-started/first-action.md)" in index
+
+
 def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
     design = (ROOT / "docs" / "design" / "gradual-reveal-api.md").read_text()
 

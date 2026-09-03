@@ -5,7 +5,7 @@ account or model API key.
 
 | Example | Shows | Run |
 | --- | --- | --- |
-| Installed-wheel quickstart | Self-contained registration and safe preparation | `python installed_quickstart.py` after copying the documented file |
+| [Installed-wheel quickstart](../getting-started/first-action.md) | Self-contained registration and safe preparation | `python installed_quickstart.py` after copying the documented file |
 | Documentation quickstart | Full prepare → authority → execute → verify → read path | `uv run python -m examples.docs.quickstart` |
 | Lifecycle edge cases | Drift, expiry, competing proposals, delayed verification, and erasure | `uv run python -m examples.docs.lifecycle_scenarios` |
 | Pydantic AI agent | Offline agent tool, deferred authority, and verified result | `uv run --extra pydantic-ai python -m examples.docs.pydantic_ai_agent` |
