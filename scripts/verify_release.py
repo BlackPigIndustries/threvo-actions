@@ -228,7 +228,12 @@ def _verified_release_artifacts(release: Path) -> dict[str, str]:
         _require(artifact.is_file(), f"candidate artifact is missing: {filename}")
         _require(_sha256(artifact) == digest, f"candidate artifact digest differs: {filename}")
         artifacts[filename] = digest
-    _require(len(artifacts) == 2, "candidate must contain one wheel and one source distribution")
+    wheel_count = sum(filename.endswith(".whl") for filename in artifacts)
+    source_distribution_count = sum(filename.endswith(".tar.gz") for filename in artifacts)
+    _require(
+        len(artifacts) == 2 and wheel_count == 1 and source_distribution_count == 1,
+        "candidate must contain one wheel and one source distribution",
+    )
     _require(
         {path.name for path in packages.iterdir() if path.is_file()} == set(artifacts),
         "candidate package files differ from the manifest",
