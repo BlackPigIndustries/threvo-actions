@@ -103,6 +103,19 @@ def test_release_builds_one_reviewed_candidate_and_promotes_same_bytes() -> None
     assert "release-distributions" in workflow
 
 
+def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
+    contributing = (ROOT / "CONTRIBUTING.md").read_text()
+
+    assert "`operation=candidate`" in contributing
+    assert re.search(
+        r"only\s+after the candidate qualification succeeds",
+        contributing,
+    )
+    assert "`operation=promote`" in contributing
+    assert "candidate workflow run ID" in contributing
+    assert "adoption-record digest" in contributing
+
+
 def test_release_dispatch_values_never_enter_shell_source() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
 
