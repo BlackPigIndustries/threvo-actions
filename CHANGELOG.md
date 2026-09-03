@@ -6,11 +6,21 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
 ### Added
 
 - An optional AWS KMS envelope-protection integration with proposal-bound
   destruction ports, per-artifact data keys, durable wrapped-key metadata, and
   release-artifact qualification for the new extra.
+
+### Changed
+
+- Pydantic AI now reports a durably prepared but unreadable proposal as
+  `prepared_not_visible` instead of the misleading `preparation_denied`.
+- Complete proposal-bound provider ports now receive a tenant-scoped
+  `ProposalIdentity` for every operation. Wrapped-key stores implement atomic
+  conditional deletion instead of a separate read/delete sequence.
 
 ### Security
 
@@ -172,7 +182,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.1...v0.1.2

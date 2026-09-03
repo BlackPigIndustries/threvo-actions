@@ -176,8 +176,8 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    wheel = packages / "threvo_actions-0.1.4-py3-none-any.whl"
-    source = packages / "threvo_actions-0.1.4.tar.gz"
+    wheel = packages / "threvo_actions-0.2.0-py3-none-any.whl"
+    source = packages / "threvo_actions-0.2.0.tar.gz"
     wheel.write_bytes(b"wheel")
     source.write_bytes(b"source")
     (release / "SHA256SUMS").write_text(
@@ -186,12 +186,12 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
     )
     commit = "a" * 40
 
-    record_candidate(release, source_commit=commit, release_tag="v0.1.4")
-    verify_candidate(release, source_commit=commit, release_tag="v0.1.4")
+    record_candidate(release, source_commit=commit, release_tag="v0.2.0")
+    verify_candidate(release, source_commit=commit, release_tag="v0.2.0")
 
     wheel.write_bytes(b"changed")
     with pytest.raises(ValueError, match="digest differs"):
-        verify_candidate(release, source_commit=commit, release_tag="v0.1.4")
+        verify_candidate(release, source_commit=commit, release_tag="v0.2.0")
 
 
 def test_candidate_record_requires_one_wheel_and_one_source_distribution(
@@ -200,8 +200,8 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    first = packages / "threvo_actions-0.1.4-py3-none-any.whl"
-    second = packages / "threvo_actions-0.1.4-second-py3-none-any.whl"
+    first = packages / "threvo_actions-0.2.0-py3-none-any.whl"
+    second = packages / "threvo_actions-0.2.0-second-py3-none-any.whl"
     first.write_bytes(b"first wheel")
     second.write_bytes(b"second wheel")
     (release / "SHA256SUMS").write_text(
@@ -210,7 +210,7 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
     )
 
     with pytest.raises(ValueError, match="one wheel and one source distribution"):
-        record_candidate(release, source_commit="a" * 40, release_tag="v0.1.4")
+        record_candidate(release, source_commit="a" * 40, release_tag="v0.2.0")
 
 
 def test_release_requires_tag_commit_to_already_be_on_main() -> None:

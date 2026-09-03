@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported `0.1.x` Python API and experimental
+`threvo-actions` has a supported `0.2.x` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.

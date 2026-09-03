@@ -19,7 +19,7 @@ Install the core wheel, copy the file below into an empty directory, and run
 it. It imports only `threvo_actions` and the Python standard library:
 
 ```bash
-python -m pip install "threvo-actions==0.1.4"
+python -m pip install "threvo-actions==0.2.0"
 python installed_quickstart.py
 ```
 

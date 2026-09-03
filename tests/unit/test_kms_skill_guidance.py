@@ -15,7 +15,6 @@ def test_skill_points_production_custody_to_the_kms_reference() -> None:
 def test_kms_api_reference_states_its_install_prerequisite() -> None:
     reference = KMS_REFERENCE.read_text()
 
-    assert "This API is unreleased" in reference
+    assert "part of the `0.2.0` release candidate" in reference
     assert "uv sync --extra aws-kms --locked" in reference
     assert "../getting-started/installation.md#optional-integrations" in reference
-    assert "`0.1.4` release does not contain this extra" in reference

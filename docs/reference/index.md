@@ -6,7 +6,7 @@ database or agent framework.
 
 !!! info "Versioned support"
 
-    Version `0.1.4` preserves the root Python imports and CLI for the `0.1.x`
+    Version `0.2.0` preserves the root Python imports and CLI for the `0.2.x`
     line. The documented `threvo_actions.experimental` namespace follows its
     separate 120-day evaluation window; it is intentionally absent from the
     root export. Serialized interoperability forms also remain experimental.

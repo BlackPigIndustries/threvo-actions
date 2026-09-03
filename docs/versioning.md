@@ -3,9 +3,9 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
-## Supported in `0.1.x`
+## Supported in `0.2.x`
 
-The following surfaces remain backward compatible throughout the `0.1.x`
+The following surfaces remain backward compatible throughout the `0.2.x`
 line:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
@@ -28,7 +28,7 @@ A patch release may add optional fields with safe defaults, new enum members
 that callers are already required to handle as unknown, new public helpers, or
 bug and security fixes that preserve this contract. Removing a name, making a
 valid call invalid, changing a result's meaning, or weakening a safety check is
-not permitted in `0.1.x`.
+not permitted in `0.2.x`.
 
 A correctness or security fix may require a new explicit safety
 acknowledgement. Such a change must fail closed, preserve a documented path for
@@ -56,7 +56,7 @@ versioned systems without an application-owned compatibility agreement.
 ### Gradual-reveal compatibility window
 
 The `threvo_actions.experimental` support and evaluation window lasts 120 days
-from publication of `0.1.4`. During that window, `0.1.x` patch
+from publication of `0.1.4`. During that window, patch
 revisions may add names or make fail-closed correctness fixes, but they will not
 silently reinterpret an existing `ActionSpec`, make a valid typed recipe grant
 more authority, or move the surface into the package root. Applications must
@@ -106,14 +106,16 @@ does not let an older library silently accept a newer migration history.
 
 ## Version changes
 
-- `0.1.z`: backward-compatible fixes and additions to the supported surface.
+- `0.2.z`: backward-compatible fixes and additions to the supported surface.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.
 - `1.0.0`: reserved for a stable cross-release contract informed by external
   production adoption.
 
-Security fixes target the newest supported `0.1.x` patch. The project does not
-maintain multiple pre-`1.0` release lines unless the security policy says so.
+Security fixes target the newest supported minor `0.x` line. The historical
+`0.1.x` contract remains recorded by the immutable `0.1.4` release record and
+tag; it is not silently redefined by this policy. The project does not maintain
+multiple pre-`1.0` release lines unless the security policy says so.
 
 ## Deprecation
 

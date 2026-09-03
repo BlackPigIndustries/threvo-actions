@@ -4,7 +4,7 @@ Read this only when the host uses Pydantic AI. In an application, install the
 published optional extra:
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
+python -m pip install "threvo-actions[pydantic-ai]==0.2.0"
 ```
 
 When contributing from a source checkout, install its locked integration
