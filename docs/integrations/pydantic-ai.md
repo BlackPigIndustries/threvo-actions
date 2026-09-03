@@ -101,6 +101,9 @@ inline handler without calling `record_authority()` still leaves the proposal
 
 - Build `ActionAgentContext` from authenticated dependencies, never model
   arguments.
+- Encode `Decimal` command fields as JSON strings. Numeric JSON values for
+  those fields are rejected before preparation because a Python `float` may
+  already have lost precision.
 - Treat deferred metadata and message history as untrusted routing input.
 - Do not use `ToolApproved.override_args` to change a prepared action.
 - Render previews and results from the stored proposal, not model prose.
