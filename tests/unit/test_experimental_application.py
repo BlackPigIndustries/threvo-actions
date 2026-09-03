@@ -432,9 +432,7 @@ def test_recipe_failure_preserves_the_host_exception_for_diagnostics() -> None:
         pass
 
     assert captured.value is failure
-    assert "fail" in {
-        frame.name for frame in traceback.extract_tb(captured.value.__traceback__)
-    }
+    assert "fail" in {frame.name for frame in traceback.extract_tb(captured.value.__traceback__)}
 
 
 def test_binding_rejects_none_for_a_required_component() -> None:
