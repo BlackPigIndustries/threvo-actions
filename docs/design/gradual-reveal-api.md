@@ -102,8 +102,8 @@ organization, principal, and custody checks.
 
 ## Async dependency scopes
 
-Agent and worker adapters accept a host-supplied async scope factory rather
-than a long-lived dependency instance:
+The Pydantic AI adapter accepts a host-supplied async scope factory rather than
+a long-lived dependency instance:
 
 ```python
 class DependencyScopeFactory(Protocol[RunDepsT, DepsT]):
@@ -117,6 +117,10 @@ For each tool call or deferred resume the adapter:
 3. binds the statically captured `RegisteredAction`;
 4. completes one runtime operation;
 5. invalidates the facade and exits the scope.
+
+Worker integration remains host code in `0.1.4`: each scheduled job opens its
+own fresh dependency scope and calls `ActionApplication.bind()` with those
+dependencies. The library provides neither a worker adapter nor a scheduler.
 
 Framework approval, copied history, client metadata, and serialized dependency
 objects never supply authority.

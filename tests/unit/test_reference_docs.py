@@ -58,6 +58,8 @@ def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
 
     assert "actions.bind(refund, dependencies=request_deps)" in design
     assert "actions.bind(refund, deps=" not in design
+    assert "Agent and worker adapters accept" not in design
+    assert "neither a worker adapter nor a scheduler" in design
 
 
 def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
