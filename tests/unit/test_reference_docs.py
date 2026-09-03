@@ -60,6 +60,8 @@ def test_gradual_reveal_design_uses_the_public_binding_keyword() -> None:
     assert "actions.bind(refund, deps=" not in design
     assert "Agent and worker adapters accept" not in design
     assert "neither a worker adapter nor a scheduler" in design
+    assert "| Static type checking | recipe/spec model relationship" in design
+    assert "| Registration runtime | duplicate action type and catalog state |" in design
 
 
 def test_gradual_reveal_adoption_worksheet_keeps_all_attempts() -> None:
