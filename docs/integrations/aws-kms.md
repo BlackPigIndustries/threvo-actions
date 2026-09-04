@@ -6,11 +6,11 @@ runtime's `ProposalBoundCommitmentProvider` and
 each commitment and private payload, HMAC-SHA-256 for the commitment, and
 AES-256-GCM for snapshot encryption.
 
-This integration is part of the `0.2.0` release candidate. Maintainers
+This integration is part of the `0.1.5` release candidate. Maintainers
 evaluating the reviewed source checkout can run
 `uv sync --extra aws-kms --locked`. After the signed release workflow
 completes, install the immutable package with
-`python -m pip install "threvo-actions[aws-kms]==0.2.0"`.
+`python -m pip install "threvo-actions[aws-kms]==0.1.5"`.
 
 The extra installs `cryptography`; it deliberately does not install boto3 or
 another hosted SDK. Adapt the AWS client your application already owns to

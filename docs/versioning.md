@@ -3,10 +3,9 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
-## Supported in `0.2.x`
+## Supported at `0.1.5`
 
-The following surfaces remain backward compatible throughout the `0.2.x`
-line:
+The following surfaces are supported at the exact `0.1.5` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -24,11 +23,18 @@ line:
 - names listed in `threvo_actions.integrations.aws_kms.__all__`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
 
-A patch release may add optional fields with safe defaults, new enum members
-that callers are already required to handle as unknown, new public helpers, or
-bug and security fixes that preserve this contract. Removing a name, making a
-valid call invalid, changing a result's meaning, or weakening a safety check is
-not permitted in `0.2.x`.
+A later patch release may add optional fields with safe defaults, new enum
+members that callers are already required to handle as unknown, new public
+helpers, or bug and security fixes that preserve this contract. Removing a
+name, making a valid call invalid, changing a result's meaning, or weakening a
+safety check is not permitted after `0.1.5` without another explicitly
+documented exception.
+
+`0.1.5` itself is an owner-directed pre-`1.0` corrective exception. It changes
+provider contracts and one integration result where preserving `0.1.4`
+behavior could misstate persistence, visibility, or erasure. It does not claim
+drop-in compatibility with `0.1.4`; exact-pinned consumers must follow the
+[`0.1.5` migration record](releases/0.1.5.md).
 
 A correctness or security fix may require a new explicit safety
 acknowledgement. Such a change must fail closed, preserve a documented path for
@@ -106,16 +112,19 @@ does not let an older library silently accept a newer migration history.
 
 ## Version changes
 
-- `0.2.z`: backward-compatible fixes and additions to the supported surface.
+- Later `0.1.z` releases: backward-compatible fixes and additions to the
+  supported `0.1.5` surface unless an explicit corrective exception is
+  documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.
 - `1.0.0`: reserved for a stable cross-release contract informed by external
   production adoption.
 
 Security fixes target the newest supported minor `0.x` line. The historical
-`0.1.x` contract remains recorded by the immutable `0.1.4` release record and
-tag; it is not silently redefined by this policy. The project does not maintain
-multiple pre-`1.0` release lines unless the security policy says so.
+`0.1.4` contract remains recorded by its immutable release record and tag; the
+`0.1.5` migration record makes the corrective exception explicit rather than
+silently redefining that release. The project does not maintain multiple
+pre-`1.0` release lines unless the security policy says so.
 
 ## Deprecation
 

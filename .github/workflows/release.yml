@@ -24,6 +24,11 @@ on:
         description: SHA-256 of the current hash-linked DX evidence record
         required: false
         type: string
+      skip_adoption_gate:
+        description: One-time repository-owner bypass for v0.1.5 only
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -353,6 +358,7 @@ jobs:
         env:
           ADOPTION_RECORD_DIGEST: ${{ inputs.adoption_record_digest }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+          SKIP_ADOPTION_GATE: ${{ inputs.skip_adoption_gate }}
           SOURCE_COMMIT: ${{ inputs.candidate_source_commit }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -376,8 +382,13 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 1; then
             echo "Using the repository owner's one-time v0.1.4 adoption waiver."
+          elif test "$RELEASE_TAG" = "v0.1.5" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.1.5 adoption-gate bypass."
           else
-            echo "Adoption evidence neither passed nor matches the one-time v0.1.4 owner waiver." >&2
+            echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1
           fi
           uv run --no-project python scripts/verify_release.py \

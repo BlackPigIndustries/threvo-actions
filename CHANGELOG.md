@@ -6,7 +6,7 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-09-04
+## [0.1.5] - 2026-09-04
 
 ### Added
 
@@ -33,6 +33,13 @@ and uses Semantic Versioning for the supported surface described in
   the real Pydantic AI dispatcher and checks the generated retry prompt.
 - Experimental binding tests now verify that runtime-construction failures
   preserve the host exception and traceback for trusted diagnostics.
+
+### Compatibility
+
+- This owner-directed patch release contains corrective provider and result
+  contract changes. Exact-pinned `0.1.4` consumers must follow the
+  [`0.1.5` migration record](docs/releases/0.1.5.md); it is not a drop-in
+  upgrade.
 
 ### Security
 
@@ -194,8 +201,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.2.0
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.1...v0.1.2

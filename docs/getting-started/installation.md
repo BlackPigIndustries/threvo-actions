@@ -4,20 +4,20 @@
 
 !!! note "Release availability"
 
-    These commands install the immutable `0.2.0` release after the signed tag
+    These commands install the immutable `0.1.5` release after the signed tag
     has completed the TestPyPI and PyPI release workflow. Never install a
     moving branch for a financial-action runtime.
 
 === "pip"
 
     ```bash
-    python -m pip install "threvo-actions==0.2.0"
+    python -m pip install "threvo-actions==0.1.5"
     ```
 
 === "uv"
 
     ```bash
-    uv add "threvo-actions==0.2.0"
+    uv add "threvo-actions==0.1.5"
     ```
 
 The core package depends only on Pydantic and the Python standard library.
@@ -36,7 +36,7 @@ The core package depends only on Pydantic and the Python standard library.
     After the signed release completes, install the immutable package with:
 
     ```bash
-    python -m pip install "threvo-actions[aws-kms]==0.2.0"
+    python -m pip install "threvo-actions[aws-kms]==0.1.5"
     ```
 
     The extra installs the AES-GCM dependency, not an AWS SDK. Adapt the host's
@@ -46,13 +46,13 @@ The core package depends only on Pydantic and the Python standard library.
 === "PostgreSQL"
 
     ```bash
-    python -m pip install "threvo-actions[postgres]==0.2.0"
+    python -m pip install "threvo-actions[postgres]==0.1.5"
     ```
 
 === "MySQL"
 
     ```bash
-    python -m pip install "threvo-actions[mysql]==0.2.0"
+    python -m pip install "threvo-actions[mysql]==0.1.5"
     ```
 
     Use the official MySQL 8 adapter for production-oriented multi-worker
@@ -61,7 +61,7 @@ The core package depends only on Pydantic and the Python standard library.
 === "SQLAlchemy and Alembic"
 
     ```bash
-    python -m pip install "threvo-actions[sqlalchemy]==0.2.0"
+    python -m pip install "threvo-actions[sqlalchemy]==0.1.5"
     ```
 
     The host-framework recipe uses SQLAlchemy for application business data,
@@ -71,7 +71,7 @@ The core package depends only on Pydantic and the Python standard library.
 === "Pydantic AI"
 
     ```bash
-    python -m pip install "threvo-actions[pydantic-ai]==0.2.0"
+    python -m pip install "threvo-actions[pydantic-ai]==0.1.5"
     ```
 
     The integration pins the Pydantic AI version it is tested against but does
@@ -84,7 +84,7 @@ The core package depends only on Pydantic and the Python standard library.
     already includes it:
 
     ```bash
-    python -m pip install "threvo-actions==0.2.0"
+    python -m pip install "threvo-actions==0.1.5"
     ```
 
     It is supported for local development, evaluation, tests, and bounded

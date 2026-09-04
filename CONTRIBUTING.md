@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported `0.2.x` Python API and experimental
+`threvo-actions` has a supported exact `0.1.5` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.
@@ -48,6 +48,13 @@ waiver without representing it as passing evidence. The workflow binds this
 exception to that release and source commit; it is not a reusable release
 option and does not waive artifact, tag, index-verification, or environment
 controls.
+
+The repository owner's explicit 2026-09-04 direction also permits promotion of
+`v0.1.5` with `skip_adoption_gate=true` and no new ledger waiver. This
+default-off exception is accepted only for that immutable release tag. It does
+not count as adoption evidence and does not bypass candidate qualification,
+signed-tag verification, artifact identity, index verification, or protected
+release environments.
 
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag

@@ -144,6 +144,18 @@ def test_release_014_owner_waiver_is_explicit_and_not_reusable() -> None:
     assert "adoption_waiver:" not in workflow
 
 
+def test_release_015_adoption_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert "skip_adoption_gate:" in workflow
+    assert "default: false" in workflow
+    assert 'test "$RELEASE_TAG" = "v0.1.5"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "Using the repository owner's one-time v0.1.5 adoption-gate bypass." in workflow
+    assert "release=v0.1.5" not in adoption_record
+
+
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text()
 
@@ -192,8 +204,8 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    wheel = packages / "threvo_actions-0.2.0-py3-none-any.whl"
-    source = packages / "threvo_actions-0.2.0.tar.gz"
+    wheel = packages / "threvo_actions-0.1.5-py3-none-any.whl"
+    source = packages / "threvo_actions-0.1.5.tar.gz"
     wheel.write_bytes(b"wheel")
     source.write_bytes(b"source")
     (release / "SHA256SUMS").write_text(
@@ -202,12 +214,12 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
     )
     commit = "a" * 40
 
-    record_candidate(release, source_commit=commit, release_tag="v0.2.0")
-    verify_candidate(release, source_commit=commit, release_tag="v0.2.0")
+    record_candidate(release, source_commit=commit, release_tag="v0.1.5")
+    verify_candidate(release, source_commit=commit, release_tag="v0.1.5")
 
     wheel.write_bytes(b"changed")
     with pytest.raises(ValueError, match="digest differs"):
-        verify_candidate(release, source_commit=commit, release_tag="v0.2.0")
+        verify_candidate(release, source_commit=commit, release_tag="v0.1.5")
 
 
 def test_candidate_record_requires_one_wheel_and_one_source_distribution(
@@ -216,8 +228,8 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    first = packages / "threvo_actions-0.2.0-py3-none-any.whl"
-    second = packages / "threvo_actions-0.2.0-second-py3-none-any.whl"
+    first = packages / "threvo_actions-0.1.5-py3-none-any.whl"
+    second = packages / "threvo_actions-0.1.5-second-py3-none-any.whl"
     first.write_bytes(b"first wheel")
     second.write_bytes(b"second wheel")
     (release / "SHA256SUMS").write_text(
@@ -226,7 +238,7 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
     )
 
     with pytest.raises(ValueError, match="one wheel and one source distribution"):
-        record_candidate(release, source_commit="a" * 40, release_tag="v0.2.0")
+        record_candidate(release, source_commit="a" * 40, release_tag="v0.1.5")
 
 
 def test_release_requires_tag_commit_to_already_be_on_main() -> None:
