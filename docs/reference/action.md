@@ -1,9 +1,11 @@
 # Action authoring and approval requirements
 
-For new integrations, start with the namespaced gradual-reveal API. It keeps
-immutable semantics separate from operation-scoped host dependencies and
-compiles to the same `ActionDefinition` and `ActionRuntime` used by the expert
-path.
+For new integrations that pin an exact patch and own equivalence tests plus
+migration review, the namespaced gradual-reveal API keeps immutable semantics
+separate from operation-scoped host dependencies and compiles to the same
+`ActionDefinition` and `ActionRuntime` used by the expert path. Other
+integrations should start with the supported `Action` facade or construct an
+`ActionDefinition` directly. See the [versioning boundary](../versioning.md).
 
 ::: threvo_actions.experimental
     options:

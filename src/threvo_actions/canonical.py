@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import math
 import unicodedata
-from typing import Annotated, Protocol
+from typing import Annotated, Protocol, runtime_checkable
 
 from pydantic import BaseModel, JsonValue, StringConstraints, TypeAdapter
 
-from .models import ExperimentalModel, SafeReference
+from .models import ExperimentalModel, ProposalIdentity, SafeReference
 
 JsonObject = dict[str, JsonValue]
 OpaquePayload = Annotated[str, StringConstraints(min_length=1, max_length=1_048_576)]
@@ -59,6 +59,30 @@ class CommitmentProvider(Protocol):
     async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None: ...
 
 
+@runtime_checkable
+class ProposalBoundCommitmentProvider(Protocol):
+    """Commitment provider bound to a complete tenant-scoped proposal identity."""
+
+    async def create_for(
+        self, *, proposal_identity: ProposalIdentity, canonical_payload: bytes
+    ) -> KeyedCommitment: ...
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool: ...
+
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        commitment: KeyedCommitment,
+    ) -> None: ...
+
+
 class ProtectionCodec(Protocol):
     """Host-owned protection boundary for canonical private snapshots.
 
@@ -72,6 +96,30 @@ class ProtectionCodec(Protocol):
     async def unprotect(self, *, payload: ProtectedPayload) -> bytes: ...
 
     async def destroy_payload(self, *, payload: ProtectedPayload) -> None: ...
+
+
+@runtime_checkable
+class ProposalBoundProtectionCodec(Protocol):
+    """Protection codec bound to a complete tenant-scoped proposal identity."""
+
+    async def protect_for(
+        self, *, proposal_identity: ProposalIdentity, canonical_payload: bytes
+    ) -> ProtectedPayload: ...
+
+    async def unprotect_for(
+        self, *, proposal_identity: ProposalIdentity, payload: ProtectedPayload
+    ) -> bytes: ...
+
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> None: ...
+
+
+CommitmentProviderPort = CommitmentProvider | ProposalBoundCommitmentProvider
+ProtectionCodecPort = ProtectionCodec | ProposalBoundProtectionCodec
 
 
 def model_json_object(model: BaseModel) -> JsonObject:

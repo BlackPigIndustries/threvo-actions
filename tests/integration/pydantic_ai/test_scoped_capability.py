@@ -15,10 +15,18 @@ from pydantic_ai.messages import (
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
-from tests.integration.pydantic_ai.support import AgentDeps, build_scoped_stack
-from tests.unit.test_runtime import authorize
+from tests.integration.pydantic_ai.support import (
+    AgentDeps,
+    ScopedDependencies,
+    build_scoped_stack,
+)
+from tests.unit.test_runtime import Command, Preview, PrivateSnapshot, Result, authorize
 
-from threvo_actions.experimental import ActionApplicationError, ActionIssueCode
+from threvo_actions.experimental import (
+    ActionApplicationError,
+    ActionComponents,
+    ActionIssueCode,
+)
 from threvo_actions.integrations.pydantic_ai import ActionToolResult, IntegrationOutcome
 
 
@@ -53,6 +61,58 @@ def test_scoped_capability_refuses_an_unfrozen_application_during_wiring() -> No
 
     assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
     assert str(captured.value) == "action binding is incomplete"
+
+
+def test_scoped_recipe_failure_is_diagnostic_to_host_and_safe_for_model() -> None:
+    async def scenario() -> None:
+        canary = "database-password=private-recipe-secret"
+        failure = RuntimeError(canary)
+        diagnostics: list[BaseException] = []
+
+        def fail_recipe(
+            dependencies: ScopedDependencies,
+        ) -> ActionComponents[Command, PrivateSnapshot, Preview, Result]:
+            del dependencies
+            raise failure
+
+        def capture_diagnostic(
+            observed: BaseException,
+            *,
+            action_type: object,
+            tool_name: str,
+        ) -> None:
+            del action_type, tool_name
+            diagnostics.append(observed)
+
+        stack = build_scoped_stack(
+            recipe_bind=fail_recipe,
+            binding_failure_handler=capture_diagnostic,
+        )
+        observed_messages: list[list[ModelMessage]] = []
+        agent = Agent(
+            _model(observed_messages),
+            deps_type=AgentDeps,
+            output_type=[str, DeferredToolRequests],
+            capabilities=[stack.capability],
+        )
+
+        with override_allow_model_requests(False):
+            result = await agent.run("refund", deps=AgentDeps("tenant:a"))
+
+        assert result.output == "done"
+        assert diagnostics == [failure]
+        tool_results = [
+            part.content
+            for message in observed_messages[-1]
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart) and isinstance(part.content, ActionToolResult)
+        ]
+        assert len(tool_results) == 1
+        assert tool_results[0].outcome is IntegrationOutcome.BINDING_UNAVAILABLE
+        assert canary not in repr(result.all_messages())
+
+    asyncio.run(scenario())
 
 
 def test_scoped_capability_commits_before_deferral_and_rebinds_for_resume() -> None:
@@ -98,23 +158,45 @@ def test_scoped_capability_commits_before_deferral_and_rebinds_for_resume() -> N
 
 def test_scope_commit_failure_prevents_approval_deferral() -> None:
     async def scenario() -> None:
-        stack = build_scoped_stack()
+        diagnostics: list[BaseException] = []
+
+        def capture_diagnostic(
+            failure: BaseException,
+            *,
+            action_type: object,
+            tool_name: str,
+        ) -> None:
+            del action_type, tool_name
+            diagnostics.append(failure)
+
+        observed: list[list[ModelMessage]] = []
+        stack = build_scoped_stack(binding_failure_handler=capture_diagnostic)
         stack.scope_factory.fail_commit = True
         agent = Agent(
-            _model(),
+            _model(observed),
             deps_type=AgentDeps,
             output_type=[str, DeferredToolRequests],
             capabilities=[stack.capability],
         )
 
-        with (
-            override_allow_model_requests(False),
-            pytest.raises(RuntimeError, match="scope commit failed"),
-        ):
-            await agent.run("refund", deps=AgentDeps("tenant:a"))
+        with override_allow_model_requests(False):
+            result = await agent.run("refund", deps=AgentDeps("tenant:a"))
 
+        assert result.output == "done"
         assert len(stack.scope_factory.entered) == 1
         assert stack.scope_factory.exited == [(stack.scope_factory.entered[0], None)]
+        assert len(diagnostics) == 1
+        assert str(diagnostics[0]) == "scope commit failed"
+        tool_results = [
+            part.content
+            for message in observed[-1]
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart) and isinstance(part.content, ActionToolResult)
+        ]
+        assert len(tool_results) == 1
+        assert tool_results[0].outcome is IntegrationOutcome.OPERATION_OUTCOME_UNKNOWN
+        assert "scope commit failed" not in repr(result.all_messages())
 
     asyncio.run(scenario())
 
@@ -153,6 +235,42 @@ def test_invalid_arguments_exit_the_scope_exceptionally_without_persisting() -> 
         assert len(stack.scope_factory.exited) == 1
         assert stack.scope_factory.exited[0][1] is not None
         assert await stack.store.get("tenant:a", "proposal:1") is None
+
+    asyncio.run(scenario())
+
+
+def test_scoped_preparation_reports_when_the_new_proposal_is_not_visible() -> None:
+    async def scenario() -> None:
+        stack = build_scoped_stack()
+        stack.host.read_allowed = False
+        observed: list[list[ModelMessage]] = []
+        agent = Agent(
+            _model(observed),
+            deps_type=AgentDeps,
+            output_type=[str, DeferredToolRequests],
+            capabilities=[stack.capability],
+        )
+
+        with override_allow_model_requests(False):
+            completed = await agent.run("refund", deps=AgentDeps("tenant:a"))
+
+        assert completed.output == "done"
+        tool_results = [
+            part.content
+            for message in observed[-1]
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart) and isinstance(part.content, ActionToolResult)
+        ]
+        assert len(tool_results) == 1
+        assert tool_results[0].outcome is IntegrationOutcome.PREPARED_NOT_VISIBLE
+        assert tool_results[0].proposal_reference is None
+        assert tool_results[0].lifecycle_status is None
+        assert tool_results[0].display_preview == {}
+        assert tool_results[0].safe_result is None
+        assert tool_results[0].fresh_proposal_reference is None
+        assert await stack.store.get("tenant:a", "proposal:1") is not None
+        assert stack.scope_factory.exited == [(stack.scope_factory.entered[0], None)]
 
     asyncio.run(scenario())
 

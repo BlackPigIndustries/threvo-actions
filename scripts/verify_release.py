@@ -148,7 +148,12 @@ def verify_distributions(dist: Path) -> None:
         }
         source_package_files.remove("src/threvo_actions/.agents/skills/threvo-actions/SKILL.md")
         required = (
-            source_package_files | REQUIRED_SDIST_FILES | {".agents/skills/threvo-actions/SKILL.md"}
+            source_package_files
+            | REQUIRED_SDIST_FILES
+            | {
+                ".agents/skills/threvo-actions/SKILL.md",
+                f"docs/releases/{version}.md",
+            }
         )
         _require(required <= names, "source distribution is missing required files")
         _assert_clean_names(names, wheel=False)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import traceback
 import weakref
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
@@ -11,6 +12,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+import threvo_actions.experimental.application as application_module
 from threvo_actions.canonical import (
     CommitmentProvider,
     KeyedCommitment,
@@ -34,6 +36,7 @@ from threvo_actions.models import (
 from threvo_actions.registry import (
     AuthorizationPort,
     AuthorizationResult,
+    DefinitionConformanceError,
     GovernedExecutorPort,
     PreparationPort,
     PreparedAction,
@@ -411,27 +414,79 @@ def test_binding_rejects_a_handle_from_another_application() -> None:
     assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
 
 
-def test_recipe_failure_is_reported_without_host_exception_content() -> None:
+def test_recipe_failure_preserves_the_host_exception_for_diagnostics() -> None:
+    failure = RuntimeError("tenant:secret database password")
+
     def fail(
         dependencies: Dependencies,
     ) -> ActionComponents[Command, PrivateSnapshot, Preview, Result]:
         del dependencies
-        raise RuntimeError("tenant:secret database password")
+        raise failure
 
     application = ActionApplication[Dependencies]()
     registered = application.register(specification(), ActionRecipe(bind=fail))
     application.freeze()
 
     with (
-        pytest.raises(ActionApplicationError) as captured,
+        pytest.raises(RuntimeError) as captured,
         application.bind(registered, dependencies=Dependencies()),
     ):
         pass
 
-    assert captured.value.code is ActionIssueCode.INCOMPLETE_BINDING
-    assert "secret" not in str(captured.value)
-    assert captured.value.__cause__ is None
-    assert captured.value.__context__ is None
+    assert captured.value is failure
+    assert "fail" in {frame.name for frame in traceback.extract_tb(captured.value.__traceback__)}
+
+
+def test_definition_nonconforming_issue_code_is_reserved_and_inspectable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    error = ActionApplicationError(ActionIssueCode.DEFINITION_NONCONFORMING)
+    failure = DefinitionConformanceError("host definition diagnostic")
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
+
+    assert error.code is ActionIssueCode.DEFINITION_NONCONFORMING
+    assert str(error) == "compiled action definition is nonconforming"
+    assert (
+        ActionIssueCode.DEFINITION_NONCONFORMING.value
+        in application.inspect(registered).issue_codes
+    )
+
+    monkeypatch.setattr(application_module, "ActionDefinition", Mock(side_effect=failure))
+    with (
+        pytest.raises(DefinitionConformanceError) as captured,
+        application.bind(registered, dependencies=Dependencies()),
+    ):
+        pass
+
+    assert captured.value is failure
+
+
+def test_runtime_construction_failure_preserves_host_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = RuntimeError("tenant:secret runtime diagnostic")
+
+    def fail_runtime(**components: object) -> None:
+        del components
+        raise failure
+
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
+
+    monkeypatch.setattr(application_module, "ActionRuntime", fail_runtime)
+    with (
+        pytest.raises(RuntimeError) as captured,
+        application.bind(registered, dependencies=Dependencies()),
+    ):
+        pass
+
+    assert captured.value is failure
+    assert "fail_runtime" in {
+        frame.name for frame in traceback.extract_tb(captured.value.__traceback__)
+    }
 
 
 def test_binding_rejects_none_for_a_required_component() -> None:

@@ -15,9 +15,13 @@ from .authority import (
 from .canonical import (
     CanonicalizationError,
     CommitmentProvider,
+    CommitmentProviderPort,
     KeyedCommitment,
+    ProposalBoundCommitmentProvider,
+    ProposalBoundProtectionCodec,
     ProtectedPayload,
     ProtectionCodec,
+    ProtectionCodecPort,
     canonicalize_v1,
     commitment_payload_v1,
 )
@@ -31,6 +35,7 @@ from .models import (
     LifecycleStatus,
     Money,
     Participant,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -90,6 +95,7 @@ from .runtime import (
     InvalidAuthorityEvidenceError,
     OperationOutcome,
     ProposalNotFoundError,
+    ProposalPersistenceOutcomeUnknownError,
     ProposalView,
     RetentionStoreUnavailableError,
     RuntimeReasonCode,
@@ -136,6 +142,7 @@ __all__ = [
     "CanonicalizationError",
     "Clock",
     "CommitmentProvider",
+    "CommitmentProviderPort",
     "ConfirmingAuthority",
     "DecisionContext",
     "DefinitionConformanceError",
@@ -171,12 +178,17 @@ __all__ = [
     "PreparedAction",
     "ProposalAlreadyExistsError",
     "ProposalNotFoundError",
+    "ProposalPersistenceOutcomeUnknownError",
+    "ProposalBoundCommitmentProvider",
+    "ProposalBoundProtectionCodec",
+    "ProposalIdentity",
     "ProposalReceipt",
     "ProposalReceiptStatus",
     "ProposalView",
     "ProposingAgent",
     "ProtectedPayload",
     "ProtectionCodec",
+    "ProtectionCodecPort",
     "ReadContext",
     "Receipt",
     "RequestingPrincipal",
@@ -209,4 +221,4 @@ __all__ = [
     "validate_proposal_update",
 ]
 
-__version__ = "0.1.4"
+__version__ = "0.2.0"

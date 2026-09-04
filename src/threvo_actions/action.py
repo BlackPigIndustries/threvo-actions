@@ -12,7 +12,7 @@ from .registry import ActionDefinition
 
 if TYPE_CHECKING:
     from .authority import AuthorityEvidence
-    from .canonical import CommitmentProvider, ProtectionCodec
+    from .canonical import CommitmentProviderPort, ProtectionCodecPort
     from .models import ActionType, AuthoritativeTarget, EffectKind, GovernedExecutor
     from .registry import (
         AuthorityEvaluatorPort,
@@ -80,8 +80,8 @@ class Action(ABC, Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
         self,
         *,
         authority_evaluator: AuthorityEvaluatorPort,
-        commitment_provider: CommitmentProvider,
-        protection_codec: ProtectionCodec,
+        commitment_provider: CommitmentProviderPort,
+        protection_codec: ProtectionCodecPort,
     ) -> None:
         self._authority_evaluator = authority_evaluator
         self._commitment_provider = commitment_provider

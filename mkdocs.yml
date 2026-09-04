@@ -93,6 +93,7 @@ nav:
   - Integrations:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
+      - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
       - SQLAlchemy and Alembic: integrations/sqlalchemy-alembic.md
@@ -123,6 +124,7 @@ nav:
       - Canonicalization and protection: reference/canonical.md
       - Testing helpers: reference/testing.md
       - Pydantic AI: reference/pydantic-ai.md
+      - AWS KMS protection: reference/aws-kms.md
       - PostgreSQL and migrations: reference/postgres.md
       - MySQL and migrations: reference/mysql.md
       - SQLite and migrations: reference/sqlite.md
@@ -135,6 +137,7 @@ nav:
       - Versioning: versioning.md
       - Gradual-reveal design: design/gradual-reveal-api.md
       - Release record 0.1.4: releases/0.1.4.md
+      - Release record 0.2.0: releases/0.2.0.md
       - Release record 0.1.3: releases/0.1.3.md
       - Release record 0.1.2: releases/0.1.2.md
       - Release record 0.1.1: releases/0.1.1.md

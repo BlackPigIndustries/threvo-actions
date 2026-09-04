@@ -4,7 +4,7 @@ description: Build or integrate accountable financial actions with the threvo-ac
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.1.4"
+  version: "0.2.0"
 ---
 
 # Threvo Actions
@@ -36,16 +36,28 @@ successful HTTP response.
 
 ## Choose the authoring surface
 
-- Prefer the experimental `ActionApplication` plus a strict `ActionSpec` for a
-  new integration. Register a typed `ActionRecipe` explicitly, freeze the
-  catalog, and bind a dependency container from a fresh host operation scope.
-  Durable services may be shared references inside that container. This
-  gradual-reveal surface compiles to the same expert runtime and cannot grant
-  policy.
-- Use `Action[Command, Snapshot, Preview, Result]` when one host object already
-  owns every action port. Build `ActionDefinition` directly when the host owns
-  the ports as separate expert-level adapters. Do not introduce a second
-  lifecycle.
+- Use the experimental `ActionApplication` plus a strict `ActionSpec` only when
+  the application pins an exact patch release, reruns its equivalence tests
+  against the expert runtime before every patch upgrade, and reviews migration
+  notes before every minor-line upgrade. Register a typed `ActionRecipe`
+  explicitly, freeze the catalog, and bind a dependency container from a fresh
+  host operation scope. Durable services may be shared references inside that
+  container. This gradual-reveal surface compiles to the same expert runtime
+  and cannot grant policy.
+- Otherwise use the supported `Action[Command, Snapshot, Preview, Result]` when
+  one host object already owns every action port. Build `ActionDefinition`
+  directly when the host owns the ports as separate expert-level adapters. Do
+  not introduce a second lifecycle.
+- Treat `ActionApplication.bind()` as trusted host composition. Recipe,
+  definition, and runtime-construction failures preserve their original
+  exception and traceback for the author. Catch them at the host API or agent
+  boundary, log them under host policy, and return a stable content-safe host
+  error; never forward arbitrary exception text, tracebacks, causes, or locals
+  to an untrusted caller or model.
+- For `ScopedActionToolBinding`, provide `binding_failure_handler` when the host
+  needs private diagnostics. The integration returns `binding_unavailable` for
+  composition failures and `operation_outcome_unknown` for scope cleanup
+  failures; models must not retry either result.
 - Call `application.inspect(handle)` for static, allowlisted configuration
   inspection. It reports closed boundary roles and invariants, not model class
   names; it does not contact stores, run recipes, or report readiness.
@@ -127,6 +139,19 @@ and deferred-resume trust boundary.
 
 Use deterministic helpers only in tests. `EphemeralProtection` deliberately
 loses data on restart and is never production encryption or key custody.
+For AWS deployments, the optional `AwsKmsEnvelopeProtection` reference uses
+proposal-scoped KMS data keys and a host-owned durable wrapped-key store. Its
+complete provider ports receive a strict `ProposalIdentity` containing both
+tenant and proposal references for every operation. Adapt the host's AWS client
+to its typed port rather than adding an SDK to the core.
+
+Durable action and wrapped-key stores must provide authoritative read-after-write
+visibility so acknowledgement-lost writes can be reconciled. Treat
+`ProposalPersistenceOutcomeUnknownError` and
+`WrappedDataKeyPersistenceOutcomeUnknownError` as operator reconciliation
+signals; do not retry preparation blindly or destroy possibly-live keys.
+Wrapped-key erasure must use the store's atomic `delete_if_matches` result;
+only `deleted` or authoritative `already_absent` permits completion.
 
 At minimum prove:
 

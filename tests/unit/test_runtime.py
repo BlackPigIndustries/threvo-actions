@@ -21,6 +21,7 @@ from threvo_actions.models import (
     ExperimentalModel,
     GovernedExecutor,
     LifecycleStatus,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -56,6 +57,7 @@ from threvo_actions.runtime import (
     InvalidAuthorityEvidenceError,
     OperationOutcome,
     ProposalNotFoundError,
+    ProposalPersistenceOutcomeUnknownError,
     RetentionStoreUnavailableError,
     RuntimeReasonCode,
 )
@@ -213,6 +215,96 @@ class DeterministicSecrets:
         self.destroyed_payloads.add(payload.key_handle)
 
 
+class ProposalBoundSecrets(DeterministicSecrets):
+    def __init__(self) -> None:
+        super().__init__()
+        self.bound_destroyed: list[tuple[str, str, str]] = []
+
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
+        return await super().create(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool:
+        return await super().verify(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> ProtectedPayload:
+        return await super().protect(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
+        del proposal_identity
+        return await super().unprotect(payload=payload)
+
+    async def destroy_commitment(self, *, commitment: KeyedCommitment) -> None:
+        del commitment
+        raise AssertionError("runtime used the unbound commitment erasure port")
+
+    async def destroy_payload(self, *, payload: ProtectedPayload) -> None:
+        del payload
+        raise AssertionError("runtime used the unbound payload erasure port")
+
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        commitment: KeyedCommitment,
+    ) -> None:
+        assert commitment.key_handle == f"commitment:{proposal_identity.proposal_reference}"
+        self.bound_destroyed.append(
+            (
+                "commitment",
+                proposal_identity.tenant_reference,
+                proposal_identity.proposal_reference,
+            )
+        )
+        self.destroyed_commitments.add(commitment.key_handle)
+
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> None:
+        assert payload.key_handle == f"payload:{proposal_identity.proposal_reference}"
+        self.bound_destroyed.append(
+            (
+                "payload",
+                proposal_identity.tenant_reference,
+                proposal_identity.proposal_reference,
+            )
+        )
+        self.destroyed_payloads.add(payload.key_handle)
+
+
 class FailOnceOnCommitmentDestroy(DeterministicSecrets):
     def __init__(self) -> None:
         super().__init__()
@@ -253,6 +345,24 @@ class FailProposalCreateStore(MemoryActionStore):
     async def create(self, proposal: StoredProposal) -> None:
         del proposal
         raise RuntimeError("simulated proposal persistence outage")
+
+
+class PersistThenRaiseProposalCreateStore(MemoryActionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.raise_once = True
+
+    async def create(self, proposal: StoredProposal) -> None:
+        await super().create(proposal)
+        if self.raise_once:
+            self.raise_once = False
+            raise RuntimeError("acknowledgement lost")
+
+
+class PersistThenCancelProposalCreateStore(MemoryActionStore):
+    async def create(self, proposal: StoredProposal) -> None:
+        await super().create(proposal)
+        raise asyncio.CancelledError
 
 
 class CapturingEvents:
@@ -522,6 +632,21 @@ class ConflictAfterConcurrentBlockStore(MemoryActionStore):
         return EffectClaimResult.CONFLICT
 
 
+class SubstitutingReadStore(MemoryActionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested_reference: str | None = None
+        self.substituted_reference: str | None = None
+
+    async def get(self, tenant_reference: str, proposal_reference: str) -> StoredProposal | None:
+        if (
+            proposal_reference == self.requested_reference
+            and self.substituted_reference is not None
+        ):
+            return await super().get(tenant_reference, self.substituted_reference)
+        return await super().get(tenant_reference, proposal_reference)
+
+
 async def prepare(
     runtime: ActionRuntime,
     action: ActionDefinition[Command, PrivateSnapshot, Preview, Result],
@@ -608,6 +733,89 @@ def test_preparation_persists_protected_private_state_and_never_executes() -> No
         assert "private-account-value" not in "".join(
             event.model_dump_json() for event in events.events
         )
+
+    asyncio.run(scenario())
+
+
+def test_preparation_reconciles_a_persisted_proposal_after_lost_acknowledgement() -> None:
+    async def scenario() -> None:
+        store = PersistThenRaiseProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+
+        prepared = await prepare(runtime, action)
+        stored = await store.get("tenant:a", prepared.proposal_reference)
+
+        assert stored is not None
+        assert stored.protected_private_snapshot is not None
+        assert stored.commitment is not None
+        assert secrets.bound_destroyed == []
+
+    asyncio.run(scenario())
+
+
+def test_preparation_preserves_keys_when_proposal_reconciliation_is_unavailable() -> None:
+    class AmbiguousProposalCreateStore(PersistThenRaiseProposalCreateStore):
+        async def get(
+            self,
+            tenant_reference: str,
+            proposal_reference: str,
+        ) -> StoredProposal | None:
+            del tenant_reference, proposal_reference
+            raise RuntimeError("private read diagnostic")
+
+    async def scenario() -> None:
+        store = AmbiguousProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        secrets = ProposalBoundSecrets()
+
+        with pytest.raises(ProposalPersistenceOutcomeUnknownError) as caught:
+            await prepare(runtime, definition(HostPorts(), secrets))
+
+        assert caught.value.proposal_identity == ProposalIdentity(
+            tenant_reference="tenant:a",
+            proposal_reference="proposal:1",
+        )
+        persisted = await MemoryActionStore.get(store, "tenant:a", "proposal:1")
+        assert persisted is not None
+        assert secrets.bound_destroyed == []
+        assert str(caught.value) == "proposal persistence outcome is unknown"
+
+    asyncio.run(scenario())
+
+
+def test_preparation_cancellation_after_persistence_preserves_durable_state() -> None:
+    async def scenario() -> None:
+        store = PersistThenCancelProposalCreateStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        secrets = ProposalBoundSecrets()
+
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await prepare(runtime, definition(HostPorts(), secrets))
+
+        persisted = await MemoryActionStore.get(store, "tenant:a", "proposal:1")
+        assert persisted is not None
+        assert secrets.bound_destroyed == []
+        assert caught.value.__notes__ == [
+            "proposal persisted before cancellation; do not compensate protected state"
+        ]
 
     asyncio.run(scenario())
 
@@ -1285,6 +1493,74 @@ def test_erasure_destroys_only_one_proposals_private_and_commitment_material() -
         assert second_record is not None
         assert second_record.protected_private_snapshot is not None
         assert second_record.commitment is not None
+
+    asyncio.run(scenario())
+
+
+def test_runtime_prefers_proposal_bound_erasure_ports() -> None:
+    async def scenario() -> None:
+        runtime, _, _, _ = runtime_parts()
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+        prepared = await prepare(runtime, action)
+        context = ReadContext(
+            tenant_reference="tenant:a",
+            consumer=EvidenceConsumer(reference="retention:officer"),
+        )
+
+        await runtime.erase(
+            action,
+            proposal_reference=prepared.proposal_reference,
+            context=context,
+        )
+
+        assert secrets.bound_destroyed == [
+            ("payload", "tenant:a", prepared.proposal_reference),
+            ("commitment", "tenant:a", prepared.proposal_reference),
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_erasure_rejects_a_store_record_substituted_after_authorization() -> None:
+    async def scenario() -> None:
+        store = SubstitutingReadStore()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=store,
+            clock=MutableClock(),
+            identifiers=SequenceIdentifiers(),
+        )
+        host = HostPorts()
+        secrets = ProposalBoundSecrets()
+        action = definition(host, secrets)
+        requested = await prepare(runtime, action, order="ORD-1")
+        substituted = await prepare(runtime, action, order="ORD-2")
+        store.requested_reference = requested.proposal_reference
+        store.substituted_reference = substituted.proposal_reference
+        context = ReadContext(
+            tenant_reference="tenant:a",
+            consumer=EvidenceConsumer(reference="retention:officer"),
+        )
+
+        with pytest.raises(ProposalNotFoundError):
+            await runtime.erase(
+                action,
+                proposal_reference=requested.proposal_reference,
+                context=context,
+            )
+
+        store.requested_reference = None
+        requested_record = await store.get("tenant:a", requested.proposal_reference)
+        substituted_record = await store.get("tenant:a", substituted.proposal_reference)
+        assert secrets.bound_destroyed == []
+        assert requested_record is not None
+        assert requested_record.erasure_pending_at is None
+        assert requested_record.protected_private_snapshot is not None
+        assert substituted_record is not None
+        assert substituted_record.erasure_pending_at is None
+        assert substituted_record.protected_private_snapshot is not None
 
     asyncio.run(scenario())
 

@@ -6,6 +6,50 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
+### Added
+
+- An optional AWS KMS envelope-protection integration with proposal-bound
+  destruction ports, per-artifact data keys, durable wrapped-key metadata, and
+  release-artifact qualification for the new extra.
+
+### Changed
+
+- Pydantic AI now reports a durably prepared but unreadable proposal as
+  `prepared_not_visible` instead of the misleading `preparation_denied`.
+- Complete proposal-bound provider ports now receive a tenant-scoped
+  `ProposalIdentity` for every operation. Wrapped-key stores implement atomic
+  conditional deletion instead of a separate read/delete sequence.
+- Pydantic AI capability instructions now tell models how to stop, defer to the
+  host, or reconcile every non-success outcome instead of naming only the
+  verified completion condition.
+- Release qualification now behaviorally exercises commitment, payload, and
+  erasure operations from the built AWS KMS extra on every supported Python
+  version.
+- Ambiguous-store coverage now includes wrapped-key read failures, deletion
+  failures, and cancellation after both key and proposal persistence.
+- Model-boundary qualification now drives invalid sensitive arguments through
+  the real Pydantic AI dispatcher and checks the generated retry prompt.
+- Experimental binding tests now verify that runtime-construction failures
+  preserve the host exception and traceback for trusted diagnostics.
+
+### Security
+
+- The runtime now binds complete tenant-scoped proposal identities through
+  proposal-bound commitment and protection contracts, preventing authorized
+  reads or erasure from crossing tenants after whole-artifact substitution.
+- Proposal and wrapped-key writes now reconcile lost acknowledgements through
+  authoritative read-back and preserve possibly-live keys when persistence
+  remains unknown.
+- Wrapped-key erasure now requires an atomic tenant/proposal-bound conditional
+  delete, so stale reads cannot falsely report cryptographic erasure complete.
+- Scoped Pydantic AI bindings now keep recipe and dependency-scope diagnostics
+  behind an optional host hook while returning stable, content-safe outcomes to
+  the model.
+- Plaintext KMS data-key buffers are overwritten before later I/O or
+  authentication failures can escape through library traceback frames.
+
 ## [0.1.4] - 2026-09-02
 
 ### Added
@@ -150,7 +194,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.1...v0.1.2

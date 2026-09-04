@@ -76,7 +76,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: >-
-          uv sync --extra dev --extra mysql --extra pydantic-ai
+          uv sync --extra aws-kms --extra dev --extra mysql --extra pydantic-ai
           --extra postgres --extra docs --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -118,8 +118,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        profile: [core, postgres, pydantic-ai, all]
+        profile: [core, aws-kms, postgres, pydantic-ai, all]
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: release-distributions
@@ -135,9 +136,10 @@ jobs:
         run: |
           case "$PROFILE" in
             core) profile_extras="" ;;
+            aws-kms) profile_extras="[aws-kms]" ;;
             postgres) profile_extras="[postgres]" ;;
             pydantic-ai) profile_extras="[pydantic-ai]" ;;
-            all) profile_extras="[mysql,postgres,pydantic-ai]" ;;
+            all) profile_extras="[aws-kms,mysql,postgres,pydantic-ai]" ;;
             *) exit 1 ;;
           esac
           for artifact in release/packages/*.whl release/packages/*.tar.gz; do
@@ -153,10 +155,24 @@ jobs:
 
           assert threvo_actions.__version__ == "${RELEASE_TAG#v}"
           assert "ActionApplication" not in threvo_actions.__all__
+          if "$PROFILE" in ("aws-kms", "all"):
+              import threvo_actions.integrations.aws_kms
           if "$PROFILE" == "core":
-              for module in ("aiomysql", "asyncpg", "pydantic_ai", "sqlalchemy"):
+              for module in (
+                  "aiomysql",
+                  "asyncpg",
+                  "cryptography",
+                  "pydantic_ai",
+                  "sqlalchemy",
+              ):
                   assert importlib.util.find_spec(module) is None, module
           PY
+            if test "$PROFILE" = "aws-kms" || test "$PROFILE" = "all"; then
+              cp scripts/smoke_aws_kms_artifact.py "$consumer_root/"
+              cd "$consumer_root"
+              "$consumer_root/venv/bin/python" smoke_aws_kms_artifact.py
+              cd "$GITHUB_WORKSPACE"
+            fi
           done
 
   qualify-pydantic:
@@ -221,6 +237,11 @@ jobs:
           extracted_root=$(find "$consumer_root" -maxdepth 1 -type d \
             -name 'threvo_actions-*' -print -quit)
           cp -R "$extracted_root/examples" "$consumer_root/examples"
+          mkdir "$consumer_root/wheel-quickstart"
+          cp "$extracted_root/examples/docs/installed_quickstart.py" \
+            "$consumer_root/wheel-quickstart/installed_quickstart.py"
+          cd "$consumer_root/wheel-quickstart"
+          "$consumer_root/venv/bin/python" installed_quickstart.py
           cd "$consumer_root"
           "$consumer_root/venv/bin/python" -m pytest -q \
             examples/refund/test_example.py \

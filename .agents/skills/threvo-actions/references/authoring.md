@@ -2,6 +2,44 @@
 
 Read this when adding a new action or changing its typed contract.
 
+## Choose a compatibility posture
+
+`ActionApplication`, `ActionSpec`, and `ActionRecipe` are a namespaced
+experimental authoring layer. Use them only when the consuming application
+pins an exact `threvo-actions` patch, runs action-equivalence tests before an
+upgrade, and has an owner for migration review. Minor-line upgrades require an
+explicit migration review; the namespace may change with a documented `0.x`
+migration note.
+
+Use the supported `Action[Command, PrivateSnapshot, Preview, Result]` facade
+when one object owns every port, or construct `ActionDefinition` directly when
+the host already separates those adapters. All three paths compile to the same
+runtime; none may add a second lifecycle or grant policy.
+
+For the experimental path, keep static semantics separate from borrowed live
+dependencies:
+
+```python
+actions = ActionApplication[Dependencies]()
+payment = actions.register(
+    payment_spec,
+    ActionRecipe(bind=payment_components),
+)
+actions.freeze()
+
+with actions.bind(payment, dependencies=request_dependencies) as action:
+    prepared = await action.prepare(
+        tenant_reference=tenant_reference,
+        command=command,
+        requesting_principal=requesting_principal,
+    )
+```
+
+The recipe must return fresh `ActionComponents` for the current operation.
+Before adopting this path, implement the same action through the expert runtime
+in tests and prove both paths produce equivalent lifecycle outcomes and stored
+evidence.
+
 ## Model roles
 
 Use one shared strict base so every runtime boundary has the required Pydantic

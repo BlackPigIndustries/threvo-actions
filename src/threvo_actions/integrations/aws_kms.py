@@ -1,0 +1,558 @@
+"""AWS KMS envelope protection without an AWS SDK dependency in the runtime."""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import hmac
+import secrets
+from asyncio import CancelledError
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol
+
+from pydantic import AfterValidator, ConfigDict, Field, StringConstraints, TypeAdapter
+
+try:
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+except ModuleNotFoundError as exc:
+    if exc.name is not None and exc.name.startswith("cryptography"):
+        raise ImportError(
+            "AWS KMS envelope protection requires: pip install 'threvo-actions[aws-kms]'"
+        ) from exc
+    raise
+
+from ..canonical import (
+    KeyedCommitment,
+    ProposalBoundCommitmentProvider,
+    ProposalBoundProtectionCodec,
+    ProtectedPayload,
+)
+from ..models import ExperimentalModel, ProposalIdentity, SafeReference
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+_DATA_KEY_BYTES = 32
+_NONCE_BYTES = 12
+_CODEC = "aws-kms-envelope-aes256-gcm-v1"
+_ALGORITHM = "hmac-sha256"
+EnvelopePurpose = Literal["commitment", "payload"]
+
+
+def _validate_kms_key_id(value: str) -> str:
+    if value != value.strip():
+        raise ValueError("KMS key identifier cannot have leading or trailing whitespace")
+    if any(character.isspace() or not character.isprintable() for character in value):
+        raise ValueError("KMS key identifier cannot contain whitespace or control characters")
+    return value
+
+
+KmsKeyIdentifier = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=2048),
+    AfterValidator(_validate_kms_key_id),
+]
+_KMS_KEY_ID_ADAPTER = TypeAdapter(KmsKeyIdentifier)
+
+
+@dataclass(frozen=True)
+class GeneratedDataKey:
+    """One mutable plaintext data key and its KMS-wrapped representation."""
+
+    plaintext: bytearray = field(repr=False)
+    ciphertext: bytes = field(repr=False)
+    resolved_key_id: str
+
+
+class WrappedDataKey(ExperimentalModel):
+    """Durable proposal binding for one KMS-wrapped data key."""
+
+    model_config = ConfigDict(
+        hide_input_in_errors=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
+
+    tenant_reference: SafeReference
+    proposal_reference: SafeReference
+    purpose: EnvelopePurpose
+    key_id: KmsKeyIdentifier
+    key_version: SafeReference
+    ciphertext: Annotated[bytes, Field(min_length=1, repr=False)]
+
+
+class WrappedDataKeyDeleteOutcome(StrEnum):
+    """Authoritative result of atomic proposal-bound wrapped-key deletion."""
+
+    DELETED = "deleted"
+    ALREADY_ABSENT = "already_absent"
+    MISMATCH = "mismatch"
+
+
+class KmsDataKeyClient(Protocol):
+    """Minimal async port a host adapts to its AWS KMS client.
+
+    Generate adapters must copy AWS's plaintext response into a ``bytearray``
+    and discard the SDK response before returning. The protection adapter
+    overwrites that buffer after use.
+    """
+
+    async def generate_data_key(
+        self,
+        *,
+        key_id: str,
+        encryption_context: Mapping[str, str],
+        number_of_bytes: int,
+    ) -> GeneratedDataKey: ...
+
+    async def decrypt_data_key(
+        self,
+        *,
+        key_id: str,
+        ciphertext: bytes,
+        encryption_context: Mapping[str, str],
+    ) -> bytes | bytearray: ...
+
+
+__all__ = [
+    "AwsKmsEnvelopeProtection",
+    "GeneratedDataKey",
+    "KmsDataKeyClient",
+    "KmsKeyIdentifier",
+    "WrappedDataKey",
+    "WrappedDataKeyDeleteOutcome",
+    "WrappedDataKeyPersistenceOutcomeUnknownError",
+    "WrappedDataKeyStore",
+]
+
+
+class WrappedDataKeyStore(Protocol):
+    """Durable, authoritative storage for proposal-scoped wrapped keys.
+
+    A completed write, including one whose acknowledgement is lost, must be
+    visible to a subsequent ``get`` through the same adapter.
+    """
+
+    async def put(self, *, key_handle: str, envelope: WrappedDataKey) -> None: ...
+
+    async def get(self, *, key_handle: str) -> WrappedDataKey | None: ...
+
+    async def delete_if_matches(
+        self,
+        *,
+        key_handle: str,
+        proposal_identity: ProposalIdentity,
+        purpose: EnvelopePurpose,
+        key_version: str,
+    ) -> WrappedDataKeyDeleteOutcome: ...
+
+
+class WrappedDataKeyPersistenceOutcomeUnknownError(RuntimeError):
+    """Raised when a wrapped-key write cannot be reconciled safely."""
+
+    def __init__(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        key_handle: str,
+        purpose: EnvelopePurpose,
+    ) -> None:
+        self.proposal_identity = proposal_identity
+        self.key_handle = key_handle
+        self.purpose = purpose
+        super().__init__("wrapped data-key persistence outcome is unknown")
+
+
+class AwsKmsEnvelopeProtection(
+    ProposalBoundCommitmentProvider,
+    ProposalBoundProtectionCodec,
+):
+    """KMS-wrapped HMAC commitments and AES-256-GCM private snapshots.
+
+    The host supplies AWS SDK calls through ``KmsDataKeyClient`` and stores
+    wrapped keys separately through ``WrappedDataKeyStore``. Deleting a wrapped
+    proposal key is the idempotent erasure boundary; the shared KMS key remains.
+    """
+
+    def __init__(
+        self,
+        *,
+        key_id: str,
+        kms: KmsDataKeyClient,
+        envelopes: WrappedDataKeyStore,
+    ) -> None:
+        self._key_id = _KMS_KEY_ID_ADAPTER.validate_python(key_id)
+        self._kms = kms
+        self._envelopes = envelopes
+
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
+        handle, generated = await self._generate_key(
+            proposal_identity=proposal_identity,
+            purpose="commitment",
+        )
+        key_version = _key_version(generated.resolved_key_id)
+        try:
+            digest = hmac.new(
+                generated.plaintext,
+                _authenticated_metadata(
+                    key_handle=handle,
+                    proposal_identity=proposal_identity,
+                    purpose="commitment",
+                    key_id=generated.resolved_key_id,
+                    key_version=key_version,
+                )
+                + canonical_payload,
+                hashlib.sha256,
+            ).hexdigest()
+        finally:
+            _zero_key(generated.plaintext)
+        commitment = KeyedCommitment(
+            algorithm=_ALGORITHM,
+            key_handle=handle,
+            key_version=key_version,
+            digest=digest,
+        )
+        await self._store_key(
+            handle=handle,
+            generated=generated,
+            proposal_identity=proposal_identity,
+            purpose="commitment",
+        )
+        return commitment
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool:
+        if commitment.algorithm != _ALGORITHM:
+            return False
+        envelope = await self._envelopes.get(key_handle=commitment.key_handle)
+        if envelope is None or not self._matches(
+            envelope,
+            proposal_identity=proposal_identity,
+            purpose="commitment",
+            key_version=commitment.key_version,
+        ):
+            return False
+        key = await self._decrypt_key(commitment.key_handle, envelope)
+        try:
+            expected = hmac.new(
+                key,
+                _authenticated_metadata(
+                    key_handle=commitment.key_handle,
+                    proposal_identity=proposal_identity,
+                    purpose="commitment",
+                    key_id=envelope.key_id,
+                    key_version=envelope.key_version,
+                )
+                + canonical_payload,
+                hashlib.sha256,
+            ).hexdigest()
+            return hmac.compare_digest(expected, commitment.digest)
+        finally:
+            _zero_key(key)
+
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        commitment: KeyedCommitment,
+    ) -> None:
+        if commitment.algorithm != _ALGORITHM:
+            raise ValueError("commitment algorithm is not supported")
+        await self._destroy(
+            key_handle=commitment.key_handle,
+            key_version=commitment.key_version,
+            purpose="commitment",
+            proposal_identity=proposal_identity,
+        )
+
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> ProtectedPayload:
+        handle, generated = await self._generate_key(
+            proposal_identity=proposal_identity,
+            purpose="payload",
+        )
+        key_version = _key_version(generated.resolved_key_id)
+        nonce = secrets.token_bytes(_NONCE_BYTES)
+        try:
+            ciphertext = nonce + AESGCM(generated.plaintext).encrypt(
+                nonce,
+                canonical_payload,
+                _authenticated_metadata(
+                    key_handle=handle,
+                    proposal_identity=proposal_identity,
+                    purpose="payload",
+                    key_id=generated.resolved_key_id,
+                    key_version=key_version,
+                ),
+            )
+        finally:
+            _zero_key(generated.plaintext)
+        protected = ProtectedPayload(
+            codec=_CODEC,
+            key_handle=handle,
+            key_version=key_version,
+            ciphertext=base64.b64encode(ciphertext).decode("ascii"),
+        )
+        await self._store_key(
+            handle=handle,
+            generated=generated,
+            proposal_identity=proposal_identity,
+            purpose="payload",
+        )
+        return protected
+
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
+        if payload.codec != _CODEC:
+            raise ValueError("protected payload codec is not supported")
+        envelope = await self._envelopes.get(key_handle=payload.key_handle)
+        if envelope is None:
+            raise KeyError(payload.key_handle)
+        if not self._matches(
+            envelope,
+            proposal_identity=proposal_identity,
+            purpose="payload",
+            key_version=payload.key_version,
+        ):
+            raise ValueError("protected payload metadata does not match its key envelope")
+        try:
+            encoded = base64.b64decode(payload.ciphertext, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("protected payload ciphertext is invalid") from None
+        if len(encoded) < _NONCE_BYTES + 16:
+            raise ValueError("protected payload ciphertext is invalid")
+        nonce, ciphertext = encoded[:_NONCE_BYTES], encoded[_NONCE_BYTES:]
+        key = await self._decrypt_key(payload.key_handle, envelope)
+        try:
+            return AESGCM(key).decrypt(
+                nonce,
+                ciphertext,
+                _authenticated_metadata(
+                    key_handle=payload.key_handle,
+                    proposal_identity=proposal_identity,
+                    purpose="payload",
+                    key_id=envelope.key_id,
+                    key_version=envelope.key_version,
+                ),
+            )
+        except InvalidTag:
+            raise ValueError("protected payload authentication failed") from None
+        finally:
+            _zero_key(key)
+
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> None:
+        if payload.codec != _CODEC:
+            raise ValueError("protected payload codec is not supported")
+        await self._destroy(
+            key_handle=payload.key_handle,
+            key_version=payload.key_version,
+            purpose="payload",
+            proposal_identity=proposal_identity,
+        )
+
+    async def _generate_key(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        purpose: EnvelopePurpose,
+    ) -> tuple[str, GeneratedDataKey]:
+        handle = f"kms-envelope:{secrets.token_hex(16)}"
+        context = _encryption_context(
+            key_handle=handle,
+            proposal_identity=proposal_identity,
+            purpose=purpose,
+        )
+        generated = await self._kms.generate_data_key(
+            key_id=self._key_id,
+            encryption_context=context,
+            number_of_bytes=_DATA_KEY_BYTES,
+        )
+        if len(generated.plaintext) != _DATA_KEY_BYTES:
+            _zero_key(generated.plaintext)
+            raise ValueError("KMS data key must contain exactly 32 plaintext bytes")
+        try:
+            _KMS_KEY_ID_ADAPTER.validate_python(generated.resolved_key_id)
+        except ValueError:
+            _zero_key(generated.plaintext)
+            raise
+        return handle, generated
+
+    async def _store_key(
+        self,
+        *,
+        handle: str,
+        generated: GeneratedDataKey,
+        proposal_identity: ProposalIdentity,
+        purpose: EnvelopePurpose,
+    ) -> None:
+        envelope = WrappedDataKey(
+            tenant_reference=proposal_identity.tenant_reference,
+            proposal_reference=proposal_identity.proposal_reference,
+            purpose=purpose,
+            key_id=generated.resolved_key_id,
+            key_version=_key_version(generated.resolved_key_id),
+            ciphertext=generated.ciphertext,
+        )
+        try:
+            await self._envelopes.put(key_handle=handle, envelope=envelope)
+        except BaseException as failure:
+            try:
+                persisted = await self._envelopes.get(key_handle=handle)
+            except BaseException as reconciliation_failure:
+                if isinstance(failure, CancelledError):
+                    failure.add_note(
+                        "wrapped data-key persistence reconciliation was interrupted; "
+                        "do not compensate the protected value"
+                    )
+                    raise
+                unknown = WrappedDataKeyPersistenceOutcomeUnknownError(
+                    proposal_identity=proposal_identity,
+                    key_handle=handle,
+                    purpose=purpose,
+                )
+                unknown.add_note(
+                    "wrapped data-key persistence reconciliation failed: "
+                    f"{type(reconciliation_failure).__name__}"
+                )
+                raise unknown from failure
+            if persisted == envelope:
+                if isinstance(failure, CancelledError):
+                    failure.add_note(
+                        "wrapped data key persisted before cancellation; "
+                        "do not compensate the protected value"
+                    )
+                    raise
+                return
+            if persisted is not None:
+                raise ValueError("wrapped data-key handle is already bound") from failure
+            raise
+
+    async def _decrypt_key(self, key_handle: str, envelope: WrappedDataKey) -> bytearray:
+        decrypted = await self._kms.decrypt_data_key(
+            key_id=envelope.key_id,
+            ciphertext=envelope.ciphertext,
+            encryption_context=_encryption_context(
+                key_handle=key_handle,
+                proposal_identity=ProposalIdentity(
+                    tenant_reference=envelope.tenant_reference,
+                    proposal_reference=envelope.proposal_reference,
+                ),
+                purpose=envelope.purpose,
+            ),
+        )
+        key = decrypted if isinstance(decrypted, bytearray) else bytearray(decrypted)
+        del decrypted
+        if len(key) != _DATA_KEY_BYTES:
+            _zero_key(key)
+            raise ValueError("KMS data key must contain exactly 32 plaintext bytes")
+        return key
+
+    async def _destroy(
+        self,
+        *,
+        key_handle: str,
+        key_version: str,
+        purpose: EnvelopePurpose,
+        proposal_identity: ProposalIdentity,
+    ) -> None:
+        outcome = await self._envelopes.delete_if_matches(
+            key_handle=key_handle,
+            proposal_identity=proposal_identity,
+            purpose=purpose,
+            key_version=key_version,
+        )
+        if outcome in (
+            WrappedDataKeyDeleteOutcome.DELETED,
+            WrappedDataKeyDeleteOutcome.ALREADY_ABSENT,
+        ):
+            return
+        if outcome is WrappedDataKeyDeleteOutcome.MISMATCH:
+            raise ValueError("key envelope metadata does not match the protected value")
+        raise ValueError("wrapped data-key store returned an invalid deletion outcome")
+
+    @staticmethod
+    def _matches(
+        envelope: WrappedDataKey | None,
+        *,
+        proposal_identity: ProposalIdentity,
+        purpose: EnvelopePurpose,
+        key_version: str,
+    ) -> bool:
+        return (
+            envelope is not None
+            and envelope.tenant_reference == proposal_identity.tenant_reference
+            and envelope.proposal_reference == proposal_identity.proposal_reference
+            and envelope.purpose == purpose
+            and envelope.key_version == key_version
+        )
+
+
+def _encryption_context(
+    *,
+    key_handle: str,
+    proposal_identity: ProposalIdentity,
+    purpose: EnvelopePurpose,
+) -> dict[str, str]:
+    return {
+        "threvo-actions:key-handle": key_handle,
+        "threvo-actions:tenant": proposal_identity.tenant_reference,
+        "threvo-actions:proposal": proposal_identity.proposal_reference,
+        "threvo-actions:purpose": purpose,
+    }
+
+
+def _authenticated_metadata(
+    *,
+    key_handle: str,
+    proposal_identity: ProposalIdentity,
+    purpose: EnvelopePurpose,
+    key_id: str,
+    key_version: str,
+) -> bytes:
+    parts = (
+        key_handle,
+        proposal_identity.tenant_reference,
+        proposal_identity.proposal_reference,
+        purpose,
+        key_id,
+        key_version,
+    )
+    encoded = [part.encode("utf-8") for part in parts]
+    return b"threvo-actions:aws-kms-envelope:v1" + b"".join(
+        len(part).to_bytes(4, "big") + part for part in encoded
+    )
+
+
+def _key_version(resolved_key_id: str) -> str:
+    digest = hashlib.sha256(resolved_key_id.encode("utf-8")).hexdigest()
+    return f"aws-kms:{digest}"
+
+
+def _zero_key(key: bytearray) -> None:
+    key[:] = b"\x00" * len(key)

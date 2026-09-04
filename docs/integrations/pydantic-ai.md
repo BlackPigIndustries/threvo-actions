@@ -5,7 +5,7 @@ model can propose a command and see a safe preview, but it cannot create
 financial authority or bypass the runtime.
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
+python -m pip install "threvo-actions[pydantic-ai]==0.2.0"
 ```
 
 The integration is tested against `pydantic-ai-slim==2.33.0`. It installs no
@@ -53,6 +53,29 @@ from the source distribution.
    one reconciliation attempt and returns a display-safe `ActionToolResult`.
 6. When verification is delayed or still uncertain, the host schedules a later
    reconciliation and reports completion only after a `verified` outcome.
+
+`ScopedActionToolBinding` is also the content-safe boundary around trusted host
+composition. Dependency entry, context resolution, recipe binding, and binding
+cleanup failures are never forwarded to the model. An optional
+`binding_failure_handler` receives the original exception and traceback under
+host logging policy. The tool returns `binding_unavailable` when composition
+never completed, or `operation_outcome_unknown` when scope cleanup failed after
+an operation ran. Models must not retry either outcome; the host owns diagnosis
+and reconciliation.
+
+The capability supplies the same fail-closed outcome rules as model-visible
+instructions, rather than relying on application prompt authors to reproduce
+them. `invalid_continuation` stops the flow until the host supplies a fresh
+continuation. `preparation_denied` is retried only after trusted host context
+changes. `prepared_not_visible` remains hidden and is not continued from model
+context. `verification_pending` and `failed_unknown` require host
+reconciliation, never a blind resend. Only `verified` proves completion.
+
+If preparation succeeds but the current evidence consumer cannot read the new
+proposal, the tool returns `prepared_not_visible` without a proposal reference,
+lifecycle status, or preview. This is distinct from `preparation_denied`: the
+proposal is durable and remains subject to the host's expiry, retention, and
+operator-reconciliation policies, but it is not exposed to the model.
 
 The agent is ordinary Pydantic AI:
 
@@ -111,8 +134,9 @@ inline handler without calling `record_authority()` still leaves the proposal
 - Schedule later reconciliation through the same registered action and fresh
   host dependency scope when the capability returns `verification_pending`.
 - Raise `ApprovalRequired` only after the prepare scope exits successfully so
-  a host transaction can commit. Real exceptions and cancellation must leave
-  through the exceptional scope path and roll back.
+  a host transaction can commit. Operation exceptions and cancellation leave
+  through the exceptional scope path. Composition failures are reported only
+  through the host-controlled diagnostic hook and a stable safe tool outcome.
 
 Existing applications may continue to use `ActionToolBinding` with a fixed
 expert runtime. Registering an `ActionRecipe` never exposes a tool by itself;

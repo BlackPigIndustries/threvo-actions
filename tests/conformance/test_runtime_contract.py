@@ -45,6 +45,7 @@ from threvo_actions.models import (
     AuthoritativeTarget,
     GovernedExecutor,
     LifecycleStatus,
+    ProposalIdentity,
     ProposingAgent,
     RequestingPrincipal,
 )
@@ -52,6 +53,7 @@ from threvo_actions.registry import VerificationResult, VerificationStatus
 from threvo_actions.stores.memory import MemoryActionStore
 
 if TYPE_CHECKING:
+    from threvo_actions.canonical import KeyedCommitment, ProtectedPayload
     from threvo_actions.registry import ActionDefinition
     from threvo_actions.runtime import ActionOperationResult, ActionRuntime
     from threvo_actions.stores.base import StoredProposal
@@ -286,6 +288,74 @@ class NoOpCommitmentDestruction(DeterministicSecrets):
         del commitment
 
 
+class ProposalBoundDeterministicSecrets(DeterministicSecrets):
+    async def create_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> KeyedCommitment:
+        return await self.create(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def verify_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+        commitment: KeyedCommitment,
+    ) -> bool:
+        return await self.verify(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+            commitment=commitment,
+        )
+
+    async def protect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        canonical_payload: bytes,
+    ) -> ProtectedPayload:
+        return await self.protect(
+            proposal_reference=proposal_identity.proposal_reference,
+            canonical_payload=canonical_payload,
+        )
+
+    async def unprotect_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> bytes:
+        del proposal_identity
+        return await self.unprotect(payload=payload)
+
+
+class ProposalBlindPayloadDestruction(ProposalBoundDeterministicSecrets):
+    async def destroy_payload_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        payload: ProtectedPayload,
+    ) -> None:
+        del proposal_identity
+        await self.destroy_payload(payload=payload)
+
+
+class ProposalBlindCommitmentDestruction(ProposalBoundDeterministicSecrets):
+    async def destroy_commitment_for(
+        self,
+        *,
+        proposal_identity: ProposalIdentity,
+        commitment: KeyedCommitment,
+    ) -> None:
+        del proposal_identity
+        await self.destroy_commitment(commitment=commitment)
+
+
 @pytest.mark.parametrize(
     ("providers", "failure"),
     [
@@ -294,6 +364,35 @@ class NoOpCommitmentDestruction(DeterministicSecrets):
     ],
 )
 def test_provider_contract_catches_no_op_destruction(
+    providers: DeterministicSecrets,
+    failure: str,
+) -> None:
+    with pytest.raises(ConformanceError, match=failure):
+        asyncio.run(
+            assert_providers_conform(
+                commitment_provider=providers,
+                protection_codec=providers,
+                proposal_reference=f"proposal:{failure}",
+                canonical_payload=b'{"account":"private-one"}',
+                mutated_payload=b'{"account":"private-two"}',
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("providers", "failure"),
+    [
+        (
+            ProposalBlindPayloadDestruction(),
+            "proposal_bound_payload_mismatch_destroyed",
+        ),
+        (
+            ProposalBlindCommitmentDestruction(),
+            "proposal_bound_commitment_mismatch_destroyed",
+        ),
+    ],
+)
+def test_provider_contract_catches_proposal_blind_destruction(
     providers: DeterministicSecrets,
     failure: str,
 ) -> None:

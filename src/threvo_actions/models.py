@@ -51,6 +51,13 @@ class ActionType(ExperimentalModel):
     version: Annotated[int, Field(ge=1)]
 
 
+class ProposalIdentity(ExperimentalModel):
+    """Complete tenant-scoped identity of a durable action proposal."""
+
+    tenant_reference: SafeReference
+    proposal_reference: SafeReference
+
+
 class LifecycleStatus(StrEnum):
     """Closed lifecycle vocabulary for proposal execution and verification."""
 

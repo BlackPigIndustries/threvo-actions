@@ -4,7 +4,7 @@ Read this only when the host uses Pydantic AI. In an application, install the
 published optional extra:
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.1.4"
+python -m pip install "threvo-actions[pydantic-ai]==0.2.0"
 ```
 
 When contributing from a source checkout, install its locked integration
@@ -42,6 +42,7 @@ binding = ScopedActionToolBinding(
     context_resolver=action_context,
     name="release_payment",
     description="Prepare a payment release and show a safe preview.",
+    binding_failure_handler=record_private_binding_failure,
 )
 actions = ActionCapability[RequestDependencies](bindings=[binding])
 agent = Agent(
@@ -61,9 +62,28 @@ paths are rejected before preparation because converting them through a Python
 `action_dependency_scope` is a host async context-manager factory. It must
 open fresh transaction/request dependencies for every prepare and deferred
 resume. The capability exits that scope successfully before raising
-`ApprovalRequired`; real exceptions and cancellation leave through the
-exceptional path. Existing expert integrations may retain `ActionToolBinding`
-with an explicit fixed `ActionRuntime`.
+`ApprovalRequired`; operation exceptions and cancellation leave through the
+exceptional path. Dependency, context, recipe, and scope-cleanup failures are
+sent only to the optional host-controlled `binding_failure_handler`; the model
+receives `binding_unavailable` or `operation_outcome_unknown` without exception
+text, causes, tracebacks, or locals. Do not retry those outcomes from the model.
+Existing expert integrations may retain `ActionToolBinding` with an explicit
+fixed `ActionRuntime`.
+
+`ActionCapability` places the complete conservative outcome policy into the
+model instructions. `invalid_continuation` stops until the host provides a
+fresh continuation. Retry `preparation_denied` only after trusted host context
+changes. Never retry `binding_unavailable`, `operation_outcome_unknown`,
+`prepared_not_visible`, `verification_pending`, or `failed_unknown` from the
+model. The host diagnoses or reconciles them, and only `verified` proves
+completion.
+
+If preparation succeeds but the evidence consumer cannot read the resulting
+proposal, the capability returns `prepared_not_visible` without its reference,
+status, or preview. This is not `preparation_denied`: the proposal is durable
+and remains subject to the host's expiry, retention, and operator-reconciliation
+policies. Do not expose the hidden proposal through model output or continuation
+metadata.
 
 ## Deferred authority
 
