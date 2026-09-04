@@ -588,10 +588,11 @@ jobs:
             --version "${RELEASE_TAG#v}" \
             --release release \
             --attempts 12
+          RELEASE_VERSION="${RELEASE_TAG#v}"
           git fetch --no-tags origin main:refs/remotes/origin/main
           git show origin/main:docs/testing/gradual-reveal-adoption.md \
             > release/ADOPTION-EVIDENCE.md
-          git show origin/main:docs/releases/0.1.4.md \
+          git show "origin/main:docs/releases/$RELEASE_VERSION.md" \
             > release/RELEASE-NOTES.md
           printf '%s  %s\n' "$ADOPTION_RECORD_DIGEST" release/ADOPTION-EVIDENCE.md \
             | sha256sum --check --strict
