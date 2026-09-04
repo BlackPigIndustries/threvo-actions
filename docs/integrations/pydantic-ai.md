@@ -5,7 +5,7 @@ model can propose a command and see a safe preview, but it cannot create
 financial authority or bypass the runtime.
 
 ```bash
-python -m pip install "threvo-actions[pydantic-ai]==0.2.0"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.5"
 ```
 
 The integration is tested against `pydantic-ai-slim==2.33.0`. It installs no

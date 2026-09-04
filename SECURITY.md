@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The `0.2.x` release line receives security fixes. Development snapshots and
+The `0.1.x` release line receives security fixes. Development snapshots and
 older `0.x` lines are unsupported. See `docs/versioning.md` for the distinction
 between the supported Python API and experimental interoperability surfaces.
 
