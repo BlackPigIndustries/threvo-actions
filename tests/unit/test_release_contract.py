@@ -119,6 +119,14 @@ def test_release_behaviorally_qualifies_the_installed_aws_kms_extra() -> None:
     assert 'if test "$PROFILE" = "aws-kms" || test "$PROFILE" = "all"' in workflow
 
 
+def test_github_release_uses_the_requested_versions_release_record() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert 'RELEASE_VERSION="${RELEASE_TAG#v}"' in workflow
+    assert 'git show "origin/main:docs/releases/$RELEASE_VERSION.md"' in workflow
+    assert "git show origin/main:docs/releases/0.1.4.md" not in workflow
+
+
 def test_release_014_owner_waiver_is_explicit_and_not_reusable() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
     adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
