@@ -6,6 +6,18 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Changed
+
+- The `pydantic-ai` extra now floors `pydantic-ai-slim>=2.33.0,<3` instead of
+  pinning `==2.33.0`, so consumers can install it next to a newer Pydantic AI;
+  the development lock moves to 2.40.0.
+
+### Added
+
+- A history-spoofing regression proving a deferred result filed under the
+  `calls` category cannot settle a financial-action approval
+  (pydantic/pydantic-ai#7626 class; our handler only keys `approvals`).
+
 ## [0.1.5] - 2026-09-04
 
 ### Added
