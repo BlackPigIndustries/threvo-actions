@@ -15,12 +15,11 @@ operation scoped.
 
 ## Copy-paste the installed-wheel example
 
-Install the core wheel, copy the file below into an empty directory, and run
-it. It imports only `threvo_actions` and the Python standard library:
+Copy the file below into an empty directory and run it with the exact package
+version. It imports only `threvo_actions` and the Python standard library:
 
 ```bash
-uv add "threvo-actions==0.2.0"
-uv run python installed_quickstart.py
+uv run --no-project --with "threvo-actions==0.2.0" python installed_quickstart.py
 ```
 
 ??? example "Copy the file below as `installed_quickstart.py`"

@@ -8,12 +8,11 @@ import hmac
 import secrets
 from typing import TYPE_CHECKING
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from threvo_actions import KeyedCommitment, ProposalIdentity, ProtectedPayload
 from threvo_actions.canonical import canonicalize_v1
-
-from .models import AppError
 
 if TYPE_CHECKING:
     import asyncpg
@@ -52,8 +51,11 @@ class PostgresProtection:
             purpose,
         )
         if not isinstance(wrapped, bytes):
-            raise AppError("proposal protection unavailable")
-        return self._master.decrypt(wrapped[:12], wrapped[12:], self._aad(identity, purpose))
+            raise KeyError("proposal protection unavailable")
+        try:
+            return self._master.decrypt(wrapped[:12], wrapped[12:], self._aad(identity, purpose))
+        except InvalidTag:
+            raise ValueError("proposal protection unavailable") from None
 
     async def _destroy(self, identity: ProposalIdentity, purpose: str, handle: str) -> None:
         await self._pool.execute(
@@ -83,7 +85,12 @@ class PostgresProtection:
         canonical_payload: bytes,
         commitment: KeyedCommitment,
     ) -> bool:
-        key = await self._key(proposal_identity, "commitment", commitment.key_handle)
+        if commitment.algorithm != "hmac-sha256" or commitment.key_version != "1":
+            return False
+        try:
+            key = await self._key(proposal_identity, "commitment", commitment.key_handle)
+        except (KeyError, ValueError):
+            return False
         expected = hmac.new(key, canonical_payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, commitment.digest)
 
@@ -110,11 +117,16 @@ class PostgresProtection:
     async def unprotect_for(
         self, *, proposal_identity: ProposalIdentity, payload: ProtectedPayload
     ) -> bytes:
+        if payload.codec != "reference-envelope-v1" or payload.key_version != "1":
+            raise ValueError("unsupported proposal protection")
         key = await self._key(proposal_identity, "payload", payload.key_handle)
         ciphertext = base64.b64decode(payload.ciphertext, validate=True)
-        return AESGCM(key).decrypt(
-            ciphertext[:12], ciphertext[12:], self._aad(proposal_identity, "payload")
-        )
+        try:
+            return AESGCM(key).decrypt(
+                ciphertext[:12], ciphertext[12:], self._aad(proposal_identity, "payload")
+            )
+        except InvalidTag:
+            raise ValueError("proposal protection unavailable") from None
 
     async def destroy_payload_for(
         self, *, proposal_identity: ProposalIdentity, payload: ProtectedPayload

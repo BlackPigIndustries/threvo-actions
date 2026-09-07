@@ -367,3 +367,124 @@ def test_webhook_replay_is_deduplicated_and_never_executes():
             assert gateway.calls == 0
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("field,value", [("codec", "unsupported"), ("key_version", "2")])
+def test_payload_metadata_fails_closed(field, value):
+    async def scenario():
+        async with application() as (service, _):
+            from threvo_actions import ProposalIdentity
+
+            identity = ProposalIdentity(tenant_reference="tenant:one", proposal_reference="p:one")
+            protection = service.definition.protection_codec
+            payload = await protection.protect_for(
+                proposal_identity=identity, canonical_payload=b"x"
+            )
+            with pytest.raises(ValueError):
+                await protection.unprotect_for(
+                    proposal_identity=identity, payload=payload.model_copy(update={field: value})
+                )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("field,value", [("algorithm", "unsupported"), ("key_version", "2")])
+def test_commitment_metadata_fails_closed(field, value):
+    async def scenario():
+        async with application() as (service, _):
+            from threvo_actions import ProposalIdentity
+
+            identity = ProposalIdentity(tenant_reference="tenant:one", proposal_reference="p:one")
+            protection = service.definition.protection_codec
+            commitment = await protection.create_for(
+                proposal_identity=identity, canonical_payload=b"x"
+            )
+            assert not await protection.verify_for(
+                proposal_identity=identity,
+                canonical_payload=b"x",
+                commitment=commitment.model_copy(update={field: value}),
+            )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("purpose", ["payload", "commitment"])
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_missing_protection_key_blocks_authorized_work(purpose, damage):
+    async def scenario():
+        async with application() as (service, gateway):
+            requester, approver, _ = service.settings.identities
+            proposal = await service.prepare(requester, command())
+            await service.decide(approver, proposal.proposal_reference, True)
+            if damage == "missing":
+                await service.repository.pool.execute(
+                    "DELETE FROM stripe_refund_app.keys WHERE purpose=$1", purpose
+                )
+            else:
+                await service.repository.pool.execute(
+                    "UPDATE stripe_refund_app.keys SET wrapped=$2 WHERE purpose=$1",
+                    purpose,
+                    b"x" * 60,
+                )
+            await service.sweep()
+            record = await service.store.get("tenant:one", proposal.proposal_reference)
+            assert record.lifecycle_status is LifecycleStatus.BLOCKED
+            assert gateway.calls == 0
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("isolation", ["read_committed", "repeatable_read"])
+def test_order_writers_cannot_change_a_reserved_payment(isolation):
+    async def scenario():
+        async with application() as (service, _):
+            proposal = await service.prepare(service.settings.identities[0], command())
+            record = await service.store.get("tenant:one", proposal.proposal_reference)
+            intent = await service.repository.intent("tenant:one", record.semantic_effect_reference)
+            async with service.repository.pool.acquire() as writer:
+                with pytest.raises((asyncpg.CheckViolationError, asyncpg.SerializationError)):
+                    async with writer.transaction(isolation=isolation):
+                        await writer.fetchval("SELECT data FROM stripe_refund_app.orders")
+                        assert await service.repository.reserve(intent.snapshot, datetime.now(UTC))
+                        await writer.execute(
+                            """UPDATE stripe_refund_app.orders
+                               SET data=jsonb_set(data, '{charge_id}',
+                               '\"ch_changed\"') WHERE tenant_reference='tenant:one'"""
+                        )
+            assert (
+                await service.repository.order("tenant:one", "order:one")
+            ).charge_id == "ch_example"
+
+    asyncio.run(scenario())
+
+
+def test_recovery_claims_do_not_starve_work_after_the_first_page():
+    async def scenario():
+        async with application() as (service, gateway):
+            requester, approver, _ = service.settings.identities
+            for _ in range(101):
+                proposal = await service.prepare(requester, command())
+                await service.decide(approver, proposal.proposal_reference, True)
+            first = await service.repository.due("tenant:one")
+            restarted = RefundService(
+                service.repository.pool, service.settings, service.action.connector
+            )
+            second = await restarted.repository.due("tenant:one")
+            assert len(first) == 100
+            assert len(second) == 1
+            assert not set(first).intersection(second)
+            assert await restarted.repository.due("tenant:one") == ()
+            assert gateway.calls == 0
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("indices", [(), (0,), (0, 2)])
+def test_settings_require_an_approver_for_every_requesting_tenant(indices):
+    from pydantic import ValidationError
+
+    original = settings("postgresql:///unused")
+    values = original.model_dump()
+    values["identities"] = tuple(original.identities[index] for index in indices)
+    with pytest.raises(ValidationError):
+        Settings.model_validate(values)

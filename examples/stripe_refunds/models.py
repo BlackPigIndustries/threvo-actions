@@ -40,6 +40,10 @@ class Settings(ExperimentalModel):
             raise ValueError("identities and bearer tokens must be distinct")
         if any(len(token) < 32 for token in tokens):
             raise ValueError("bearer tokens require at least 32 characters")
+        requesting = {i.tenant_reference for i in self.identities if i.role == "requester"}
+        approving = {i.tenant_reference for i in self.identities if i.role == "approver"}
+        if not requesting or not requesting <= approving:
+            raise ValueError("every requesting tenant requires an independent approver")
         return self
 
 

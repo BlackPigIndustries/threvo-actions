@@ -102,6 +102,13 @@ class RefundRepository:
             )
             if pending:
                 return False
+            # Make snapshot-isolated order writers conflict with this reservation commit.
+            await connection.execute(
+                """UPDATE stripe_refund_app.orders SET data=data
+                   WHERE tenant_reference=$1 AND order_reference=$2""",
+                tenant,
+                snapshot.order_reference,
+            )
             submitted = record.model_copy(update={"submitted_at": now})
             await connection.execute(
                 """UPDATE stripe_refund_app.intents SET data=$3::jsonb, phase='submitted'
@@ -134,16 +141,36 @@ class RefundRepository:
     async def due(self, tenant: str) -> tuple[str, ...]:
         # Authoritative discovery repairs missed execution jobs and lost webhooks.
         rows = await self.pool.fetch(
-            """SELECT proposal_reference FROM threvo_actions.proposals
-               WHERE tenant_reference=$1 AND (
-                   lifecycle_status='authorized'
-                   OR (lifecycle_status='awaiting_authority' AND expires_at <= CURRENT_TIMESTAMP)
-                   OR (lifecycle_status IN ('executing', 'verification_pending', 'failed_unknown')
-                       AND next_verification_at <= CURRENT_TIMESTAMP))
-               ORDER BY created_at LIMIT 100""",
+            """INSERT INTO stripe_refund_app.work_schedule AS work
+                   (tenant_reference, proposal_reference, next_attempt_at)
+               SELECT p.tenant_reference, p.proposal_reference,
+                      CURRENT_TIMESTAMP + interval '60 seconds'
+               FROM threvo_actions.proposals p
+               LEFT JOIN stripe_refund_app.work_schedule w
+                 USING (tenant_reference, proposal_reference)
+               WHERE p.tenant_reference=$1
+                 AND (w.next_attempt_at IS NULL OR w.next_attempt_at <= CURRENT_TIMESTAMP)
+                 AND (p.lifecycle_status='authorized'
+                   OR (p.lifecycle_status='awaiting_authority'
+                       AND p.expires_at <= CURRENT_TIMESTAMP)
+                   OR (p.lifecycle_status IN ('executing', 'verification_pending', 'failed_unknown')
+                       AND p.next_verification_at <= CURRENT_TIMESTAMP))
+               ORDER BY w.next_attempt_at NULLS FIRST, p.created_at LIMIT 100
+               ON CONFLICT (tenant_reference, proposal_reference)
+               DO UPDATE SET next_attempt_at=EXCLUDED.next_attempt_at
+                 WHERE work.next_attempt_at <= CURRENT_TIMESTAMP
+               RETURNING proposal_reference""",
             tenant,
         )
         return tuple(str(row["proposal_reference"]) for row in rows)
+
+    async def completed_attempt(self, tenant: str, proposal: str) -> None:
+        await self.pool.execute(
+            """DELETE FROM stripe_refund_app.work_schedule
+               WHERE tenant_reference=$1 AND proposal_reference=$2""",
+            tenant,
+            proposal,
+        )
 
     async def open_case(self, tenant: str, effect: str) -> None:
         await self.pool.execute(
