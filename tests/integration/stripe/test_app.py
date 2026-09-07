@@ -458,22 +458,57 @@ def test_order_writers_cannot_change_a_reserved_payment(isolation):
     asyncio.run(scenario())
 
 
-def test_recovery_claims_do_not_starve_work_after_the_first_page():
+def test_recovery_sweeps_do_not_starve_work_behind_duplicate_proposals():
     async def scenario():
         async with application() as (service, gateway):
             requester, approver, _ = service.settings.identities
-            for _ in range(101):
+            for _ in range(102):
                 proposal = await service.prepare(requester, command())
                 await service.decide(approver, proposal.proposal_reference, True)
-            first = await service.repository.due("tenant:one")
+            legitimate = await service.prepare(
+                requester, command().model_copy(update={"intent_reference": "intent:later"})
+            )
+            await service.decide(approver, legitimate.proposal_reference, True)
+            await service.sweep()
             restarted = RefundService(
                 service.repository.pool, service.settings, service.action.connector
             )
-            second = await restarted.repository.due("tenant:one")
-            assert len(first) == 100
-            assert len(second) == 1
-            assert not set(first).intersection(second)
-            assert await restarted.repository.due("tenant:one") == ()
+            await restarted.sweep()
+            await restarted.sweep()
+            record = await restarted.store.get("tenant:one", legitimate.proposal_reference)
+            assert record.lifecycle_status is LifecycleStatus.VERIFICATION_PENDING
+            assert gateway.calls == 2
+
+    asyncio.run(scenario())
+
+
+def test_failure_backoff_starts_after_the_attempt_finishes(monkeypatch):
+    async def scenario():
+        async with application() as (service, gateway):
+            requester, approver, _ = service.settings.identities
+            proposal = await service.prepare(requester, command())
+            await service.decide(approver, proposal.proposal_reference, True)
+            attempts = 0
+
+            async def fail_after_claim_expired(*args, **kwargs):
+                nonlocal attempts
+                attempts += 1
+                await service.repository.pool.execute(
+                    """UPDATE stripe_refund_app.work_schedule
+                       SET next_attempt_at=CURRENT_TIMESTAMP - interval '1 second'"""
+                )
+                raise AppError("unavailable")
+
+            monkeypatch.setattr(service.runtime, "execute", fail_after_claim_expired)
+            await service.sweep()
+            seconds = await service.repository.pool.fetchval(
+                """SELECT EXTRACT(EPOCH FROM next_attempt_at - CURRENT_TIMESTAMP)
+                   FROM stripe_refund_app.work_schedule WHERE proposal_reference=$1""",
+                proposal.proposal_reference,
+            )
+            assert seconds > 50
+            await service.sweep()
+            assert attempts == 1
             assert gateway.calls == 0
 
     asyncio.run(scenario())
@@ -488,3 +523,27 @@ def test_settings_require_an_approver_for_every_requesting_tenant(indices):
     values["identities"] = tuple(original.identities[index] for index in indices)
     with pytest.raises(ValidationError):
         Settings.model_validate(values)
+
+
+def test_concurrent_workers_claim_each_attempt_once_and_recover_expired_claims():
+    async def scenario():
+        async with application() as (service, gateway):
+            proposal = await service.prepare(service.settings.identities[0], command())
+            restarted = RefundService(
+                service.repository.pool, service.settings, service.action.connector
+            )
+            claims = await asyncio.gather(
+                service.repository.claim_attempt("tenant:one", proposal.proposal_reference),
+                restarted.repository.claim_attempt("tenant:one", proposal.proposal_reference),
+            )
+            assert sorted(claims) == [False, True]
+            await service.repository.pool.execute(
+                """UPDATE stripe_refund_app.work_schedule
+                   SET next_attempt_at=CURRENT_TIMESTAMP - interval '1 second'"""
+            )
+            assert await restarted.repository.claim_attempt(
+                "tenant:one", proposal.proposal_reference
+            )
+            assert gateway.calls == 0
+
+    asyncio.run(scenario())
