@@ -12,6 +12,7 @@ from urllib.parse import parse_qs
 import pytest
 from pydantic import SecretStr
 
+pytest.importorskip("stripe._stripe_client")
 stripe = pytest.importorskip("stripe")
 
 from threvo_actions import Money, VerificationStatus  # noqa: E402

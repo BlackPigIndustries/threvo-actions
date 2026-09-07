@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 asyncpg = pytest.importorskip("asyncpg")
-pytest.importorskip("stripe")
+pytest.importorskip("stripe._stripe_client")
 pytest.importorskip("cryptography")
 pytest.importorskip("pydantic_ai")
 
