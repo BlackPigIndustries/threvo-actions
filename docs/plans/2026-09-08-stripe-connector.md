@@ -57,7 +57,7 @@ application-fee refunds until their independent business effects are modeled.
 
 - All three original defects were reproduced by failing tests before fixes.
   The focused runtime/registry/SQLite suite then passed 96 tests.
-- Full local suite checkpoint: 494 passed, 30 skipped (no local MySQL test
+- Full local suite checkpoint: 498 passed, 30 skipped (no local MySQL test
   service). PostgreSQL was exercised against an isolated local database.
 - The expanded Stripe suite passes 25 tests, including seven database-backed
   app scenarios. CI adds Python 3.11–3.13 and isolated PostgreSQL services.
