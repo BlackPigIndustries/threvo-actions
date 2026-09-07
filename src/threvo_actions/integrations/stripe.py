@@ -359,5 +359,5 @@ def verify_refund_webhook(
             refund_id=event.data.object["id"],
             livemode=event.livemode,
         )
-    except (stripe.StripeError, ValueError, AttributeError, TypeError):
+    except (stripe.StripeError, ValueError, AttributeError, TypeError, KeyError):
         raise StripeBoundaryError("Stripe webhook could not be authenticated") from None
