@@ -83,3 +83,11 @@ recovery beyond the first 100 proposals, missing/corrupted keys, unsupported
 protection metadata and incomplete identity configuration. The final local
 suite passed 514 tests with 30 MySQL-related skips; Ruff, strict mypy, Bandit and
 strict documentation builds passed. GitHub CI supplies the MySQL matrix.
+
+A subsequent sweep-level regression covered 102 duplicate authorized proposals
+before a legitimate refund, and expiry of an attempt's initial claim before its
+failure. Recovery now claims each bounded attempt immediately before running
+it and starts backoff after failed or unchanged results. Concurrent worker
+claims and expired-claim recovery are covered. The resulting full local suite
+passed 516 tests with 30 MySQL-related skips; quality and documentation checks
+remained green.

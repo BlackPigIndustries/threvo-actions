@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -134,29 +135,48 @@ class RefundService:
         processed = 0
         for tenant in sorted({i.tenant_reference for i in self.settings.identities}):
             for proposal in await self.repository.due(tenant):
+                if not await self.repository.claim_attempt(tenant, proposal):
+                    continue
                 try:
-                    record = await self.store.get(tenant, proposal)
-                    if record is None:
-                        continue
-                    if record.lifecycle_status is LifecycleStatus.AWAITING_AUTHORITY:
-                        await self.runtime.expire_due(
-                            self.definition, tenant_reference=tenant, proposal_reference=proposal
-                        )
-                    elif record.lifecycle_status is LifecycleStatus.AUTHORIZED:
-                        await self.runtime.execute(
-                            self.definition, tenant_reference=tenant, proposal_reference=proposal
-                        )
-                    else:
-                        result = await self.runtime.reconcile(
-                            self.definition, tenant_reference=tenant, proposal_reference=proposal
-                        )
-                        if result.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED:
-                            await self.repository.open_case(
-                                tenant, record.semantic_effect_reference
+                    async with asyncio.timeout(30):
+                        record = await self.store.get(tenant, proposal)
+                        if record is None:
+                            await self.repository.completed_attempt(tenant, proposal)
+                            continue
+                        if record.lifecycle_status is LifecycleStatus.AWAITING_AUTHORITY:
+                            await self.runtime.expire_due(
+                                self.definition,
+                                tenant_reference=tenant,
+                                proposal_reference=proposal,
                             )
-                    await self.repository.completed_attempt(tenant, proposal)
+                        elif record.lifecycle_status is LifecycleStatus.AUTHORIZED:
+                            await self.runtime.execute(
+                                self.definition,
+                                tenant_reference=tenant,
+                                proposal_reference=proposal,
+                            )
+                        else:
+                            result = await self.runtime.reconcile(
+                                self.definition,
+                                tenant_reference=tenant,
+                                proposal_reference=proposal,
+                            )
+                            if result.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED:
+                                await self.repository.open_case(
+                                    tenant, record.semantic_effect_reference
+                                )
+                        current = await self.store.get(tenant, proposal)
+                        progressed = current is None or (
+                            current.lifecycle_status != record.lifecycle_status
+                            or current.next_verification_at != record.next_verification_at
+                        )
+                    if progressed:
+                        await self.repository.completed_attempt(tenant, proposal)
+                    else:
+                        await self.repository.defer_attempt(tenant, proposal)
                     processed += 1
                 except Exception:
+                    await self.repository.defer_attempt(tenant, proposal)
                     # Leave durable work discoverable. No raw provider/error text in logs.
                     logger.error("refund recovery attempt failed")
             for effect in await self.repository.monitoring_due(tenant):

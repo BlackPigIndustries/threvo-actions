@@ -141,10 +141,7 @@ class RefundRepository:
     async def due(self, tenant: str) -> tuple[str, ...]:
         # Authoritative discovery repairs missed execution jobs and lost webhooks.
         rows = await self.pool.fetch(
-            """INSERT INTO stripe_refund_app.work_schedule AS work
-                   (tenant_reference, proposal_reference, next_attempt_at)
-               SELECT p.tenant_reference, p.proposal_reference,
-                      CURRENT_TIMESTAMP + interval '60 seconds'
+            """SELECT p.proposal_reference
                FROM threvo_actions.proposals p
                LEFT JOIN stripe_refund_app.work_schedule w
                  USING (tenant_reference, proposal_reference)
@@ -155,14 +152,33 @@ class RefundRepository:
                        AND p.expires_at <= CURRENT_TIMESTAMP)
                    OR (p.lifecycle_status IN ('executing', 'verification_pending', 'failed_unknown')
                        AND p.next_verification_at <= CURRENT_TIMESTAMP))
-               ORDER BY w.next_attempt_at NULLS FIRST, p.created_at LIMIT 100
-               ON CONFLICT (tenant_reference, proposal_reference)
-               DO UPDATE SET next_attempt_at=EXCLUDED.next_attempt_at
-                 WHERE work.next_attempt_at <= CURRENT_TIMESTAMP
-               RETURNING proposal_reference""",
+               ORDER BY w.next_attempt_at NULLS FIRST, p.created_at LIMIT 100""",
             tenant,
         )
         return tuple(str(row["proposal_reference"]) for row in rows)
+
+    async def claim_attempt(self, tenant: str, proposal: str) -> bool:
+        claimed = await self.pool.fetchval(
+            """INSERT INTO stripe_refund_app.work_schedule AS work
+                   (tenant_reference, proposal_reference, next_attempt_at)
+               VALUES ($1, $2, CURRENT_TIMESTAMP + interval '60 seconds')
+               ON CONFLICT (tenant_reference, proposal_reference)
+               DO UPDATE SET next_attempt_at=EXCLUDED.next_attempt_at
+                 WHERE work.next_attempt_at <= CURRENT_TIMESTAMP
+               RETURNING true""",
+            tenant,
+            proposal,
+        )
+        return claimed is True
+
+    async def defer_attempt(self, tenant: str, proposal: str) -> None:
+        await self.pool.execute(
+            """UPDATE stripe_refund_app.work_schedule
+               SET next_attempt_at=CURRENT_TIMESTAMP + interval '60 seconds'
+               WHERE tenant_reference=$1 AND proposal_reference=$2""",
+            tenant,
+            proposal,
+        )
 
     async def completed_attempt(self, tenant: str, proposal: str) -> None:
         await self.pool.execute(

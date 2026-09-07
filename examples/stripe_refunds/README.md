@@ -44,8 +44,10 @@ Every invocation creates a new test payment. It rejects live keys and live
 orders. It does not exercise a real human login or charge real money.
 
 The worker runs in the web process every five seconds. Durable database
-discovery recovers work after restart. Failed attempts receive a durable
-60-second backoff so an unhealthy first page cannot starve later work.
+discovery recovers work after restart. Each attempt is claimed immediately
+before processing and bounded to 30 seconds. Failed attempts and unchanged
+proposals receive a durable 60-second backoff after processing, so an unhealthy
+or duplicate first page cannot starve later work.
 A separate scheduler can also run:
 
 ```bash

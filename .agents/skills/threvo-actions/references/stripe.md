@@ -21,7 +21,8 @@ reservation and correlation across restarts and action-version upgrades.
 Treat authenticated webhooks as lookup hints and deduplicate them. Keep a
 durable sweep so lost jobs or events do not strand proposals. Late failures
 belong to a separate host case; do not rewrite old receipts or replay a refund.
-Back off failed recovery attempts durably without starving later work. Keep
+Back off failed or unchanged recovery attempts from the end of processing;
+claim each bounded attempt immediately before running it. Keep
 order writers coordinated with unresolved refund reservations. Protection
 providers must reject unsupported metadata and map unavailable keys to the
 runtime's documented missing-protection contract.
