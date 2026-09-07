@@ -56,6 +56,15 @@ not count as adoption evidence and does not bypass candidate qualification,
 signed-tag verification, artifact identity, index verification, or protected
 release environments.
 
+The repository owner's explicit 2026-09-07 direction also permits promotion of
+`v0.1.6` with `skip_adoption_gate=true` and no new ledger waiver. `0.1.6`
+changes no supported API surface — only the `pydantic-ai` extra's dependency
+range — so the gradual-reveal adoption gate, which qualifies API usability, has
+nothing new to qualify. This default-off exception is accepted only for that
+immutable release tag. It does not count as adoption evidence and does not
+bypass candidate qualification, signed-tag verification, artifact identity,
+index verification, or protected release environments.
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as

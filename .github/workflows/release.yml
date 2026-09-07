@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       skip_adoption_gate:
-        description: One-time repository-owner bypass for v0.1.5 only
+        description: One-time repository-owner bypass for v0.1.5 and v0.1.6 only
         required: false
         default: false
         type: boolean
@@ -387,6 +387,11 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 0; then
             echo "Using the repository owner's one-time v0.1.5 adoption-gate bypass."
+          elif test "$RELEASE_TAG" = "v0.1.6" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.1.6 adoption-gate bypass."
           else
             echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1
