@@ -14,6 +14,7 @@ ALLOWED_OPTIONAL_IMPORTS = {
     Path("cli.py"): {"aiomysql", "asyncpg"},
     Path("integrations/aws_kms.py"): {"cryptography"},
     Path("integrations/pydantic_ai.py"): {"pydantic_ai"},
+    Path("integrations/stripe.py"): {"stripe"},
 }
 HISTORICAL_CLEAN_ROOM_REPORT = Path("docs/testing/clean-room-adoption-2026-08-30.md")
 

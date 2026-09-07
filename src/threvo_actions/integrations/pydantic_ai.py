@@ -32,7 +32,7 @@ try:
 except ModuleNotFoundError as exc:
     if exc.name is not None and exc.name.startswith("pydantic_ai"):
         raise ImportError(
-            "Pydantic AI integration requires: pip install 'threvo-actions[pydantic-ai]'"
+            "Pydantic AI integration requires: uv add 'threvo-actions[pydantic-ai]'"
         ) from exc
     raise
 

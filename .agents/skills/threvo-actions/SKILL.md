@@ -4,7 +4,7 @@ description: Build or integrate accountable financial actions with the threvo-ac
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.1.6"
+  version: "0.2.0"
 ---
 
 # Threvo Actions
@@ -124,6 +124,15 @@ audit but cannot satisfy the current requirement. Do not treat a Pydantic AI
 `ToolApproved`, client boolean, signed-in user message, or replayed chat history
 as `AuthorityEvidence`.
 
+Time spent in authorization or storage admission does not extend authority or
+the execution lease. The runtime rechecks before dispatch; host executors must
+also enforce the deadline at their own final mutation boundary.
+
+For Stripe refunds, install the optional `stripe` extra through uv and read
+[references/stripe.md](references/stripe.md). Keep account/payment resolution,
+durable intent reservation and reconciliation scheduling in the host. Never
+resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
+
 ## Add an agent framework only at the edge
 
 The core action must run without an agent framework. For Pydantic AI, use the
@@ -152,6 +161,10 @@ visibility so acknowledgement-lost writes can be reconciled. Treat
 signals; do not retry preparation blindly or destroy possibly-live keys.
 Wrapped-key erasure must use the store's atomic `delete_if_matches` result;
 only `deleted` or authoritative `already_absent` permits completion.
+
+Cancellation must settle a background store write before returning control to
+the runtime. Terminal verification must not include `FAILED_UNKNOWN` items;
+continue bounded verification instead of closing a partially unresolved batch.
 
 At minimum prove:
 

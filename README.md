@@ -1,18 +1,18 @@
 # threvo-actions
 
-`threvo-actions` is an experimental Python contract for confirm-first financial
-actions. It is framework-neutral: host applications retain business truth,
+`threvo-actions` is a Python runtime for approving, executing and reconciling
+agent-initiated financial operations. It is framework-neutral: hosts retain business truth,
 authorization, governed execution, authoritative verification, and retention
 policy.
 
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
 for the runnable quickstart, one guide per feature, complete runnable
 examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
-integrations, and the full API reference.
+integrations, the optional Stripe refund connector, and the full API reference.
 
 > [!IMPORTANT]
-> Version `0.1.6` is the current supported exact release. Its correctness and
-> security changes require the documented migration review from `0.1.4`. The
+> Version `0.2.0` is the current supported exact release. Its correctness and
+> security changes require the documented migration review before upgrading. The
 > namespaced gradual-reveal API, receipt serialization,
 > canonicalization, database schemas, and the example cross-service envelope
 > remain experimental. Read the [versioning policy](docs/versioning.md) before
@@ -23,10 +23,10 @@ integrations, and the full API reference.
 Python 3.11 through 3.13 is supported.
 
 ```bash
-python -m pip install "threvo-actions==0.1.6"
+uv add "threvo-actions==0.2.0"
 ```
 
-Install only after the signed `v0.1.6` tag completes the TestPyPI and PyPI
+Install only after the signed `v0.2.0` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
@@ -35,10 +35,11 @@ optional. SQLite uses the Python standard library and is included in the base
 installation:
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.6"
-python -m pip install "threvo-actions[mysql]==0.1.6"
-python -m pip install "threvo-actions[sqlalchemy]==0.1.6"
-python -m pip install "threvo-actions[pydantic-ai]==0.1.6"
+uv add "threvo-actions[postgres]==0.2.0"
+uv add "threvo-actions[mysql]==0.2.0"
+uv add "threvo-actions[sqlalchemy]==0.2.0"
+uv add "threvo-actions[pydantic-ai]==0.2.0"
+uv add "threvo-actions[stripe]==0.2.0"
 ```
 
 The distribution also bundles an Agent Skills-compatible guide for coding
@@ -185,10 +186,28 @@ Optional persistence and agent adapters depend inward on these contracts; the
 core does not import an adapter, database driver, web framework, agent
 framework, ORM, or hosted-service SDK.
 
+## Stripe refund application
+
+The [Stripe reference app](examples/stripe_refunds/README.md) includes a Greek
+and English browser UI, Pydantic AI assistant, independent finance approval,
+PostgreSQL intent reservation, protected proposals, recovery sweeping and
+late-failure cases. It runs in Stripe sandbox mode and refuses live credentials.
+
+```bash
+uv sync --extra stripe-app --locked
+uv run python -m examples.stripe_refunds --help
+```
+
+See the [connector contract](docs/integrations/stripe.md),
+[target Stripe customers](docs/product/stripe-target-clients.md), and
+[next steps](docs/plans/2026-09-08-next-steps.md). A Stripe refund object is
+accepted transport; independent verification establishes the operation's
+completion milestone. No blind resend or unlimited idempotency is claimed.
+
 ## Migration
 
-The documented Python imports and CLI are supported at `0.1.6`. Pin the exact
-patch release, review the [`0.1.6` migration](docs/releases/0.1.6.md), and keep
+The documented Python imports and CLI are supported at `0.2.0`. Pin the exact
+patch release, review the [`0.2.0` migration](docs/releases/0.2.0.md), and keep
 host adapters at the application boundary.
 Experimental interoperability surfaces may change in a minor `0.x` release;
 the [versioning policy](docs/versioning.md) defines the exact boundary.

@@ -20,7 +20,7 @@ try:
 except ModuleNotFoundError as exc:
     if exc.name is not None and exc.name.startswith("cryptography"):
         raise ImportError(
-            "AWS KMS envelope protection requires: pip install 'threvo-actions[aws-kms]'"
+            "AWS KMS envelope protection requires: uv add 'threvo-actions[aws-kms]'"
         ) from exc
     raise
 

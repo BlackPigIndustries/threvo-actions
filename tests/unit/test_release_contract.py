@@ -176,7 +176,7 @@ def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
 
     bypass_tags = re.findall(r'test "\$RELEASE_TAG" = "(v[0-9]+\.[0-9]+\.[0-9]+)"', workflow)
-    assert sorted(bypass_tags) == ["v0.1.4", "v0.1.5", "v0.1.6"]
+    assert sorted(bypass_tags) == ["v0.1.4", "v0.1.5", "v0.1.6", "v0.2.0"]
 
 
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
