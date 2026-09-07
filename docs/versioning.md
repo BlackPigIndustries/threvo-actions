@@ -124,7 +124,7 @@ does not let an older library silently accept a newer migration history.
 ## Version changes
 
 - Later `0.1.z` releases: backward-compatible fixes and additions to the
-  supported `0.1.6` surface unless an explicit corrective exception is
+  supported `0.2.0` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

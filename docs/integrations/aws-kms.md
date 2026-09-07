@@ -6,7 +6,7 @@ runtime's `ProposalBoundCommitmentProvider` and
 each commitment and private payload, HMAC-SHA-256 for the commitment, and
 AES-256-GCM for snapshot encryption.
 
-This integration is part of the `0.1.5` release candidate. Maintainers
+This integration is included in the `0.2.0` release. Maintainers
 evaluating the reviewed source checkout can run
 `uv sync --extra aws-kms --locked`. After the signed release workflow
 completes, install the immutable package with
