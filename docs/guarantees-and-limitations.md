@@ -6,7 +6,7 @@ that knows whether the financial effect occurred. Every guarantee below is
 therefore assigned to the component that actually supplies it.
 
 The documented Python API and CLI are supported at the exact `0.2.0` release;
-upgrading from `0.1.4` requires its documented migration review.
+upgrading requires the [documented migration review](releases/0.2.0.md).
 Serialized interoperability forms remain experimental. These are implementation
 guarantees for a tested release, not a promise that the host application or an
 external financial system implemented its side correctly. See

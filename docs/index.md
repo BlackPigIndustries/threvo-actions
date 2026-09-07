@@ -97,7 +97,7 @@ the [coding-agent skill](integrations/coding-agents.md), or jump to the
 !!! warning "Know the compatibility boundary"
 
     The root Python API and CLI are supported at the exact `0.2.0` release;
-    migrating from `0.1.4` requires its documented host changes. The
+    upgrading requires the [documented migration review](releases/0.2.0.md). The
     namespaced gradual-reveal API and interoperability formats remain
     experimental under their documented windows. The package is not a payment
     protocol, compliance certification, policy engine, or distributed

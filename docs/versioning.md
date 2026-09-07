@@ -20,8 +20,8 @@ The following surfaces are supported at the exact `0.2.0` release:
   `threvo_actions.store_security`;
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`;
-- names listed in `threvo_actions.integrations.aws_kms.__all__`; and
-- the documented contracts in `threvo_actions.integrations.stripe`;
+- names listed in `threvo_actions.integrations.aws_kms.__all__`;
+- the documented contracts in `threvo_actions.integrations.stripe`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
 
 A later patch release may add optional fields with safe defaults, new enum
@@ -123,7 +123,7 @@ does not let an older library silently accept a newer migration history.
 
 ## Version changes
 
-- Later `0.1.z` releases: backward-compatible fixes and additions to the
+- Later `0.2.z` releases: backward-compatible fixes and additions to the
   supported `0.2.0` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
