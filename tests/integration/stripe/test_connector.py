@@ -249,6 +249,25 @@ def test_webhook_signature_replay_window_and_minimized_hint():
             verify_refund_webhook(payload, bad, SecretStr(secret))
 
 
+def test_authenticated_webhook_without_refund_id_is_a_sanitized_boundary_error():
+    secret = "whsec_test_only"  # noqa: S105 — synthetic webhook fixture, not a credential.
+    payload = json.dumps(
+        {
+            "id": "evt_one",
+            "object": "event",
+            "type": "refund.updated",
+            "livemode": False,
+            "data": {"object": {"object": "refund"}},
+        }
+    ).encode()
+    timestamp = int(time.time())
+    digest = hmac.new(
+        secret.encode(), str(timestamp).encode() + b"." + payload, hashlib.sha256
+    ).hexdigest()
+    with pytest.raises(StripeBoundaryError, match="authenticated"):
+        verify_refund_webhook(payload, f"t={timestamp},v1={digest}", SecretStr(secret))
+
+
 def test_sdk_uses_connected_account_idempotency_and_sanitizes_errors():
     class Transport(stripe.HTTPClient):
         name = "test"

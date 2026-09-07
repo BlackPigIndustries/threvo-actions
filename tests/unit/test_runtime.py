@@ -1699,6 +1699,31 @@ def test_expiry_during_state_resolution_refuses_execution() -> None:
     asyncio.run(scenario())
 
 
+def test_admission_outlasting_the_lease_emits_the_public_runtime_reason() -> None:
+    async def scenario() -> None:
+        clock = MutableClock()
+
+        class DelayedStore(MemoryActionStore):
+            async def admit_execution(self, **kwargs):
+                clock.advance(timedelta(minutes=2))
+                return await super().admit_execution(**kwargs)
+
+        store = DelayedStore()
+        runtime = ActionRuntime(store=store, clock=clock, identifiers=SequenceIdentifiers())
+        host = HostPorts()
+        action = definition(host, DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        result = await runtime.execute(
+            action, tenant_reference="tenant:a", proposal_reference=prepared.proposal_reference
+        )
+        assert result.reason_code == RuntimeReasonCode.EXECUTION_LEASE_EXPIRED.value
+        assert result.lifecycle_status is LifecycleStatus.FAILED_KNOWN
+        assert host.executor_calls == 0
+
+    asyncio.run(scenario())
+
+
 def test_proposal_expiry_during_state_resolution_refuses_execution() -> None:
     async def scenario() -> None:
         runtime, store, clock, _ = runtime_parts()

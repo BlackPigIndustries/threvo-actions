@@ -228,6 +228,7 @@ class RuntimeReasonCode(StrEnum):
     PRIVATE_SNAPSHOT_UNAVAILABLE = "private_snapshot_unavailable"
     PROPOSAL_COMMITMENT_UNAVAILABLE = "proposal_commitment_unavailable"
     AUTHORITY_EXPIRED = "authority_expired"
+    EXECUTION_LEASE_EXPIRED = "execution_lease_expired"
     AUTHORITY_NO_LONGER_SATISFIED = "authority_no_longer_satisfied"
     REAUTHORIZATION_FAILED = "reauthorization_failed"
     VERIFICATION_RETRIES_EXHAUSTED = "verification_retries_exhausted"
@@ -740,7 +741,7 @@ class ActionRuntime:
         ):
             refusal = RuntimeReasonCode.AUTHORITY_EXPIRED.value
         elif execution_at >= admitted_at + definition.verification_lease_duration:
-            refusal = "execution_lease_expired"
+            refusal = RuntimeReasonCode.EXECUTION_LEASE_EXPIRED.value
         if refusal is not None:
             return await self._settle_execution(
                 definition=definition,
