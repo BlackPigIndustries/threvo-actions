@@ -156,6 +156,29 @@ def test_release_015_adoption_bypass_is_explicit_default_off_and_not_reusable() 
     assert "release=v0.1.5" not in adoption_record
 
 
+def test_release_016_adoption_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert "skip_adoption_gate:" in workflow
+    assert "default: false" in workflow
+    assert 'test "$RELEASE_TAG" = "v0.1.6"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "Using the repository owner's one-time v0.1.6 adoption-gate bypass." in workflow
+    assert "release=v0.1.6" not in adoption_record
+    # The v0.1.5 bypass stays bound to its own tag rather than widening.
+    assert 'test "$RELEASE_TAG" = "v0.1.5"' in workflow
+
+
+def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None:
+    """Each bypass names one immutable tag. A prefix or wildcard match would
+    silently carry the exception into every later release."""
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    bypass_tags = re.findall(r'test "\$RELEASE_TAG" = "(v[0-9]+\.[0-9]+\.[0-9]+)"', workflow)
+    assert sorted(bypass_tags) == ["v0.1.4", "v0.1.5", "v0.1.6"]
+
+
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
     contributing = (ROOT / "CONTRIBUTING.md").read_text()
 
@@ -204,8 +227,8 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    wheel = packages / "threvo_actions-0.1.5-py3-none-any.whl"
-    source = packages / "threvo_actions-0.1.5.tar.gz"
+    wheel = packages / f"threvo_actions-{threvo_actions.__version__}-py3-none-any.whl"
+    source = packages / f"threvo_actions-{threvo_actions.__version__}.tar.gz"
     wheel.write_bytes(b"wheel")
     source.write_bytes(b"source")
     (release / "SHA256SUMS").write_text(
@@ -213,13 +236,14 @@ def test_candidate_record_rejects_changed_package_bytes(tmp_path: Path) -> None:
         f"{hashlib.sha256(source.read_bytes()).hexdigest()}  {source.name}\n"
     )
     commit = "a" * 40
+    tag = f"v{threvo_actions.__version__}"
 
-    record_candidate(release, source_commit=commit, release_tag="v0.1.5")
-    verify_candidate(release, source_commit=commit, release_tag="v0.1.5")
+    record_candidate(release, source_commit=commit, release_tag=tag)
+    verify_candidate(release, source_commit=commit, release_tag=tag)
 
     wheel.write_bytes(b"changed")
     with pytest.raises(ValueError, match="digest differs"):
-        verify_candidate(release, source_commit=commit, release_tag="v0.1.5")
+        verify_candidate(release, source_commit=commit, release_tag=tag)
 
 
 def test_candidate_record_requires_one_wheel_and_one_source_distribution(
@@ -228,8 +252,8 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
     release = tmp_path / "release"
     packages = release / "packages"
     packages.mkdir(parents=True)
-    first = packages / "threvo_actions-0.1.5-py3-none-any.whl"
-    second = packages / "threvo_actions-0.1.5-second-py3-none-any.whl"
+    first = packages / f"threvo_actions-{threvo_actions.__version__}-py3-none-any.whl"
+    second = packages / f"threvo_actions-{threvo_actions.__version__}-second-py3-none-any.whl"
     first.write_bytes(b"first wheel")
     second.write_bytes(b"second wheel")
     (release / "SHA256SUMS").write_text(
@@ -237,8 +261,9 @@ def test_candidate_record_requires_one_wheel_and_one_source_distribution(
         f"{hashlib.sha256(second.read_bytes()).hexdigest()}  {second.name}\n"
     )
 
+    tag = f"v{threvo_actions.__version__}"
     with pytest.raises(ValueError, match="one wheel and one source distribution"):
-        record_candidate(release, source_commit="a" * 40, release_tag="v0.1.5")
+        record_candidate(release, source_commit="a" * 40, release_tag=tag)
 
 
 def test_release_requires_tag_commit_to_already_be_on_main() -> None:

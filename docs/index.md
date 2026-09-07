@@ -9,7 +9,7 @@ is not enough: refunds, supplier bank-detail changes, payment releases, ledger
 postings, credit-limit changes, and similar financial effects.
 
 ```bash
-python -m pip install "threvo-actions==0.1.5"
+python -m pip install "threvo-actions==0.1.6"
 ```
 
 Install an exact patch version so runtime attribution and compatibility are
@@ -96,7 +96,7 @@ the [coding-agent skill](integrations/coding-agents.md), or jump to the
 
 !!! warning "Know the compatibility boundary"
 
-    The root Python API and CLI are supported at the exact `0.1.5` release;
+    The root Python API and CLI are supported at the exact `0.1.6` release;
     migrating from `0.1.4` requires its documented host changes. The
     namespaced gradual-reveal API and interoperability formats remain
     experimental under their documented windows. The package is not a payment

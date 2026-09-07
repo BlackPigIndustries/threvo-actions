@@ -19,6 +19,10 @@ def _run_mypy(case: str, *, cache_dir: Path) -> tuple[str, str, int]:
                 "--strict",
                 "--python-version=3.11",
                 "--show-error-codes",
+                # mypy >=2 bolds quoted names in its output. Without this the
+                # assertions below miss on ANSI escapes rather than on the
+                # error actually being absent.
+                "--no-color-output",
                 f"--cache-dir={cache_dir}",
                 str(CASES / case),
             ]

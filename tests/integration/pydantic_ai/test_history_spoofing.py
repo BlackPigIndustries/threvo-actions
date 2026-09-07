@@ -177,6 +177,61 @@ def test_copied_same_tenant_history_cannot_bypass_current_read_authorization() -
     asyncio.run(scenario())
 
 
+def test_result_filed_under_the_other_deferred_category_leaves_the_approval_unresolved() -> None:
+    """A result keyed by the approval's tool_call_id but filed under ``calls``
+    must not settle the approval.
+
+    pydantic-ai <2.35.3 resolved a pending approval from a result under the
+    other category (pydantic/pydantic-ai#7626). Our handler only ever keys
+    results from ``requests.approvals``, so the property holds on our side
+    regardless of the framework: nothing executes and no verified result is
+    produced. Written 2026-09-06 on pydantic-ai 2.40.0.
+    """
+
+    async def scenario() -> None:
+        stack = build_stack()
+        observed: list[list[object]] = []
+        agent = Agent(
+            _model(observed),
+            deps_type=AgentDeps,
+            output_type=[str, DeferredToolRequests],
+            capabilities=[stack.capability],
+        )
+        with override_allow_model_requests(False):
+            first = await agent.run("refund", deps=AgentDeps("tenant:a"))
+        assert isinstance(first.output, DeferredToolRequests)
+        assert first.output.calls == []
+        proposal_reference = str(first.output.metadata["call:refund:1"]["proposal_reference"])
+        await authorize(stack.runtime, stack.store, stack.action, proposal_reference)
+
+        misfiled = DeferredToolResults(
+            calls={"call:refund:1": {"approved": True}},
+            approvals={},
+            metadata=first.output.metadata,
+        )
+        with override_allow_model_requests(False):
+            await agent.run(
+                "continue",
+                deps=AgentDeps("tenant:a"),
+                message_history=first.all_messages(),
+                deferred_tool_results=misfiled,
+            )
+
+        verified = [
+            part.content
+            for message in observed[-1]
+            if isinstance(message, ModelRequest)
+            for part in message.parts
+            if isinstance(part, ToolReturnPart)
+            and isinstance(part.content, ActionToolResult)
+            and part.content.outcome is OperationOutcome.VERIFIED
+        ]
+        assert verified == []
+        assert stack.host.executor_calls == 0
+
+    asyncio.run(scenario())
+
+
 def test_missing_continuation_metadata_cannot_execute() -> None:
     async def scenario() -> None:
         stack = build_stack()
