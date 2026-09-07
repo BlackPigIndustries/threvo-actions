@@ -1613,6 +1613,50 @@ def test_expired_authority_is_re_evaluated_before_execution() -> None:
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("delay_minutes", [6, 11])
+@pytest.mark.parametrize("boundary", ["authorization", "admission", "evaluation"])
+def test_expiry_during_final_async_boundaries_refuses_execution(boundary, delay_minutes) -> None:
+    async def scenario() -> None:
+        clock = MutableClock()
+
+        class DelayedStore(MemoryActionStore):
+            async def admit_execution(self, **kwargs):
+                if boundary == "admission":
+                    clock.advance(timedelta(minutes=delay_minutes))
+                return await super().admit_execution(**kwargs)
+
+        class DelayedHost(HostPorts):
+            evaluation_calls = 0
+
+            async def can_execute(self, snapshot, *, context):
+                result = await super().can_execute(snapshot, context=context)
+                if boundary == "authorization":
+                    clock.advance(timedelta(minutes=delay_minutes))
+                return result
+
+            async def evaluate(self, *, binding, evidence):
+                result = await super().evaluate(binding=binding, evidence=evidence)
+                self.evaluation_calls += 1
+                if boundary == "evaluation" and self.evaluation_calls == 3:
+                    clock.advance(timedelta(minutes=delay_minutes))
+                return result
+
+        store = DelayedStore()
+        runtime = ActionRuntime(store=store, clock=clock, identifiers=SequenceIdentifiers())
+        host = DelayedHost()
+        action = definition(host, DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        result = await runtime.execute(
+            action, tenant_reference="tenant:a", proposal_reference=prepared.proposal_reference
+        )
+        assert host.executor_calls == 0
+        assert result.is_terminal
+        assert not result.needs_reconciliation
+
+    asyncio.run(scenario())
+
+
 def test_expiry_during_state_resolution_refuses_execution() -> None:
     async def scenario() -> None:
         runtime, store, clock, _ = runtime_parts()

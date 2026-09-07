@@ -65,6 +65,13 @@ immutable release tag. It does not count as adoption evidence and does not
 bypass candidate qualification, signed-tag verification, artifact identity,
 index verification, or protected release environments.
 
+The repository owner's 2026-09-08 release direction permits the exact `v0.2.0`
+tag with `skip_adoption_gate=true`. Independent adoption remains pending; the
+Stripe sandbox and internal tests are not substitutes for that evidence. This
+exception preserves candidate qualification, signed tags, artifact and index
+verification, and the protected publication environments. See the
+[`0.2.0` release record](docs/releases/0.2.0.md).
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as

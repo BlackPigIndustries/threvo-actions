@@ -140,7 +140,7 @@ async def _postgres(
     try:
         import asyncpg
     except ModuleNotFoundError:
-        print("PostgreSQL commands require: pip install 'threvo-actions[postgres]'")
+        print("PostgreSQL commands require: uv add 'threvo-actions[postgres]'")
         return 2
 
     from .migrations import (
@@ -303,7 +303,7 @@ async def _mysql(
     try:
         import aiomysql
     except ModuleNotFoundError:
-        print("MySQL commands require: pip install 'threvo-actions[mysql]'")
+        print("MySQL commands require: uv add 'threvo-actions[mysql]'")
         return 2
 
     from .mysql_migrations import check_mysql_readiness, inspect_mysql, migrate_mysql

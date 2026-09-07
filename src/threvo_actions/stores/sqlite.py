@@ -79,7 +79,22 @@ class _SQLiteStoreBase:
         return connection
 
     async def _run(self, operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> T:
-        return await asyncio.to_thread(operation, *args, **kwargs)
+        worker = asyncio.create_task(asyncio.to_thread(operation, *args, **kwargs))
+        cancellation: asyncio.CancelledError | None = None
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError as error:
+                # A running SQLite thread cannot be cancelled. Settle it before
+                # allowing callers to reconcile or compensate a possibly-live write.
+                cancellation = error
+            except Exception:
+                break
+        if cancellation is not None:
+            if not worker.cancelled():
+                worker.exception()  # Consume any write failure before propagating cancellation.
+            raise cancellation
+        return worker.result()
 
     def _load(
         self,

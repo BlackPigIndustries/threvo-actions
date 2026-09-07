@@ -140,6 +140,21 @@ def test_registry_round_trips_a_typed_definition() -> None:
     assert not resolved.allow_resend_after_final_absence
 
 
+def test_terminal_verification_rejects_unknown_item_outcomes() -> None:
+    for status in (
+        VerificationStatus.VERIFIED_COMPLETION,
+        VerificationStatus.VERIFIED_TERMINAL_FAILURE,
+    ):
+        with pytest.raises(ValueError, match="unknown item"):
+            VerificationResult[Result](
+                status=status,
+                item_outcomes=(
+                    ItemOutcome(item_reference="item:1", status=ItemOutcomeStatus.SUCCEEDED),
+                    ItemOutcome(item_reference="item:2", status=ItemOutcomeStatus.FAILED_UNKNOWN),
+                ),
+            )
+
+
 def test_registry_rejects_duplicate_action_type() -> None:
     registry = ActionRegistry()
     registry.register(definition())

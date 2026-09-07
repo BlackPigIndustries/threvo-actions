@@ -164,6 +164,11 @@ class VerificationResult(ExperimentalModel, Generic[ResultT]):
             and not any(item.status is ItemOutcomeStatus.SUCCEEDED for item in self.item_outcomes)
         ):
             raise ValueError("verified completion requires at least one successful item")
+        if self.status in {
+            VerificationStatus.VERIFIED_COMPLETION,
+            VerificationStatus.VERIFIED_TERMINAL_FAILURE,
+        } and any(item.status is ItemOutcomeStatus.FAILED_UNKNOWN for item in self.item_outcomes):
+            raise ValueError("terminal verification cannot contain an unknown item outcome")
         if (
             self.status is VerificationStatus.AUTHORITATIVE_FINAL_ABSENCE
         ) is not self.settling_boundary_passed:
