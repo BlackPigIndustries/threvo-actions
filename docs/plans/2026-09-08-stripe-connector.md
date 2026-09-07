@@ -72,3 +72,14 @@ application-fee refunds until their independent business effects are modeled.
   production use remain explicitly unverified. See the next-step roadmap.
 - Remote CI, merge and package publication are qualified by the linked release
   workflow; local checks alone do not establish those outcomes.
+
+### Final release review
+
+The follow-up review added explicit lease-expiry reasons, sanitized malformed
+signed webhooks, protected order reservations against concurrent writers,
+durable recovery backoff, and fail-closed protection metadata/key handling.
+Regression tests cover read-committed and repeatable-read order writers,
+recovery beyond the first 100 proposals, missing/corrupted keys, unsupported
+protection metadata and incomplete identity configuration. The final local
+suite passed 514 tests with 30 MySQL-related skips; Ruff, strict mypy, Bandit and
+strict documentation builds passed. GitHub CI supplies the MySQL matrix.

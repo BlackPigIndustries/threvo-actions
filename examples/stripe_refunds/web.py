@@ -169,9 +169,9 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
     ) -> dict[str, bool]:
         payload = bytearray()
         async for chunk in request.stream():
-            payload.extend(chunk)
-            if len(payload) > 262_144:
+            if len(payload) + len(chunk) > 262_144:
                 raise HTTPException(413, "Webhook too large")
+            payload.extend(chunk)
         hint = verify_refund_webhook(
             bytes(payload), stripe_signature, service.settings.webhook_secret
         )

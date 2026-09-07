@@ -21,6 +21,10 @@ reservation and correlation across restarts and action-version upgrades.
 Treat authenticated webhooks as lookup hints and deduplicate them. Keep a
 durable sweep so lost jobs or events do not strand proposals. Late failures
 belong to a separate host case; do not rewrite old receipts or replay a refund.
+Back off failed recovery attempts durably without starving later work. Keep
+order writers coordinated with unresolved refund reservations. Protection
+providers must reject unsupported metadata and map unavailable keys to the
+runtime's documented missing-protection contract.
 
 The repository's `examples/stripe_refunds` app is a runnable sandbox host with
 Pydantic AI `ActionCapability`, independent approver credentials, PostgreSQL and

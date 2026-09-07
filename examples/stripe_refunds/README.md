@@ -44,7 +44,9 @@ Every invocation creates a new test payment. It rejects live keys and live
 orders. It does not exercise a real human login or charge real money.
 
 The worker runs in the web process every five seconds. Durable database
-discovery recovers work after restart. A separate scheduler can also run:
+discovery recovers work after restart. Failed attempts receive a durable
+60-second backoff so an unhealthy first page cannot starve later work.
+A separate scheduler can also run:
 
 ```bash
 uv run python -m examples.stripe_refunds sweep
@@ -131,7 +133,9 @@ unresolved. The sample uses asyncpg's default JSON codec, independently of any
 application-specific codec.
 
 Only one unresolved refund per order can reserve submission at a time. A
-reserved intent is never sent again, even beyond Stripe's idempotency window.
+database guard prevents order updates while that reservation is unresolved;
+order writers must preserve this guard and the reservation transaction.
+A reserved intent is never sent again, even beyond Stripe's idempotency window.
 A crash before the actual HTTP call can therefore require manual investigation;
 absence alone does not release the reservation or authorize another refund.
 Provider status is monitored for 31 days. Retention, backups, master-key rotation

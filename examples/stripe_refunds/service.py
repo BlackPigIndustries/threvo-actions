@@ -154,6 +154,7 @@ class RefundService:
                             await self.repository.open_case(
                                 tenant, record.semantic_effect_reference
                             )
+                    await self.repository.completed_attempt(tenant, proposal)
                     processed += 1
                 except Exception:
                     # Leave durable work discoverable. No raw provider/error text in logs.

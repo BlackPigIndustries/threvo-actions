@@ -109,11 +109,11 @@ jobs:
     env:
       THREVO_ACTIONS_STRIPE_TEST_DSN: postgresql://postgres:postgres@localhost:5432/ta_stripe_test_ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: true
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --extra dev --extra stripe-app --locked
