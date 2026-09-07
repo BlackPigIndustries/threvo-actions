@@ -3,9 +3,9 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
-## Supported at `0.1.5`
+## Supported at `0.1.6`
 
-The following surfaces are supported at the exact `0.1.5` release:
+The following surfaces are supported at the exact `0.1.6` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -27,8 +27,12 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.1.5` without another explicitly
+safety check is not permitted after `0.1.6` without another explicitly
 documented exception.
+
+`0.1.6` carries no corrective exception. It changes only the `pydantic-ai`
+extra's dependency range and is backward compatible with the `0.1.5` supported
+surface.
 
 `0.1.5` itself is an owner-directed pre-`1.0` corrective exception. It changes
 provider contracts and one integration result where preserving `0.1.4`
@@ -113,7 +117,7 @@ does not let an older library silently accept a newer migration history.
 ## Version changes
 
 - Later `0.1.z` releases: backward-compatible fixes and additions to the
-  supported `0.1.5` surface unless an explicit corrective exception is
+  supported `0.1.6` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

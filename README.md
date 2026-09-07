@@ -11,7 +11,7 @@ examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
 integrations, and the full API reference.
 
 > [!IMPORTANT]
-> Version `0.1.5` is the current supported exact release. Its correctness and
+> Version `0.1.6` is the current supported exact release. Its correctness and
 > security changes require the documented migration review from `0.1.4`. The
 > namespaced gradual-reveal API, receipt serialization,
 > canonicalization, database schemas, and the example cross-service envelope
@@ -23,10 +23,10 @@ integrations, and the full API reference.
 Python 3.11 through 3.13 is supported.
 
 ```bash
-python -m pip install "threvo-actions==0.1.5"
+python -m pip install "threvo-actions==0.1.6"
 ```
 
-Install only after the signed `v0.1.5` tag completes the TestPyPI and PyPI
+Install only after the signed `v0.1.6` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
@@ -35,10 +35,10 @@ optional. SQLite uses the Python standard library and is included in the base
 installation:
 
 ```bash
-python -m pip install "threvo-actions[postgres]==0.1.5"
-python -m pip install "threvo-actions[mysql]==0.1.5"
-python -m pip install "threvo-actions[sqlalchemy]==0.1.5"
-python -m pip install "threvo-actions[pydantic-ai]==0.1.5"
+python -m pip install "threvo-actions[postgres]==0.1.6"
+python -m pip install "threvo-actions[mysql]==0.1.6"
+python -m pip install "threvo-actions[sqlalchemy]==0.1.6"
+python -m pip install "threvo-actions[pydantic-ai]==0.1.6"
 ```
 
 The distribution also bundles an Agent Skills-compatible guide for coding
@@ -187,8 +187,8 @@ framework, ORM, or hosted-service SDK.
 
 ## Migration
 
-The documented Python imports and CLI are supported at `0.1.5`. Pin the exact
-patch release, review the [`0.1.5` migration](docs/releases/0.1.5.md), and keep
+The documented Python imports and CLI are supported at `0.1.6`. Pin the exact
+patch release, review the [`0.1.6` migration](docs/releases/0.1.6.md), and keep
 host adapters at the application boundary.
 Experimental interoperability surfaces may change in a minor `0.x` release;
 the [versioning policy](docs/versioning.md) defines the exact boundary.

@@ -4,7 +4,7 @@ description: Build or integrate accountable financial actions with the threvo-ac
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.1.5"
+  version: "0.1.6"
 ---
 
 # Threvo Actions

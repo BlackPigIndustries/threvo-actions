@@ -6,11 +6,15 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-07
+
 ### Changed
 
 - The `pydantic-ai` extra now floors `pydantic-ai-slim>=2.33.0,<3` instead of
   pinning `==2.33.0`, so consumers can install it next to a newer Pydantic AI;
-  the development lock moves to 2.40.0.
+  the development lock moves to 2.40.0. See the
+  [`0.1.6` release record](docs/releases/0.1.6.md); no runtime behavior,
+  durable data, or Python integration contract changes.
 
 ### Added
 
@@ -213,7 +217,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.2...v0.1.3
