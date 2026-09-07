@@ -37,6 +37,7 @@ FORBIDDEN_PARTS = {
     "uv.lock",
 }
 REQUIRED_PACKAGE_FILES = {
+    "threvo_actions/integrations/stripe.py",
     "threvo_actions/.agents/skills/threvo-actions/SKILL.md",
     "threvo_actions/experimental/__init__.py",
     "threvo_actions/experimental/application.py",
@@ -53,6 +54,11 @@ REQUIRED_PACKAGE_FILES = {
     "threvo_actions/py.typed",
 }
 REQUIRED_SDIST_FILES = {
+    "examples/stripe_refunds/__main__.py",
+    "examples/stripe_refunds/schema.sql",
+    "examples/stripe_refunds/index.html",
+    "examples/stripe_refunds/README.md",
+    "docs/integrations/stripe.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "LICENSE",

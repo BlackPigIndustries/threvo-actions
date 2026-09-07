@@ -127,6 +127,9 @@ class ActionStore(Protocol):
     A completed write, including one whose acknowledgement is lost, must be
     visible to a subsequent ``get`` through the same adapter so the runtime can
     reconcile before compensating protected state.
+
+    Cancellation must settle any background write before returning control.
+    A subsequent absent read must not race a write that can still commit.
     """
 
     async def create(self, proposal: StoredProposal) -> None: ...

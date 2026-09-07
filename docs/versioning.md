@@ -3,9 +3,9 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
-## Supported at `0.1.6`
+## Supported at `0.2.0`
 
-The following surfaces are supported at the exact `0.1.6` release:
+The following surfaces are supported at the exact `0.2.0` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -20,15 +20,22 @@ The following surfaces are supported at the exact `0.1.6` release:
   `threvo_actions.store_security`;
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`;
-- names listed in `threvo_actions.integrations.aws_kms.__all__`; and
+- names listed in `threvo_actions.integrations.aws_kms.__all__`;
+- the documented contracts in `threvo_actions.integrations.stripe`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
 
 A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.1.6` without another explicitly
+safety check is not permitted after `0.2.0` without another explicitly
 documented exception.
+
+`0.2.0` is a minor-line upgrade with stricter verification and cancellation
+contracts, plus the optional Stripe connector. See the
+[`0.2.0` migration record](releases/0.2.0.md). The app remains a reference host;
+its static credentials, master-key custody and deployment are not a production
+support claim.
 
 `0.1.6` carries no corrective exception. It changes only the `pydantic-ai`
 extra's dependency range and is backward compatible with the `0.1.5` supported
@@ -116,8 +123,8 @@ does not let an older library silently accept a newer migration history.
 
 ## Version changes
 
-- Later `0.1.z` releases: backward-compatible fixes and additions to the
-  supported `0.1.6` surface unless an explicit corrective exception is
+- Later `0.2.z` releases: backward-compatible fixes and additions to the
+  supported `0.2.0` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       skip_adoption_gate:
-        description: One-time repository-owner bypass for v0.1.5 and v0.1.6 only
+        description: Exact repository-owner exceptions for v0.1.5, v0.1.6 or v0.2.0 only
         required: false
         default: false
         type: boolean
@@ -82,7 +82,7 @@ jobs:
           python-version: "3.13"
       - run: >-
           uv sync --extra aws-kms --extra dev --extra mysql --extra pydantic-ai
-          --extra postgres --extra docs --locked
+          --extra postgres --extra docs --extra stripe-app --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src/threvo_actions examples benchmarks scripts
@@ -123,7 +123,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        profile: [core, aws-kms, postgres, pydantic-ai, all]
+        profile: [core, aws-kms, postgres, pydantic-ai, stripe, all]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -144,7 +144,8 @@ jobs:
             aws-kms) profile_extras="[aws-kms]" ;;
             postgres) profile_extras="[postgres]" ;;
             pydantic-ai) profile_extras="[pydantic-ai]" ;;
-            all) profile_extras="[aws-kms,mysql,postgres,pydantic-ai]" ;;
+            stripe) profile_extras="[stripe]" ;;
+            all) profile_extras="[aws-kms,mysql,postgres,pydantic-ai,stripe-app]" ;;
             *) exit 1 ;;
           esac
           for artifact in release/packages/*.whl release/packages/*.tar.gz; do
@@ -162,6 +163,8 @@ jobs:
           assert "ActionApplication" not in threvo_actions.__all__
           if "$PROFILE" in ("aws-kms", "all"):
               import threvo_actions.integrations.aws_kms
+          if "$PROFILE" in ("stripe", "all"):
+              import threvo_actions.integrations.stripe
           if "$PROFILE" == "core":
               for module in (
                   "aiomysql",
@@ -169,6 +172,7 @@ jobs:
                   "cryptography",
                   "pydantic_ai",
                   "sqlalchemy",
+                  "stripe",
               ):
                   assert importlib.util.find_spec(module) is None, module
           PY
@@ -179,6 +183,45 @@ jobs:
               cd "$GITHUB_WORKSPACE"
             fi
           done
+
+  qualify-stripe:
+    if: inputs.operation == 'candidate'
+    needs: build-candidate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ta_stripe_test_release
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ta_stripe_test_release"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      THREVO_ACTIONS_STRIPE_TEST_DSN: postgresql://postgres:postgres@localhost:5432/ta_stripe_test_release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-distributions
+          path: release
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Qualify Stripe SDK and app against the immutable wheel
+        run: |
+          consumer_root=$(mktemp -d)
+          uv venv "$consumer_root/venv"
+          wheel=$(find release/packages -name '*.whl' -print -quit)
+          uv pip install --python "$consumer_root/venv/bin/python" "${wheel}[stripe-app]" pytest
+          mkdir -p "$consumer_root/tests/integration" "$consumer_root/examples"
+          cp -R tests/integration/stripe "$consumer_root/tests/integration/stripe"
+          cp -R examples/stripe_refunds "$consumer_root/examples/stripe_refunds"
+          cd "$consumer_root"
+          PYTHONPATH="$consumer_root" "$consumer_root/venv/bin/python" -m pytest -q tests/integration/stripe
 
   qualify-pydantic:
     if: inputs.operation == 'candidate'
@@ -392,6 +435,11 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 0; then
             echo "Using the repository owner's one-time v0.1.6 adoption-gate bypass."
+          elif test "$RELEASE_TAG" = "v0.2.0" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.2.0 adoption-gate bypass."
           else
             echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1

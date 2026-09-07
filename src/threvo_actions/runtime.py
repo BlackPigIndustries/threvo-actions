@@ -228,6 +228,7 @@ class RuntimeReasonCode(StrEnum):
     PRIVATE_SNAPSHOT_UNAVAILABLE = "private_snapshot_unavailable"
     PROPOSAL_COMMITMENT_UNAVAILABLE = "proposal_commitment_unavailable"
     AUTHORITY_EXPIRED = "authority_expired"
+    EXECUTION_LEASE_EXPIRED = "execution_lease_expired"
     AUTHORITY_NO_LONGER_SATISFIED = "authority_no_longer_satisfied"
     REAUTHORIZATION_FAILED = "reauthorization_failed"
     VERIFICATION_RETRIES_EXHAUSTED = "verification_retries_exhausted"
@@ -677,6 +678,26 @@ class ActionRuntime:
                     live_authorization.reason_code or RuntimeReasonCode.REAUTHORIZATION_FAILED.value
                 ),
             )
+        admitted_at = self._clock.now()
+        if record.expires_at <= admitted_at:
+            expired = record.model_copy(
+                update={
+                    "lifecycle_status": LifecycleStatus.EXPIRED,
+                    "revision": record.revision + 1,
+                }
+            )
+            if await self._cas(record, expired):
+                return self._result(expired, OperationOutcome.EXPIRED)
+            return self._result(record, OperationOutcome.CONFLICT)
+        if self._valid_authority_evidence(valid_evidence, binding=binding, at=admitted_at) != (
+            valid_evidence
+        ):
+            return await self._block(
+                definition=definition,
+                record=record,
+                now=admitted_at,
+                reason_code=RuntimeReasonCode.AUTHORITY_EXPIRED.value,
+            )
         started_receipt = ExecutionReceipt(
             receipt_reference=self._identifiers.new("receipt"),
             correlation_reference=record.proposal_reference,
@@ -710,6 +731,29 @@ class ActionRuntime:
         if claim is EffectClaimResult.PROPOSAL_NOT_AUTHORIZED:
             current = await self._required(record.tenant_reference, record.proposal_reference)
             return self._result(current, self._outcome_for(current.lifecycle_status))
+        execution_at = self._clock.now()
+        refusal: str | None = None
+        if record.expires_at <= execution_at:
+            refusal = RuntimeReasonCode.PROPOSAL_EXPIRED.value
+        elif (
+            self._valid_authority_evidence(valid_evidence, binding=binding, at=execution_at)
+            != valid_evidence
+        ):
+            refusal = RuntimeReasonCode.AUTHORITY_EXPIRED.value
+        elif execution_at >= admitted_at + definition.verification_lease_duration:
+            refusal = RuntimeReasonCode.EXECUTION_LEASE_EXPIRED.value
+        if refusal is not None:
+            return await self._settle_execution(
+                definition=definition,
+                record=executing,
+                execution=ExecutionResult[ResultT](
+                    status=ExecutionStatus.FAILED_KNOWN, reason_code=refusal
+                ),
+                now=execution_at,
+            )
+        context = self._execution_context(
+            record, observed_at=execution_at, authority_evidence=valid_evidence
+        )
         execution = await definition.executor.execute(
             resolved.current_snapshot,
             context=context,

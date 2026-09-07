@@ -6,6 +6,33 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-08
+
+### Fixed
+
+- Refuse execution when authority or proposal expiry crosses asynchronous
+  authorization/admission work, and refuse dispatch after the recovery lease.
+- Settle SQLite background writes before propagating cancellation so runtime
+  compensation cannot destroy keys that a later commit references.
+- Reject terminal verification results containing unknown item outcomes.
+
+### Added
+
+- Optional typed Stripe refund connector: async SDK transport, explicit account
+  scope, exact Decimal amounts, bounded correlation lookup, independent
+  verification and authenticated webhook hints.
+- Standalone sandbox refund app with PostgreSQL, envelope-protected proposals,
+  requester/approver separation, Pydantic AI deferred approval, Greek/English
+  browser UI, recovery sweeping and separate late-failure cases.
+- Target-customer description, integration design and next-step roadmap.
+
+### Changed
+
+- Installation documentation and dependency error messages use uv.
+- New minor-line migration records the stricter verification and cancellation
+  contract. Existing core dependencies, serialized records and schemas remain
+  unchanged. The Stripe example owns its separate host schema.
+
 ## [0.1.6] - 2026-09-07
 
 ### Changed
@@ -217,7 +244,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.3...v0.1.4
