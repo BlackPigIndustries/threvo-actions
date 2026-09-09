@@ -94,6 +94,7 @@ nav:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
       - Stripe refunds: integrations/stripe.md
+      - Stripe Actions (develop): integrations/stripe-actions.md
       - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
@@ -126,6 +127,7 @@ nav:
       - Canonicalization and protection: reference/canonical.md
       - Testing helpers: reference/testing.md
       - Pydantic AI: reference/pydantic-ai.md
+      - Stripe: reference/stripe.md
       - AWS KMS protection: reference/aws-kms.md
       - PostgreSQL and migrations: reference/postgres.md
       - MySQL and migrations: reference/mysql.md
@@ -139,6 +141,7 @@ nav:
       - Versioning: versioning.md
       - Stripe target customers: product/stripe-target-clients.md
       - Stripe implementation plan: plans/2026-09-08-stripe-connector.md
+      - Stripe Actions proposition and pipeline: plans/2026-09-10-stripe-actions.md
       - Next steps: plans/2026-09-08-next-steps.md
       - Release record 0.2.0: releases/0.2.0.md
       - Gradual-reveal design: design/gradual-reveal-api.md

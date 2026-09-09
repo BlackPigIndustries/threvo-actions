@@ -50,9 +50,16 @@ the first connector's qualification.
 
 ## Adoption offer and evidence
 
+The proposed `StripeActions.refunds` interface packages expert refund behavior
+behind explicit typed host contracts. Evaluate whether developers and agents can
+understand affected data, handle changed state and revoked authority, and
+distinguish submission from completion through the ordinary interface. Ease of
+applying strong practices is the primary value; elapsed integration time is
+secondary. See the [detailed proposition and pipeline](../plans/2026-09-10-stripe-actions.md).
+
 Offer one assisted integration of the customer's own refund operation, using
-their existing policy and systems. Measure host code, integration time, failure
-recovery effort, developer confusion and repeat use on a second action. Record
+their existing policy and systems. Evaluate failure recovery, correct use of
+authority and data boundaries, developer confusion and repeat use on a second action. Record
 assistance and failed attempts honestly. The included sandbox app and internal
 use are engineering evidence, not evidence of independent customer adoption.
 

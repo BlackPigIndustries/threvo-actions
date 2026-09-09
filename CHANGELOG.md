@@ -6,6 +6,24 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Added
+
+- `StripeActions.refunds`: a runtime-backed operation group with strict refund
+  policy, host payment resolution, private policy binding, durable reservation
+  contracts and independent completion verification.
+- `RefundRequest`, `RefundPayment`, `RefundPolicy`, `RefundHost`,
+  `RefundRepository`, `RefundSnapshot`, `RefundPreview`,
+  `RefundReservationStatus` and `StripeRefundSettings` in the optional Stripe
+  integration. A complete deterministic adoption example and Pydantic AI recipe.
+- Detailed Stripe proposition, naming decisions and implementation/follow-on pipeline.
+
+### Changed
+
+- The Stripe integration is a package; existing public connector imports remain
+  valid. Existing reference-app action identities and stored shapes are unchanged.
+- Shared agent instructions use category-neutral action terminology. Persisted
+  receipts and existing wire identifiers remain unchanged.
+
 ## [0.2.0] - 2026-09-08
 
 ### Fixed

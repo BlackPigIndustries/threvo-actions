@@ -1,7 +1,7 @@
 [project]
 name = "threvo-actions"
 version = "0.2.0"
-description = "Experimental confirm-first financial action contracts"
+description = "Typed contracts for approving, executing and verifying governed actions"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11,<3.14"

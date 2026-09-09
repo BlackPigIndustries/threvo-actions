@@ -1,9 +1,9 @@
 # threvo-actions
 
 `threvo-actions` is a Python runtime for approving, executing and reconciling
-agent-initiated financial operations. It is framework-neutral: hosts retain business truth,
-authorization, governed execution, authoritative verification, and retention
-policy.
+governed business operations, starting with financial actions. It is
+framework-neutral: hosts retain business truth, authorization, governed
+execution, authoritative verification, and retention policy.
 
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
 for the runnable quickstart, one guide per feature, complete runnable
@@ -19,6 +19,13 @@ integrations, the optional Stripe refund connector, and the full API reference.
 > upgrading.
 
 ## Installation
+
+On `develop`, the new `StripeActions.refunds` interface combines validated policy,
+host payment resolution and reservation with the existing runtime. This facade is
+**unreleased** and is not in the 0.2.0 installation below. Read the
+[Stripe Actions guide](docs/integrations/stripe-actions.md), run
+`uv run --extra stripe python -m examples.stripe_actions.demo` from this checkout,
+and see the [proposition and pipeline](docs/plans/2026-09-10-stripe-actions.md).
 
 Python 3.11 through 3.13 is supported.
 

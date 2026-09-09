@@ -20,10 +20,10 @@ try:
 except ModuleNotFoundError as exc:
     raise ImportError("Stripe integration requires: uv add 'threvo-actions[stripe]'") from exc
 
-from ..canonical import canonicalize_v1, model_json_object
-from ..models import ExperimentalModel, Money, SafeReference
-from ..receipts import ExternalReference
-from ..registry import ExecutionResult, ExecutionStatus, VerificationResult, VerificationStatus
+from ...canonical import canonicalize_v1, model_json_object
+from ...models import ExperimentalModel, Money, SafeReference
+from ...receipts import ExternalReference
+from ...registry import ExecutionResult, ExecutionStatus, VerificationResult, VerificationStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
