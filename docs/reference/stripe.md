@@ -22,3 +22,41 @@ remain compatible. All symbols require the optional Stripe integration.
 ::: threvo_actions.integrations.stripe.ports.RefundHost
 
 ::: threvo_actions.integrations.stripe.ports.RefundRepository
+
+## Billing operations (develop)
+
+See the [billing guide](../integrations/stripe-billing-actions.md) for composition,
+supported scope and host obligations. Both groups expose the same prepare,
+record_authority, execute, reconcile and read methods as refunds.
+
+::: threvo_actions.integrations.stripe.subscriptions.StripeSubscriptions
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionCancellationConfig
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionCancellationRequest
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionCancellationPolicy
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionCancellationRepository
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionBinding
+
+::: threvo_actions.integrations.stripe.subscriptions.SubscriptionCancellationOutcome
+
+::: threvo_actions.integrations.stripe.credit_notes.StripeCreditNotes
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNoteConfig
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNoteRequest
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNotePolicy
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNoteRepository
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNoteInvoice
+
+::: threvo_actions.integrations.stripe.credit_notes.CreditNoteOutcome
+
+::: threvo_actions.integrations.stripe._operation.StripeActionSettings
+
+::: threvo_actions.integrations.stripe._operation.StripeActionRepository

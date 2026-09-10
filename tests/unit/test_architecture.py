@@ -16,6 +16,7 @@ ALLOWED_OPTIONAL_IMPORTS = {
     Path("integrations/pydantic_ai.py"): {"pydantic_ai"},
     Path("integrations/stripe/gateway.py"): {"stripe"},
     Path("integrations/stripe/actions.py"): {"stripe"},
+    Path("integrations/stripe/billing_gateway.py"): {"stripe"},
 }
 HISTORICAL_CLEAN_ROOM_REPORT = Path("docs/testing/clean-room-adoption-2026-08-30.md")
 

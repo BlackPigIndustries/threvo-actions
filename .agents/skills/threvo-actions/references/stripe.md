@@ -59,3 +59,38 @@ protected proposal storage. It refuses live credentials. Replace reference
 identity and key custody with the production host's implementations before
 qualifying financial use. It is not a Stripe Marketplace extension or a
 Visa/Mastercard/AP2/UCP adapter.
+
+## Billing groups on develop
+
+The unreleased facade adds `subscriptions=SubscriptionCancellationConfig(...)`
+and `credit_notes=CreditNoteConfig(...)`. Either can be used without refunds.
+Each config has a typed host, Pydantic policy, `StripeActionSettings` and an
+optional test gateway. Production supplies the caller-owned StripeClient to the
+facade. Do not configure both a client and a group gateway.
+
+`SubscriptionCancellationRequest` carries host subscription and intent references
+plus `SubscriptionOperation.SCHEDULE` or `WITHDRAW`. Only active single licensed
+items without schedules, pending updates, pauses or custom dates are supported.
+The result proves `scheduled`/`withdrawn`, never actual subscription termination.
+Host entitlements and later invoices remain separate.
+
+`CreditNoteRequest` carries host invoice/line references, positive Money line
+amounts, exact expected final total, reason and `CreditDisposition`. Stripe's
+preview computes tax/discounts and validates remaining credit. Support is bounded
+to full invoice reduction or full customer-balance allocation; no cash refunds,
+mixed allocations, custom lines, quantity credits, shipping or outbound email.
+Customer-balance completion additionally requires an independently retrieved
+credit-note balance transaction matching customer, currency and negative amount.
+
+Host repositories implement tenant-scoped canonical resolution plus durable
+remember/load/reserve/no-submission/outcome methods. Serialize all writers to the
+same subscription/invoice, including other actions. Unknown acknowledgements
+retain claims; never resend after empty lookup or expired provider idempotency.
+Stripe lacks atomic compare-and-set: final preflight reduces but cannot eliminate
+external-writer races. A changed/missing subscription correlation remains
+unresolved, even if the current state happens to match the requested state.
+
+Use `examples/stripe_billing/demo.py` for complete deterministic host wiring and
+`examples/stripe_billing/agent.py` for existing Pydantic AI bindings. The guide is
+`docs/integrations/stripe-billing-actions.md`; the reviewed design and follow-on
+qualification pipeline is `docs/plans/2026-09-11-stripe-billing-actions.md`.

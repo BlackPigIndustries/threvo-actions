@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from stripe.params import RefundListParams
 
 StripeAccountId = Annotated[str, StringConstraints(pattern=r"^acct_[A-Za-z0-9]+$")]
+StripeCustomerId = Annotated[str, StringConstraints(pattern=r"^cus_[A-Za-z0-9]+$")]
 StripeChargeId = Annotated[str, StringConstraints(pattern=r"^ch_[A-Za-z0-9]+$")]
 StripeRefundId = Annotated[str, StringConstraints(pattern=r"^re_[A-Za-z0-9]+$")]
 RefundStatus = Literal["pending", "requires_action", "succeeded", "failed", "canceled"]

@@ -27,6 +27,16 @@ host payment resolution and reservation with the existing runtime. This facade i
 `uv run --extra stripe python -m examples.stripe_actions.demo` from this checkout,
 and see the [proposition and pipeline](docs/plans/2026-09-10-stripe-actions.md).
 
+The develop facade also provides `StripeActions.subscriptions` for scheduling or
+withdrawing period-end cancellation and `StripeActions.credit_notes` for reducing
+an open invoice or crediting a paid invoice's customer balance. Each group can be
+configured independently. See the [billing action guide](docs/integrations/stripe-billing-actions.md)
+and [reviewed implementation plan](docs/plans/2026-09-11-stripe-billing-actions.md).
+Run all four credential-free scenarios with
+`uv run --extra stripe python -m examples.stripe_billing.demo`. These APIs are
+unreleased; cancellation scheduling does not end service immediately, and credit
+notes in this scope do not refund cash or send customer email.
+
 Python 3.11 through 3.13 is supported.
 
 ```bash

@@ -8,6 +8,15 @@ and uses Semantic Versioning for the supported surface described in
 
 ### Added
 
+- Independently configurable `StripeActions.subscriptions` and
+  `StripeActions.credit_notes`, using the existing action runtime. Period-end
+  cancellation scheduling/withdrawal, open-invoice reduction and paid-invoice
+  customer balance credits have typed policies, versioned host bindings, durable
+  resource reservation contracts and independent provider verification.
+- Async Stripe SDK billing gateways, exact credit-note preview binding, customer
+  balance transaction verification, explicit email suppression, and credential-free
+  billing examples with optional Pydantic AI recipes. Cash-refund/mixed credit
+  notes and immediate/metered/trial subscription cancellation remain unsupported.
 - `StripeActions.refunds`: a runtime-backed operation group with strict refund
   policy, host payment resolution, private policy binding, durable reservation
   contracts and independent completion verification.

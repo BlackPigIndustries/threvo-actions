@@ -142,6 +142,12 @@ connector for existing hosts; do not rewrite their persisted snapshots or action
 identities during adoption. Shared components and agent prompts use category-neutral
 action names; do not rename persisted wire discriminators without migration review.
 
+Develop also includes independent `StripeActions.subscriptions` and
+`StripeActions.credit_notes` groups. Read the billing section in
+[references/stripe.md](references/stripe.md). Cancellation scheduling is not
+termination; invoice reduction and customer balance credit are not cash refunds.
+Do not expose raw SDK calls, invent an allocation or automatically email customers.
+
 ## Add an agent framework only at the edge
 
 The core action must run without an agent framework. For Pydantic AI, use the
