@@ -3,9 +3,9 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
-## Supported at `0.3.0`
+## Supported at `0.3.1`
 
-The following surfaces are supported at the exact `0.3.0` release:
+The following surfaces are supported at the exact `0.3.1` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -28,12 +28,17 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.3.0` without another explicitly
+safety check is not permitted after `0.3.1` without another explicitly
 documented exception.
 
 `0.3.0` adds governed Stripe refund, subscription cancellation and credit-note
 operation groups while preserving existing connector imports and persisted
 proposal/receipt contracts. Follow the [`0.3.0` migration record](releases/0.3.0.md).
+
+`0.3.1` corrects the Stripe optional-dependency boundary, exposes runtime
+observability and deterministic clock injection, classifies unsettled refunds
+as provisional, and reports concurrent execution admission accurately. It is a
+backward-compatible patch. Follow the [`0.3.1` migration record](releases/0.3.1.md).
 
 `0.2.0` was a minor-line upgrade with stricter verification and cancellation
 contracts, plus the optional Stripe connector. See the
@@ -128,7 +133,7 @@ does not let an older library silently accept a newer migration history.
 ## Version changes
 
 - Later `0.3.z` releases: backward-compatible fixes and additions to the
-  supported `0.3.0` surface unless an explicit corrective exception is
+  supported `0.3.1` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

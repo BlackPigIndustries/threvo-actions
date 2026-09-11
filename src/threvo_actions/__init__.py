@@ -221,4 +221,4 @@ __all__ = [
     "validate_proposal_update",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
