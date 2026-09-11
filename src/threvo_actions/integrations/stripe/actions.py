@@ -14,9 +14,8 @@ from ...registry import (
     VerificationResult,
     VerificationStatus,
 )
-from ...runtime import ActionRuntime
+from ...runtime import ActionRuntime, SystemClock
 from ._operation import _definition
-from .billing_gateway import StripeCreditNoteSDKGateway, StripeSubscriptionSDKGateway
 from .credit_notes import (
     CreditNoteConfig,
     CreditNoteOutcome,
@@ -26,7 +25,7 @@ from .credit_notes import (
     StripeCreditNotes,
     _CreditNoteWorkflow,
 )
-from .gateway import RefundIntent, RefundOutcome, StripeRefundConnector, StripeSDKGateway
+from .gateway import RefundIntent, RefundOutcome, StripeRefundConnector
 from .models import (
     RefundPayment,
     RefundPolicy,
@@ -51,14 +50,15 @@ if TYPE_CHECKING:
     from ...authority import AuthorityEvidence
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
     from ...models import ConfirmingAuthority, ProposingAgent, RequestingPrincipal
+    from ...receipts import EventSink
     from ...registry import (
         AuthorityEvaluatorPort,
         ExecutionContext,
         PreparationContext,
         ReadContext,
     )
-    from ...runtime import ActionOperationResult, ProposalView
-    from ...stores import ActionStore
+    from ...runtime import ActionOperationResult, Clock, IdentifierProvider, ProposalView
+    from ...stores import ActionStore, RetentionStore
     from .gateway import StripeRefundGateway
     from .models import StripeRefundSettings
     from .ports import RefundHost
@@ -306,6 +306,11 @@ class StripeActions:
         authority_evaluator: AuthorityEvaluatorPort,
         commitment_provider: CommitmentProviderPort,
         protection_codec: ProtectionCodecPort,
+        retention_store: RetentionStore | None = None,
+        clock: Clock | None = None,
+        identifiers: IdentifierProvider | None = None,
+        event_sink: EventSink | None = None,
+        runtime_revision: str | None = None,
         client: stripe.StripeClient | None = None,
         gateway: StripeRefundGateway | None = None,
         subscriptions: SubscriptionCancellationConfig | None = None,
@@ -317,6 +322,15 @@ class StripeActions:
         refund_configured = any(value is not None for value in (host, policy, settings, gateway))
         if not refund_configured and subscriptions is None and credit_notes is None:
             raise ValueError("configure at least one Stripe action group")
+        runtime_clock = clock if clock is not None else SystemClock()
+        runtime = ActionRuntime(
+            store=store,
+            retention_store=retention_store,
+            clock=runtime_clock,
+            identifiers=identifiers,
+            event_sink=event_sink,
+            runtime_revision=runtime_revision,
+        )
         if refund_configured:
             if host is None or policy is None or settings is None:
                 raise ValueError("refunds require host, policy and settings together")
@@ -330,17 +344,25 @@ class StripeActions:
                 protection_codec=protection_codec,
                 client=client,
                 gateway=gateway,
+                runtime=runtime,
+                clock=runtime_clock,
             )
         if subscriptions is not None:
             if (client is None) == (subscriptions.gateway is None):
                 raise ValueError("provide exactly one Stripe client or subscription gateway")
-            subscription_gateway = (
-                subscriptions.gateway if client is None else StripeSubscriptionSDKGateway(client)
-            )
+            if client is None:
+                subscription_gateway = subscriptions.gateway
+            else:
+                from .billing_gateway import StripeSubscriptionSDKGateway
+
+                subscription_gateway = StripeSubscriptionSDKGateway(client)
             if subscription_gateway is None:
                 raise ValueError("a subscription gateway is required")
             workflow = _SubscriptionWorkflow(
-                config=subscriptions, gateway=subscription_gateway, store=store
+                config=subscriptions,
+                gateway=subscription_gateway,
+                store=store,
+                clock=runtime_clock,
             )
             self._subscriptions = StripeSubscriptions(
                 definition=_definition(
@@ -355,18 +377,24 @@ class StripeActions:
                     commitment_provider=commitment_provider,
                     protection_codec=protection_codec,
                 ),
-                runtime=ActionRuntime(store=store),
+                runtime=runtime,
             )
         if credit_notes is not None:
             if (client is None) == (credit_notes.gateway is None):
                 raise ValueError("provide exactly one Stripe client or credit-note gateway")
-            credit_gateway = (
-                credit_notes.gateway if client is None else StripeCreditNoteSDKGateway(client)
-            )
+            if client is None:
+                credit_gateway = credit_notes.gateway
+            else:
+                from .billing_gateway import StripeCreditNoteSDKGateway
+
+                credit_gateway = StripeCreditNoteSDKGateway(client)
             if credit_gateway is None:
                 raise ValueError("a credit-note gateway is required")
             credit_workflow = _CreditNoteWorkflow(
-                config=credit_notes, gateway=credit_gateway, store=store
+                config=credit_notes,
+                gateway=credit_gateway,
+                store=store,
+                clock=runtime_clock,
             )
             self._credit_notes = StripeCreditNotes(
                 definition=_definition(
@@ -381,7 +409,7 @@ class StripeActions:
                     commitment_provider=commitment_provider,
                     protection_codec=protection_codec,
                 ),
-                runtime=ActionRuntime(store=store),
+                runtime=runtime,
             )
 
     @property
@@ -414,15 +442,22 @@ class StripeActions:
         protection_codec: ProtectionCodecPort,
         client: stripe.StripeClient | None,
         gateway: StripeRefundGateway | None,
+        runtime: ActionRuntime,
+        clock: Clock,
     ) -> None:
         if (client is None) == (gateway is None):
             raise ValueError("provide exactly one Stripe client or refund gateway")
         if client is not None:
+            from .sdk_gateway import StripeSDKGateway
+
             gateway = StripeSDKGateway(client)
         if gateway is None:
             raise ValueError("a Stripe refund gateway is required")
         workflow = _RefundWorkflow(
-            connector=StripeRefundConnector(gateway), host=host, policy=policy, store=store
+            connector=StripeRefundConnector(gateway, clock=clock),
+            host=host,
+            policy=policy,
+            store=store,
         )
         definition = ActionDefinition(
             action_type=settings.action_type,
@@ -448,4 +483,4 @@ class StripeActions:
             verification_lease_duration=settings.verification_lease_duration,
             max_verification_attempts=settings.max_verification_attempts,
         )
-        self._refunds = StripeRefunds(definition=definition, runtime=ActionRuntime(store=store))
+        self._refunds = StripeRefunds(definition=definition, runtime=runtime)

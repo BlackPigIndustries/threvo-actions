@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 pytest.importorskip("stripe._stripe_client")
 
-from threvo_actions import Money, OperationOutcome  # noqa: E402
+from threvo_actions import Money, OperationOutcome, RuntimeEventType  # noqa: E402
 from threvo_actions.integrations.stripe import (  # noqa: E402
     RefundPolicy,
     RefundPreparationError,
@@ -37,6 +37,33 @@ def test_policy_json_round_trip_and_currency_specific_bounds():
     assert not policy.permits(Money(amount=Decimal("101"), currency="USD"), livemode=False)
     assert not policy.permits(Money(amount=Decimal("1"), currency="EUR"), livemode=False)
     assert not policy.permits(Money(amount=Decimal("1"), currency="USD"), livemode=True)
+
+
+def test_facade_wires_runtime_observability_and_clock():
+    from examples.stripe_actions.demo import build_demo
+
+    from threvo_actions.testing import FixedClock, RecordingEventSink, SequentialIdentifiers
+
+    async def scenario():
+        clock = FixedClock(datetime(2026, 9, 12, 10, 0, tzinfo=UTC))
+        events = RecordingEventSink()
+        demo = build_demo(
+            clock=clock,
+            event_sink=events,
+            identifiers=SequentialIdentifiers(),
+            runtime_revision=f"threvo-actions/commit:{'a' * 40}",
+        )
+
+        prepared = await demo.prepare()
+        stored = await demo.store.get("tenant:demo", prepared.proposal_reference)
+
+        assert prepared.proposal_reference == "proposal:1"
+        assert stored is not None
+        assert stored.receipts[0].runtime_revision == f"threvo-actions/commit:{'a' * 40}"
+        assert [event.event_type for event in events.events] == [RuntimeEventType.PROPOSAL_PREPARED]
+        assert events.events[0].observed_at == clock.now()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("timeout", [False, True])
@@ -195,7 +222,7 @@ def test_expired_evidence_never_reaches_reservation():
 
     async def scenario():
         demo = build_demo()
-        clock = FixedClock(datetime.now(UTC))
+        clock = FixedClock(datetime.now(UTC) + timedelta(seconds=1))
         demo.actions.refunds.runtime = ActionRuntime(store=demo.store, clock=clock)
         prepared = await demo.prepare()
         clock.advance(timedelta(seconds=1))
@@ -323,24 +350,21 @@ def test_agent_tool_prepares_without_minting_authority():
     asyncio.run(scenario())
 
 
-def test_expiry_during_reservation_is_checked_again_before_stripe_create(monkeypatch):
-    from types import SimpleNamespace
-
+def test_expiry_during_reservation_is_checked_again_before_stripe_create():
     from examples.stripe_actions.demo import build_demo
 
-    from threvo_actions.integrations.stripe import gateway as gateway_module
+    from threvo_actions.testing import FixedClock
 
     async def scenario():
-        demo = build_demo()
+        clock = FixedClock(datetime.now(UTC) + timedelta(seconds=1))
+        demo = build_demo(clock=clock)
         prepared = await demo.prepare()
         await demo.approve(prepared.proposal_reference)
         reserve = demo.repository.reserve
 
         async def expire(snapshot, *, not_after):
             result = await reserve(snapshot, not_after=not_after)
-            monkeypatch.setattr(
-                gateway_module, "datetime", SimpleNamespace(now=lambda zone: not_after)
-            )
+            clock.advance(not_after - clock.now())
             return result
 
         demo.repository.reserve = expire

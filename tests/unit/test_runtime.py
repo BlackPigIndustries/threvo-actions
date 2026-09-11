@@ -632,6 +632,27 @@ class ConflictAfterConcurrentBlockStore(MemoryActionStore):
         return EffectClaimResult.CONFLICT
 
 
+class ConflictAfterConcurrentExecutionStore(MemoryActionStore):
+    async def admit_execution(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+        expected_revision: int,
+        admitted_at: datetime,
+        updated: StoredProposal,
+    ) -> EffectClaimResult:
+        result = await super().admit_execution(
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+            expected_revision=expected_revision,
+            admitted_at=admitted_at,
+            updated=updated,
+        )
+        assert result is EffectClaimResult.ACQUIRED
+        return EffectClaimResult.CONFLICT
+
+
 class SubstitutingReadStore(MemoryActionStore):
     def __init__(self) -> None:
         super().__init__()
@@ -1280,6 +1301,28 @@ def test_effect_conflict_returns_the_current_proposal_lifecycle() -> None:
 
         assert result.outcome is OperationOutcome.REPLAYED
         assert result.lifecycle_status is LifecycleStatus.BLOCKED
+        assert host.executor_calls == 0
+
+    asyncio.run(scenario())
+
+
+def test_effect_conflict_reports_an_active_execution_as_in_progress() -> None:
+    async def scenario() -> None:
+        store = ConflictAfterConcurrentExecutionStore()
+        runtime = ActionRuntime(store=store, clock=MutableClock())
+        host = HostPorts()
+        action = definition(host, DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+
+        result = await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+
+        assert result.outcome is OperationOutcome.IN_PROGRESS
+        assert result.lifecycle_status is LifecycleStatus.EXECUTING
         assert host.executor_calls == 0
 
     asyncio.run(scenario())

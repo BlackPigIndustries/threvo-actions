@@ -37,6 +37,20 @@ without changing the record. Crash recovery may move `executing` to
 `verification_pending` only after the persisted due time, which is set from
 `verification_lease_duration` when execution is admitted.
 
+The runtime deliberately timestamps durable admission after the awaited live
+`can_execute()` check. Time spent in that authorization call consumes proposal
+and authority validity; both are checked again when it returns. It does not
+consume the execution recovery lease, which starts only when the store admits
+the proposal as `executing`. If the admission write itself consumes that lease,
+dispatch is refused. This separates expiring authority from crash-recovery
+ownership without granting extra time to either.
+
+An authorization refusal during `prepare()` raises `AuthorizationDeniedError`
+because no proposal exists to transition. A failed live check for an existing
+proposal records the terminal `blocked` lifecycle state. Decision and read
+denials intentionally use `ProposalNotFoundError` so unauthorized and unknown
+proposal references remain indistinguishable.
+
 ## Lifecycle status versus operation outcome
 
 `lifecycle_status` is the durable state of the proposal. `outcome` describes
@@ -64,6 +78,9 @@ from current application state. Never execute the stale proposal again.
 Outcomes such as `authority_pending`, `in_progress`, and `conflict` describe a
 call result; inspect the accompanying `lifecycle_status` before scheduling the
 next operation.
+An execute caller that loses admission to another active executor receives
+`in_progress`; a conflict whose winner has already moved elsewhere remains a
+replay result carrying that current lifecycle.
 
 Do not translate `accepted`, an HTTP 2xx, a queue acknowledgement, or model
 text into `verified`. Only the configured verifier can do that.

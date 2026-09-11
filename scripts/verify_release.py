@@ -45,6 +45,7 @@ REQUIRED_PACKAGE_FILES = {
     "threvo_actions/integrations/stripe/gateway.py",
     "threvo_actions/integrations/stripe/models.py",
     "threvo_actions/integrations/stripe/ports.py",
+    "threvo_actions/integrations/stripe/sdk_gateway.py",
     "threvo_actions/integrations/stripe/subscriptions.py",
     "threvo_actions/.agents/skills/threvo-actions/SKILL.md",
     "threvo_actions/experimental/__init__.py",

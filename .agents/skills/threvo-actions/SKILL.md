@@ -4,7 +4,7 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Threvo Actions
@@ -128,7 +128,7 @@ Time spent in authorization or storage admission does not extend authority or
 the execution lease. The runtime rechecks before dispatch; host executors must
 also enforce the deadline at their own final mutation boundary.
 
-For Stripe refunds, install the optional `stripe` extra through uv and read
+For SDK-backed Stripe refunds, install the optional `stripe` extra through uv and read
 [references/stripe.md](references/stripe.md). Keep account/payment resolution,
 durable intent reservation and reconciliation scheduling in the host. Never
 resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
@@ -141,6 +141,10 @@ identity. The facade compiles to the existing runtime. Retain the lower-level
 connector for existing hosts; do not rewrite their persisted snapshots or action
 identities during adoption. Shared components and agent prompts use category-neutral
 action names; do not rename persisted wire discriminators without migration review.
+Custom typed gateways work without the Stripe SDK. When overriding runtime
+services, pass the host clock, identifiers, event sink, retention store and exact
+revision through `StripeActions`; one runtime and clock are shared by all groups.
+Map an observed pending refund to provisional absence, not target unavailability.
 
 Version 0.3.0 also includes independent `StripeActions.subscriptions` and
 `StripeActions.credit_notes` groups. Read the billing section in

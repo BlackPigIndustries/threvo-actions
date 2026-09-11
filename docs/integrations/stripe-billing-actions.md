@@ -1,6 +1,6 @@
 # Governed Stripe billing actions
 
-Included in 0.3.0 through the optional `stripe` extra. They use the
+Included in 0.3.1 through the optional `stripe` extra. They use the
 same `ActionDefinition`, `ActionRuntime`, authority evidence and store contracts
 as `StripeActions.refunds`. Existing refund callers remain compatible.
 
@@ -105,6 +105,11 @@ group raises `ValueError`. Existing refund `host`, `policy`, `settings` and
 `gateway` arguments retain their behavior. Each new configuration can instead
 supply its typed `gateway` for tests; supplying both that gateway and a client
 is a configuration error. Client lifetime and timeouts remain host-owned.
+Custom gateways work without the Stripe SDK installed. The facade shares one
+runtime across configured refund, subscription and credit-note groups; its
+`clock`, `identifiers`, `event_sink`, `retention_store` and `runtime_revision`
+arguments are forwarded to that runtime, and the clock also governs every
+Stripe-side deadline check.
 
 SDK fixtures use Stripe Python 14.4.1 and its default `2026-02-25.clover`
 API contract. Qualify other SDK/API versions in fixtures and a Stripe sandbox

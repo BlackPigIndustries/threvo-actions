@@ -42,8 +42,11 @@ from threvo_actions.testing import EphemeralProtection
 if TYPE_CHECKING:
     from threvo_actions import (
         ActionOperationResult,
+        Clock,
         DecisionContext,
+        EventSink,
         ExecutionContext,
+        IdentifierProvider,
         PreparationContext,
         ReadContext,
     )
@@ -261,7 +264,14 @@ class Demo:
         )
 
 
-def build_demo(*, policy: RefundPolicy | None = None) -> Demo:
+def build_demo(
+    *,
+    policy: RefundPolicy | None = None,
+    clock: Clock | None = None,
+    identifiers: IdentifierProvider | None = None,
+    event_sink: EventSink | None = None,
+    runtime_revision: str | None = None,
+) -> Demo:
     repository = DemoRepository()
     authorization = DemoAuthorization()
     gateway = DemoGateway()
@@ -280,6 +290,10 @@ def build_demo(*, policy: RefundPolicy | None = None) -> Demo:
         authority_evaluator=SingleApproval(ConfirmingAuthority(reference="user:approver")),
         commitment_provider=protection,
         protection_codec=protection,
+        clock=clock,
+        identifiers=identifiers,
+        event_sink=event_sink,
+        runtime_revision=runtime_revision,
     )
     return Demo(actions, repository, authorization, gateway, store, protection)
 

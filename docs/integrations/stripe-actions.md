@@ -4,7 +4,7 @@ This guide covers refunds. The independently configurable subscription
 cancellation and credit-note groups are documented in the
 [billing action guide](stripe-billing-actions.md).
 
-Included in 0.3.0 through the optional `stripe` extra. For checkout
+Included in 0.3.1 through the optional `stripe` extra. For checkout
 development, run `uv sync --extra dev --extra stripe --extra pydantic-ai`.
 
 `StripeActions.refunds` packages the reviewed refund lifecycle around the Stripe
@@ -69,6 +69,18 @@ implementations for an evaluation are in `examples/stripe_actions/demo.py`.
 Supply exactly one `client` or typed `gateway`. The caller owns SDK client
 lifetime, HTTP timeouts and credentials. Configure a bounded async client; the
 SDK gateway disables automatic mutation retries per request.
+
+A custom typed gateway does not require the Stripe SDK. Install the `stripe`
+extra only when using the maintained SDK gateways or Stripe webhook parser.
+
+Pass `clock`, `identifiers`, `event_sink`, `retention_store` and
+`runtime_revision` to `StripeActions` as needed. The facade creates one
+`ActionRuntime` shared by every configured group and uses the same clock for the
+runtime, provider submission deadlines and billing preflight deadlines. Defaults
+remain the normal system clock, UUID identifiers, no-op event sink, no retention
+store and resolved installed-package revision. Production governance projections
+should supply an event sink explicitly; durable audit evidence remains in the
+store and receipts rather than depending on best-effort event delivery.
 
 The supported operation is one exact positive refund of a paid, captured,
 undisputed direct charge. Currency exponent comes from the host payment record.

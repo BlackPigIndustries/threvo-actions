@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
 from pydantic import (
@@ -11,25 +10,22 @@ from pydantic import (
     Field,
     SecretStr,
     StringConstraints,
-    ValidationError,
     model_validator,
 )
-
-try:
-    import stripe
-except ModuleNotFoundError as exc:
-    raise ImportError("Stripe integration requires: uv add 'threvo-actions[stripe]'") from exc
 
 from ...canonical import canonicalize_v1, model_json_object
 from ...models import ExperimentalModel, Money, SafeReference
 from ...receipts import ExternalReference
 from ...registry import ExecutionResult, ExecutionStatus, VerificationResult, VerificationStatus
+from ...runtime import Clock, SystemClock
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
-    from stripe import RequestOptions
-    from stripe.params import RefundListParams
+    import stripe
+
+    from .sdk_gateway import StripeSDKGateway as StripeSDKGateway
 
 StripeAccountId = Annotated[str, StringConstraints(pattern=r"^acct_[A-Za-z0-9]+$")]
 StripeCustomerId = Annotated[str, StringConstraints(pattern=r"^cus_[A-Za-z0-9]+$")]
@@ -37,7 +33,6 @@ StripeChargeId = Annotated[str, StringConstraints(pattern=r"^ch_[A-Za-z0-9]+$")]
 StripeRefundId = Annotated[str, StringConstraints(pattern=r"^re_[A-Za-z0-9]+$")]
 RefundStatus = Literal["pending", "requires_action", "succeeded", "failed", "canceled"]
 CORRELATION_KEY = "threvo_refund_intent"
-_construct_event: Callable[[bytes, str, str], stripe.Event] = stripe.Webhook.construct_event
 
 
 class StripeBoundaryError(RuntimeError):
@@ -153,101 +148,21 @@ class StripeRefundGateway(Protocol):
     async def refunds(self, intent: RefundIntent, after: str | None) -> RefundPage: ...
 
 
-def _observation(refund: stripe.Refund) -> RefundObservation:
-    charge = refund.charge
-    return RefundObservation.model_validate(
-        {
-            "refund_id": refund.id,
-            "charge_id": charge if isinstance(charge, str) else charge.id if charge else None,
-            "currency": refund.currency,
-            "amount_minor": refund.amount,
-            "status": refund.status,
-            "correlation": (refund.metadata or {}).get(CORRELATION_KEY, ""),
-        }
-    )
-
-
-class StripeSDKGateway:
-    """Async SDK adapter with bounded transport and no automatic mutation retry."""
-
-    def __init__(self, client: stripe.StripeClient) -> None:
-        self._client = client
-
-    @staticmethod
-    def _options(intent: RefundIntent) -> RequestOptions:
-        options: RequestOptions = {"max_network_retries": 0}
-        if intent.account.connected_account is not None:
-            options["stripe_account"] = intent.account.connected_account
-        return options
-
-    async def charge(self, intent: RefundIntent) -> ChargeObservation:
-        try:
-            value = await self._client.v1.charges.retrieve_async(
-                intent.charge_id, options=self._options(intent)
-            )
-            return ChargeObservation(
-                charge_id=value.id,
-                currency=value.currency,
-                amount_minor=value.amount,
-                refunded_minor=value.amount_refunded,
-                captured=value.captured,
-                paid=value.paid,
-                disputed=value.disputed,
-                livemode=value.livemode,
-                indirect_charge=value.get("transfer_data") is not None
-                or value.get("transfer") is not None,
-            )
-        except (stripe.StripeError, ValidationError, AttributeError, TypeError):
-            raise StripeBoundaryError("Stripe charge could not be established") from None
-
-    async def create(self, intent: RefundIntent) -> RefundObservation:
-        options = self._options(intent)
-        options["idempotency_key"] = intent.idempotency_key
-        try:
-            value = await self._client.v1.refunds.create_async(
-                {
-                    "charge": intent.charge_id,
-                    "amount": intent.amount_minor,
-                    "metadata": {CORRELATION_KEY: intent.correlation},
-                },
-                options=options,
-            )
-            return _observation(value)
-        except (stripe.StripeError, ValidationError, AttributeError, TypeError):
-            # Even a returned error does not prove that the target has no effect.
-            raise StripeBoundaryError("Stripe submission outcome requires reconciliation") from None
-
-    async def retrieve(self, intent: RefundIntent, refund_id: str) -> RefundObservation:
-        try:
-            return _observation(
-                await self._client.v1.refunds.retrieve_async(
-                    refund_id, options=self._options(intent)
-                )
-            )
-        except (stripe.StripeError, ValidationError, AttributeError, TypeError):
-            raise StripeBoundaryError("Stripe refund could not be established") from None
-
-    async def refunds(self, intent: RefundIntent, after: str | None) -> RefundPage:
-        params: RefundListParams = {"charge": intent.charge_id, "limit": 100}
-        if after is not None:
-            params["starting_after"] = after
-        try:
-            page = await self._client.v1.refunds.list_async(params, options=self._options(intent))
-            return RefundPage(
-                refunds=tuple(_observation(refund) for refund in page.data), has_more=page.has_more
-            )
-        except (stripe.StripeError, ValidationError, AttributeError, TypeError):
-            raise StripeBoundaryError("Stripe refund lookup is incomplete") from None
-
-
 class StripeRefundConnector:
     """Submit once after host reservation; verify through independently read observations."""
 
-    def __init__(self, gateway: StripeRefundGateway, *, max_lookup_pages: int = 100) -> None:
+    def __init__(
+        self,
+        gateway: StripeRefundGateway,
+        *,
+        max_lookup_pages: int = 100,
+        clock: Clock | None = None,
+    ) -> None:
         if max_lookup_pages < 1:
             raise ValueError("max_lookup_pages must be positive")
         self.gateway = gateway
         self._max_lookup_pages = max_lookup_pages
+        self._clock = clock if clock is not None else SystemClock()
 
     async def submit(
         self, intent: RefundIntent, *, not_after: datetime | None = None
@@ -262,7 +177,7 @@ class StripeRefundConnector:
             return ExecutionResult(
                 status=ExecutionStatus.STALE_NO_EFFECT, reason_code="stripe_charge_changed"
             )
-        if not_after is not None and datetime.now(UTC) >= not_after:
+        if not_after is not None and self._clock.now() >= not_after:
             return ExecutionResult(
                 status=ExecutionStatus.FAILED_KNOWN,
                 reason_code="stripe_submission_deadline_expired",
@@ -331,7 +246,8 @@ class StripeRefundConnector:
             )
         if observed.status in {"pending", "requires_action"}:
             return VerificationResult(
-                status=VerificationStatus.TARGET_UNAVAILABLE, reason_code="stripe_refund_pending"
+                status=VerificationStatus.PROVISIONAL_ABSENCE,
+                reason_code="stripe_refund_pending",
             )
         return VerificationResult(
             status=(
@@ -351,7 +267,12 @@ def verify_refund_webhook(
     if len(payload) > 262_144:
         raise StripeBoundaryError("Stripe webhook exceeds the supported size")
     try:
-        event = _construct_event(payload, signature, secret.get_secret_value())
+        import stripe
+    except ModuleNotFoundError as exc:
+        raise ImportError("Stripe integration requires: uv add 'threvo-actions[stripe]'") from exc
+    try:
+        construct_event: Callable[[bytes, str, str], stripe.Event] = stripe.Webhook.construct_event
+        event = construct_event(payload, signature, secret.get_secret_value())
         if event.type not in {"refund.created", "refund.updated", "refund.failed"}:
             return None
         return RefundWebhook(
@@ -362,3 +283,11 @@ def verify_refund_webhook(
         )
     except (stripe.StripeError, ValueError, AttributeError, TypeError, KeyError):
         raise StripeBoundaryError("Stripe webhook could not be authenticated") from None
+
+
+def __getattr__(name: str) -> object:
+    if name == "StripeSDKGateway":
+        from .sdk_gateway import StripeSDKGateway
+
+        return StripeSDKGateway
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
