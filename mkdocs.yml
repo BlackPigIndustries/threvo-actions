@@ -145,6 +145,7 @@ nav:
       - Stripe Actions proposition and pipeline: plans/2026-09-10-stripe-actions.md
       - Stripe billing design and review: plans/2026-09-11-stripe-billing-actions.md
       - Next steps: plans/2026-09-08-next-steps.md
+      - Release record 0.3.2: releases/0.3.2.md
       - Release record 0.3.1: releases/0.3.1.md
       - Release record 0.3.0: releases/0.3.0.md
       - Release record 0.2.0: releases/0.2.0.md
