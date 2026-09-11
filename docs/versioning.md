@@ -28,7 +28,7 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.3.0` without another explicitly
+safety check is not permitted after `0.3.1` without another explicitly
 documented exception.
 
 `0.3.0` adds governed Stripe refund, subscription cancellation and credit-note

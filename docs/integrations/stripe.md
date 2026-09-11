@@ -1,9 +1,9 @@
 # Stripe refunds
 
-For the new runtime-backed `StripeActions.refunds` interface in 0.3.1, start
-with [Stripe Actions](stripe-actions.md). It composes the connector described
-here and adds policy, preparation and host reservation contracts. The facade is
-included in 0.3.1; existing 0.2.0 connector imports remain compatible.
+For the runtime-backed `StripeActions.refunds` interface, introduced in 0.3.0
+and included in 0.3.1, start with [Stripe Actions](stripe-actions.md). It
+composes the connector described here and adds policy, preparation and host
+reservation contracts. Existing 0.2.0 connector imports remain compatible.
 
 The optional Stripe connector supports governed refunds of captured charges.
 The host still owns authentication, business eligibility, exact proposal
