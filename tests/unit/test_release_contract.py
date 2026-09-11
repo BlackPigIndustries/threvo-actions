@@ -183,6 +183,7 @@ def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None
         "v0.2.0",
         "v0.3.0",
         "v0.3.1",
+        "v0.3.2",
     ]
 
 
@@ -208,6 +209,18 @@ def test_release_031_adoption_bypass_is_explicit_default_off_and_not_reusable() 
     assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
     assert "Using the repository owner's one-time v0.3.1 adoption-gate bypass." in workflow
     assert "release=v0.3.1" not in adoption_record
+
+
+def test_release_032_adoption_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert "skip_adoption_gate:" in workflow
+    assert "default: false" in workflow
+    assert 'test "$RELEASE_TAG" = "v0.3.2"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "Using the repository owner's one-time v0.3.2 adoption-gate bypass." in workflow
+    assert "release=v0.3.2" not in adoption_record
 
 
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:

@@ -9,7 +9,7 @@ is not enough: refunds, supplier bank-detail changes, payment releases, ledger
 postings, credit-limit changes, and similar financial effects.
 
 ```bash
-uv add "threvo-actions==0.3.1"
+uv add "threvo-actions==0.3.2"
 ```
 
 Install an exact patch version so runtime attribution and compatibility are
@@ -96,8 +96,8 @@ the [coding-agent skill](integrations/coding-agents.md), or jump to the
 
 !!! warning "Know the compatibility boundary"
 
-    The root Python API and CLI are supported at the exact `0.3.1` release;
-    upgrading requires the [documented migration review](releases/0.3.1.md). The
+    The root Python API and CLI are supported at the exact `0.3.2` release;
+    upgrading requires the [documented migration review](releases/0.3.2.md). The
     namespaced gradual-reveal API and interoperability formats remain
     experimental under their documented windows. The package is not a payment
     protocol, compliance certification, policy engine, or distributed

@@ -27,7 +27,7 @@ and the compatible connector below.
 ## Existing connector
 
 ```bash
-uv add "threvo-actions[stripe]==0.3.1"
+uv add "threvo-actions[stripe]==0.3.2"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
