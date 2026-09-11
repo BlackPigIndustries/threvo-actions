@@ -8,12 +8,24 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [0.3.2] - 2026-09-12
 
-### Changed
+### Fixed
+
+- Custom Stripe gateways work without installing the Stripe SDK; SDK transports
+  and authenticated webhook parsing remain explicit optional-extra paths.
+- `StripeActions` accepts runtime clock, identifiers, event sink, retention store
+  and revision services, shared across every configured Stripe action group.
+- Retrieved unsettled refunds produce `PROVISIONAL_ABSENCE`, while failed or
+  incomplete authoritative queries remain `TARGET_UNAVAILABLE`.
+- A same-proposal concurrent execution-admission race returns
+  `IN_PROGRESS`; distinct proposals competing for one semantic effect retain the
+  existing replay result.
+
+### Release process
 
 - Publish the `0.3.1` corrective change set from a single reviewed `main`
   commit after the immutable `v0.3.1` source tag could not be paired with its
   separately built candidate commit. No `0.3.1` artifacts reached TestPyPI or
-  PyPI, and this release adds no behavior beyond the corrections below.
+  PyPI.
 
 ## [0.3.1] - 2026-09-12
 
