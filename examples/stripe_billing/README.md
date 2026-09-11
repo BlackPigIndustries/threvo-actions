@@ -16,8 +16,8 @@ real runtime approval binding and reconciliation. Its process-local stores,
 fixed demonstration identities and ephemeral encryption are evaluation-only.
 Production hosts implement durable resource reservations and real authentication.
 `agent.py` supplies optional Pydantic AI capability recipes with business-only
-arguments. Use `uv add "threvo-actions[stripe,pydantic-ai]"` once a release includes
-these APIs; they currently exist only on `develop`, not published 0.2.0.
+arguments. Install the published package with
+`uv add "threvo-actions[stripe,pydantic-ai]==0.3.0"` once release promotion completes.
 
 Cancellation scheduling does not end service immediately. Credit notes do not
 refund cash or send email. For supported scope, composition and production host

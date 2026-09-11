@@ -6,6 +6,8 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-11
+
 ### Added
 
 - Independently configurable `StripeActions.subscriptions` and

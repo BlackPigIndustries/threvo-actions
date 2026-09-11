@@ -1,6 +1,6 @@
 # Stripe subscription cancellation and credit notes
 
-Status: designed, reviewed and implemented on `develop`; unreleased.
+Status: designed, reviewed and implemented; included in the 0.3.0 release candidate.
 
 ## Proposition and contract
 

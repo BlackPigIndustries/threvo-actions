@@ -4,7 +4,7 @@ This guide covers refunds. The independently configurable subscription
 cancellation and credit-note groups are documented in the
 [billing action guide](stripe-billing-actions.md).
 
-Available on `develop`; not included in the published 0.2.0 package. For checkout
+Included in 0.3.0 through the optional `stripe` extra. For checkout
 development, run `uv sync --extra dev --extra stripe --extra pydantic-ai`.
 
 `StripeActions.refunds` packages the reviewed refund lifecycle around the Stripe

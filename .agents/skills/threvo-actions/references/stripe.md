@@ -1,6 +1,6 @@
 # Stripe refund integration
 
-## Governed facade on develop (unreleased)
+## Governed facade (0.3.0)
 
 Use `StripeActions.refunds` with a host-resolved `RefundPayment`, model-visible
 `RefundRequest`, private `RefundSnapshot`, minimized `RefundPreview`, explicit
@@ -21,13 +21,13 @@ The facade does not turn framework approvals into authority, infer currency
 precision, supply production identity/key custody or schedule recovery. Use its
 public definition/runtime with the existing Pydantic AI capability and trusted
 dependency context. Never register the server-side facade methods directly as
-model tools. Default erasure authorization is denied. The published 0.2.0 package
-has the connector below, not this facade; do not document this as released yet.
+model tools. Default erasure authorization is denied. The 0.3.0 package includes the facade
+and the compatible connector below.
 
 ## Existing connector
 
 ```bash
-uv add "threvo-actions[stripe]==0.2.0"
+uv add "threvo-actions[stripe]==0.3.0"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
@@ -60,9 +60,9 @@ identity and key custody with the production host's implementations before
 qualifying financial use. It is not a Stripe Marketplace extension or a
 Visa/Mastercard/AP2/UCP adapter.
 
-## Billing groups on develop
+## Billing groups (0.3.0)
 
-The unreleased facade adds `subscriptions=SubscriptionCancellationConfig(...)`
+The facade adds `subscriptions=SubscriptionCancellationConfig(...)`
 and `credit_notes=CreditNoteConfig(...)`. Either can be used without refunds.
 Each config has a typed host, Pydantic policy, `StripeActionSettings` and an
 optional test gateway. Production supplies the caller-owned StripeClient to the

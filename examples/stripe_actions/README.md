@@ -1,6 +1,6 @@
 # Stripe Actions adoption example
 
-From the repository on `develop`:
+From the 0.3.0 source checkout:
 
 ```bash
 uv sync --extra dev --extra stripe --extra pydantic-ai

@@ -1,6 +1,6 @@
 # Governed Stripe billing actions
 
-Unreleased on `develop`; these groups are not in published 0.2.0. They use the
+Included in 0.3.0 through the optional `stripe` extra. They use the
 same `ActionDefinition`, `ActionRuntime`, authority evidence and store contracts
 as `StripeActions.refunds`. Existing refund callers remain compatible.
 

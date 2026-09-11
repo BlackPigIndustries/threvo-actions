@@ -7,7 +7,7 @@ once. The governed executor still needs target-side idempotency and authoritativ
 Install the optional driver and apply the packaged, forward-only migration explicitly:
 
 ```bash
-uv add "threvo-actions[postgres]==0.2.0"
+uv add "threvo-actions[postgres]==0.3.0"
 threvo-actions postgres inspect --dsn-env DATABASE_URL --schema threvo_actions
 threvo-actions postgres migrate --dsn-env DATABASE_URL --schema threvo_actions
 ```

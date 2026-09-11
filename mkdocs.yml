@@ -94,8 +94,8 @@ nav:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
       - Stripe refunds: integrations/stripe.md
-      - Stripe Actions (develop): integrations/stripe-actions.md
-      - Stripe billing actions (develop): integrations/stripe-billing-actions.md
+      - Stripe Actions: integrations/stripe-actions.md
+      - Stripe billing actions: integrations/stripe-billing-actions.md
       - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
@@ -145,6 +145,7 @@ nav:
       - Stripe Actions proposition and pipeline: plans/2026-09-10-stripe-actions.md
       - Stripe billing design and review: plans/2026-09-11-stripe-billing-actions.md
       - Next steps: plans/2026-09-08-next-steps.md
+      - Release record 0.3.0: releases/0.3.0.md
       - Release record 0.2.0: releases/0.2.0.md
       - Gradual-reveal design: design/gradual-reveal-api.md
       - Release record 0.1.6: releases/0.1.6.md

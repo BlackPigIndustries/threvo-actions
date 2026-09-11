@@ -533,3 +533,24 @@ def test_0_1_documented_adapter_contracts_remain_importable() -> None:
     for module_name, names in documented.items():
         module = import_module(module_name)
         assert all(hasattr(module, name) for name in names)
+
+
+def test_release_manifest_covers_the_stripe_package() -> None:
+    from scripts.verify_release import REQUIRED_PACKAGE_FILES, REQUIRED_SDIST_FILES
+
+    stripe_sources = {
+        str(path.relative_to(ROOT / "src"))
+        for path in (ROOT / "src/threvo_actions/integrations/stripe").glob("*.py")
+    }
+    assert stripe_sources <= REQUIRED_PACKAGE_FILES
+    assert "threvo_actions/integrations/stripe.py" not in REQUIRED_PACKAGE_FILES
+    for example in ("stripe_actions", "stripe_billing"):
+        assert f"examples/{example}/demo.py" in REQUIRED_SDIST_FILES
+        assert f"examples/{example}/agent.py" in REQUIRED_SDIST_FILES
+
+
+def test_installed_stripe_qualification_includes_facade_examples() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    stripe_job = workflow.split("  qualify-stripe:\n", 1)[1].split("  qualify-pydantic:\n", 1)[0]
+    for example in ("stripe_actions", "stripe_billing"):
+        assert f'cp -R examples/{example} "$consumer_root/examples/{example}"' in stripe_job

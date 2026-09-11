@@ -4,7 +4,7 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Threvo Actions
@@ -133,8 +133,8 @@ For Stripe refunds, install the optional `stripe` extra through uv and read
 durable intent reservation and reconciliation scheduling in the host. Never
 resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
 
-On the develop checkout, prefer `StripeActions.refunds` for a new direct-charge
-refund integration. It is unreleased and unavailable in published 0.2.0. Bind
+In 0.3.0, prefer `StripeActions.refunds` for a new direct-charge
+refund integration. Bind
 `RefundHost` to the existing authorization port and a durable `RefundRepository`,
 declare `RefundPolicy` currency ceilings and `StripeRefundSettings` authority
 identity. The facade compiles to the existing runtime. Retain the lower-level
@@ -142,7 +142,7 @@ connector for existing hosts; do not rewrite their persisted snapshots or action
 identities during adoption. Shared components and agent prompts use category-neutral
 action names; do not rename persisted wire discriminators without migration review.
 
-Develop also includes independent `StripeActions.subscriptions` and
+Version 0.3.0 also includes independent `StripeActions.subscriptions` and
 `StripeActions.credit_notes` groups. Read the billing section in
 [references/stripe.md](references/stripe.md). Cancellation scheduling is not
 termination; invoice reduction and customer balance credit are not cash refunds.

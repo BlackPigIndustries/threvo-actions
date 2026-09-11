@@ -1,6 +1,6 @@
 # Stripe operations
 
-The operation facade is unreleased on `develop`. Existing 0.2.0 connector exports
+The operation facade is included in 0.3.0. Existing 0.2.0 connector exports
 remain compatible. All symbols require the optional Stripe integration.
 
 ::: threvo_actions.integrations.stripe.actions.StripeActions
@@ -23,7 +23,7 @@ remain compatible. All symbols require the optional Stripe integration.
 
 ::: threvo_actions.integrations.stripe.ports.RefundRepository
 
-## Billing operations (develop)
+## Billing operations
 
 See the [billing guide](../integrations/stripe-billing-actions.md) for composition,
 supported scope and host obligations. Both groups expose the same prepare,

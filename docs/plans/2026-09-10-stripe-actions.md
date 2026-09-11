@@ -1,6 +1,6 @@
 # Stripe Actions: proposition and implementation pipeline
 
-Status: implemented and locally validated on `develop`; unreleased. This extends the existing
+Status: implemented and locally validated; included in the 0.3.0 release candidate. This extends the existing
 Stripe refund connector; it does not qualify new payment flows or release a version.
 
 ## Proposition
