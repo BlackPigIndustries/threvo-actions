@@ -17,6 +17,7 @@ ALLOWED_OPTIONAL_IMPORTS = {
     Path("integrations/stripe/gateway.py"): {"stripe"},
     Path("integrations/stripe/actions.py"): {"stripe"},
     Path("integrations/stripe/billing_gateway.py"): {"stripe"},
+    Path("integrations/stripe/sdk_gateway.py"): {"stripe"},
 }
 HISTORICAL_CLEAN_ROOM_REPORT = Path("docs/testing/clean-room-adoption-2026-08-30.md")
 
@@ -66,6 +67,13 @@ def test_installation_docs_use_an_exact_release_instead_of_a_moving_source() -> 
 def test_custom_store_validation_helpers_are_public() -> None:
     assert callable(threvo_actions.validate_proposal_create)
     assert callable(threvo_actions.validate_proposal_update)
+
+
+def test_stripe_deadline_paths_use_an_injected_clock() -> None:
+    stripe_root = CORE_ROOT / "integrations" / "stripe"
+
+    for path in stripe_root.glob("*.py"):
+        assert "datetime.now(UTC)" not in path.read_text(encoding="utf-8"), path
 
 
 def test_host_extension_contract_is_exported_from_the_top_level_package() -> None:

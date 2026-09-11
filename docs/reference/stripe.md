@@ -1,7 +1,9 @@
 # Stripe operations
 
 The operation facade is included in 0.3.0. Existing 0.2.0 connector exports
-remain compatible. All symbols require the optional Stripe integration.
+remain compatible. Facades, models, connectors and gateway protocols work with
+the base installation. SDK gateway classes and webhook parsing require the
+optional Stripe integration.
 
 ::: threvo_actions.integrations.stripe.actions.StripeActions
 

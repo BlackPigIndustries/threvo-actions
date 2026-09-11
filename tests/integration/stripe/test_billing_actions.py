@@ -8,13 +8,39 @@ import pytest
 
 pytest.importorskip("stripe._stripe_client")
 
-from threvo_actions import OperationOutcome  # noqa: E402
+from threvo_actions import OperationOutcome, RuntimeEventType  # noqa: E402
 from threvo_actions.integrations.stripe import (  # noqa: E402
     CreditNoteLookup,
     CreditNotePage,
     StripePreparationError,
     StripeReservationStatus,
 )
+
+
+@pytest.mark.parametrize("kind", ["schedule", "invoice_reduction"])
+def test_billing_facade_wires_runtime_observability_and_clock(kind):
+    from examples.stripe_billing.demo import build_demo
+
+    from threvo_actions.testing import FixedClock, RecordingEventSink, SequentialIdentifiers
+
+    async def scenario():
+        clock = FixedClock(datetime.now(UTC) + timedelta(seconds=1))
+        events = RecordingEventSink()
+        demo = build_demo(
+            kind,
+            clock=clock,
+            event_sink=events,
+            identifiers=SequentialIdentifiers(),
+            runtime_revision=f"threvo-actions/commit:{'a' * 40}",
+        )
+
+        prepared = await demo.prepare()
+
+        assert prepared.proposal_reference == "proposal:1"
+        assert [event.event_type for event in events.events] == [RuntimeEventType.PROPOSAL_PREPARED]
+        assert events.events[0].observed_at == clock.now()
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("kind", ["schedule", "withdraw", "invoice_reduction", "customer_balance"])
@@ -334,22 +360,21 @@ def test_private_snapshot_refuses_inconsistent_host_binding(kind):
 
 
 @pytest.mark.parametrize("kind", ["schedule", "customer_balance"])
-def test_expiry_during_reservation_is_rechecked_before_dispatch(kind, monkeypatch):
-    from types import SimpleNamespace
-
+def test_expiry_during_reservation_is_rechecked_before_dispatch(kind):
     from examples.stripe_billing.demo import build_demo
 
-    from threvo_actions.integrations.stripe import _operation
+    from threvo_actions.testing import FixedClock
 
     async def scenario():
-        demo = build_demo(kind)
+        clock = FixedClock(datetime.now(UTC) + timedelta(seconds=1))
+        demo = build_demo(kind, clock=clock)
         prepared = await demo.prepare()
         await demo.approve(prepared.proposal_reference)
         reserve = demo.repository.reserve
 
         async def expire(snapshot, *, not_after):
             status = await reserve(snapshot, not_after=not_after)
-            monkeypatch.setattr(_operation, "datetime", SimpleNamespace(now=lambda zone: not_after))
+            clock.advance(not_after - clock.now())
             return status
 
         demo.repository.reserve = expire

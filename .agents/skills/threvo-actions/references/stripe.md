@@ -33,6 +33,13 @@ uv add "threvo-actions[stripe]==0.3.0"
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
 `stripe.StripeClient`. Core runtime code must not import Stripe. Every account
 scope comes from authenticated host configuration, never tool arguments.
+Custom implementations of the refund, subscription and credit-note gateway
+protocols do not require the Stripe SDK. SDK adapters and webhook parsing load
+the optional dependency only when used.
+
+When composing `StripeActions`, pass the host's clock, identifiers, event sink,
+retention store and exact runtime revision when overriding runtime defaults.
+The facade shares one runtime and one clock across every configured group.
 
 Persist a `RefundIntent` and reserve its stable business identity before
 calling `submit`. Use `Money`/`Decimal` and the payment's authoritative currency
@@ -43,6 +50,9 @@ execution-lease deadline using `not_after`.
 or incomplete lookup is not authoritative final absence; the connector never
 authorizes resend. Stripe's idempotency retention is finite. Keep durable host
 reservation and correlation across restarts and action-version upgrades.
+An observed `pending` or `requires_action` refund is `PROVISIONAL_ABSENCE` for
+retry scheduling. Use `TARGET_UNAVAILABLE` only when the authoritative lookup
+could not complete or its binding was inconsistent.
 
 Treat authenticated webhooks as lookup hints and deduplicate them. Keep a
 durable sweep so lost jobs or events do not strand proposals. Late failures

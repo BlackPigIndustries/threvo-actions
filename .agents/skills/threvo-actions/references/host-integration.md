@@ -100,6 +100,12 @@ latency and arrange for a durable worker to reconcile due proposals after a
 crash. Recovery still queries the authoritative target; it does not assume the
 executor failed.
 
+Live authorization finishes before durable admission is timestamped. Its delay
+consumes proposal and authority validity, which the runtime rechecks after the
+call, while the recovery lease starts only at admission. An admission write that
+outlasts the new lease refuses dispatch. Inject the same `Clock` into adapters
+that perform deadline checks so tests and receipts use one time source.
+
 SQLite is included without an extra and must be explicitly migrated with
 `threvo-actions sqlite migrate --database PATH`. Use it only for local
 development, evaluation, tests, and bounded single-writer deployments. It has
