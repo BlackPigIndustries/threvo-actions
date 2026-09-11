@@ -37,7 +37,15 @@ FORBIDDEN_PARTS = {
     "uv.lock",
 }
 REQUIRED_PACKAGE_FILES = {
-    "threvo_actions/integrations/stripe.py",
+    "threvo_actions/integrations/stripe/__init__.py",
+    "threvo_actions/integrations/stripe/_operation.py",
+    "threvo_actions/integrations/stripe/actions.py",
+    "threvo_actions/integrations/stripe/billing_gateway.py",
+    "threvo_actions/integrations/stripe/credit_notes.py",
+    "threvo_actions/integrations/stripe/gateway.py",
+    "threvo_actions/integrations/stripe/models.py",
+    "threvo_actions/integrations/stripe/ports.py",
+    "threvo_actions/integrations/stripe/subscriptions.py",
     "threvo_actions/.agents/skills/threvo-actions/SKILL.md",
     "threvo_actions/experimental/__init__.py",
     "threvo_actions/experimental/application.py",
@@ -54,6 +62,12 @@ REQUIRED_PACKAGE_FILES = {
     "threvo_actions/py.typed",
 }
 REQUIRED_SDIST_FILES = {
+    "examples/stripe_actions/demo.py",
+    "examples/stripe_actions/agent.py",
+    "examples/stripe_billing/demo.py",
+    "examples/stripe_billing/agent.py",
+    "docs/integrations/stripe-actions.md",
+    "docs/integrations/stripe-billing-actions.md",
     "examples/stripe_refunds/__main__.py",
     "examples/stripe_refunds/schema.sql",
     "examples/stripe_refunds/index.html",

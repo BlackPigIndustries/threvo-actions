@@ -20,10 +20,10 @@ try:
 except ModuleNotFoundError as exc:
     raise ImportError("Stripe integration requires: uv add 'threvo-actions[stripe]'") from exc
 
-from ..canonical import canonicalize_v1, model_json_object
-from ..models import ExperimentalModel, Money, SafeReference
-from ..receipts import ExternalReference
-from ..registry import ExecutionResult, ExecutionStatus, VerificationResult, VerificationStatus
+from ...canonical import canonicalize_v1, model_json_object
+from ...models import ExperimentalModel, Money, SafeReference
+from ...receipts import ExternalReference
+from ...registry import ExecutionResult, ExecutionStatus, VerificationResult, VerificationStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from stripe.params import RefundListParams
 
 StripeAccountId = Annotated[str, StringConstraints(pattern=r"^acct_[A-Za-z0-9]+$")]
+StripeCustomerId = Annotated[str, StringConstraints(pattern=r"^cus_[A-Za-z0-9]+$")]
 StripeChargeId = Annotated[str, StringConstraints(pattern=r"^ch_[A-Za-z0-9]+$")]
 StripeRefundId = Annotated[str, StringConstraints(pattern=r"^re_[A-Za-z0-9]+$")]
 RefundStatus = Literal["pending", "requires_action", "succeeded", "failed", "canceled"]

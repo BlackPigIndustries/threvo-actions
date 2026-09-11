@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       skip_adoption_gate:
-        description: Exact repository-owner exceptions for v0.1.5, v0.1.6 or v0.2.0 only
+        description: Exact repository-owner exceptions through v0.3.0 only
         required: false
         default: false
         type: boolean
@@ -220,6 +220,8 @@ jobs:
           mkdir -p "$consumer_root/tests/integration" "$consumer_root/examples"
           cp -R tests/integration/stripe "$consumer_root/tests/integration/stripe"
           cp -R examples/stripe_refunds "$consumer_root/examples/stripe_refunds"
+          cp -R examples/stripe_actions "$consumer_root/examples/stripe_actions"
+          cp -R examples/stripe_billing "$consumer_root/examples/stripe_billing"
           cd "$consumer_root"
           PYTHONPATH="$consumer_root" "$consumer_root/venv/bin/python" -m pytest -q tests/integration/stripe
 
@@ -440,6 +442,11 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 0; then
             echo "Using the repository owner's one-time v0.2.0 adoption-gate bypass."
+          elif test "$RELEASE_TAG" = "v0.3.0" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.3.0 adoption-gate bypass."
           else
             echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1

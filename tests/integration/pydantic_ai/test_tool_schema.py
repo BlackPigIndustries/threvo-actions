@@ -140,9 +140,7 @@ def test_invalid_arguments_do_not_survive_in_model_retry_exception_graph() -> No
                 )
 
             error = captured.value
-            assert str(error) == (
-                "Financial action arguments do not match the declared command schema."
-            )
+            assert str(error) == ("Action arguments do not match the declared command schema.")
             assert sensitive_value not in repr(error)
             assert error.__cause__ is None
             assert error.__context__ is None
@@ -196,7 +194,7 @@ def test_real_agent_dispatch_keeps_invalid_arguments_out_of_retry_prompts() -> N
                 ]
                 assert len(retry_parts) == 1
                 assert str(retry_parts[0].content) == (
-                    "Financial action arguments do not match the declared command schema."
+                    "Action arguments do not match the declared command schema."
                 )
                 assert sensitive_value not in repr(retry_parts[0])
                 return ModelResponse(parts=[TextPart("invalid arguments were refused")])

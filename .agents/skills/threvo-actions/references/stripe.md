@@ -1,7 +1,33 @@
 # Stripe refund integration
 
+## Governed facade (0.3.0)
+
+Use `StripeActions.refunds` with a host-resolved `RefundPayment`, model-visible
+`RefundRequest`, private `RefundSnapshot`, minimized `RefundPreview`, explicit
+`RefundPolicy` and `StripeRefundSettings`. The host is a `RefundHost` containing
+the existing four-method `AuthorizationPort` and a `RefundRepository`.
+`examples/stripe_actions/demo.py` is a complete deterministic adoption example;
+`examples/stripe_actions/agent.py` binds the definition with `ActionToolBinding`.
+
+Repository reservation must atomically compare payment and original intent,
+coordinate all payment writers and reject expired deadlines or unresolved
+submissions. Retain stable tenant + intent identity across restarts and versions.
+Different parameters cannot rebind an existing intent. Only `ACQUIRED` may
+dispatch; `ALREADY_SUBMITTED` goes to verification. Retain claims on exceptions
+and ambiguous acknowledgements. Known no-submission closes an attempt without
+reopening its intent identity. Policy changes invalidate old approved snapshots.
+
+The facade does not turn framework approvals into authority, infer currency
+precision, supply production identity/key custody or schedule recovery. Use its
+public definition/runtime with the existing Pydantic AI capability and trusted
+dependency context. Never register the server-side facade methods directly as
+model tools. Default erasure authorization is denied. The 0.3.0 package includes the facade
+and the compatible connector below.
+
+## Existing connector
+
 ```bash
-uv add "threvo-actions[stripe]==0.2.0"
+uv add "threvo-actions[stripe]==0.3.0"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
@@ -33,3 +59,38 @@ protected proposal storage. It refuses live credentials. Replace reference
 identity and key custody with the production host's implementations before
 qualifying financial use. It is not a Stripe Marketplace extension or a
 Visa/Mastercard/AP2/UCP adapter.
+
+## Billing groups (0.3.0)
+
+The facade adds `subscriptions=SubscriptionCancellationConfig(...)`
+and `credit_notes=CreditNoteConfig(...)`. Either can be used without refunds.
+Each config has a typed host, Pydantic policy, `StripeActionSettings` and an
+optional test gateway. Production supplies the caller-owned StripeClient to the
+facade. Do not configure both a client and a group gateway.
+
+`SubscriptionCancellationRequest` carries host subscription and intent references
+plus `SubscriptionOperation.SCHEDULE` or `WITHDRAW`. Only active single licensed
+items without schedules, pending updates, pauses or custom dates are supported.
+The result proves `scheduled`/`withdrawn`, never actual subscription termination.
+Host entitlements and later invoices remain separate.
+
+`CreditNoteRequest` carries host invoice/line references, positive Money line
+amounts, exact expected final total, reason and `CreditDisposition`. Stripe's
+preview computes tax/discounts and validates remaining credit. Support is bounded
+to full invoice reduction or full customer-balance allocation; no cash refunds,
+mixed allocations, custom lines, quantity credits, shipping or outbound email.
+Customer-balance completion additionally requires an independently retrieved
+credit-note balance transaction matching customer, currency and negative amount.
+
+Host repositories implement tenant-scoped canonical resolution plus durable
+remember/load/reserve/no-submission/outcome methods. Serialize all writers to the
+same subscription/invoice, including other actions. Unknown acknowledgements
+retain claims; never resend after empty lookup or expired provider idempotency.
+Stripe lacks atomic compare-and-set: final preflight reduces but cannot eliminate
+external-writer races. A changed/missing subscription correlation remains
+unresolved, even if the current state happens to match the requested state.
+
+Use `examples/stripe_billing/demo.py` for complete deterministic host wiring and
+`examples/stripe_billing/agent.py` for existing Pydantic AI bindings. The guide is
+`docs/integrations/stripe-billing-actions.md`; the reviewed design and follow-on
+qualification pipeline is `docs/plans/2026-09-11-stripe-billing-actions.md`.

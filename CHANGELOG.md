@@ -6,6 +6,35 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-11
+
+### Added
+
+- Independently configurable `StripeActions.subscriptions` and
+  `StripeActions.credit_notes`, using the existing action runtime. Period-end
+  cancellation scheduling/withdrawal, open-invoice reduction and paid-invoice
+  customer balance credits have typed policies, versioned host bindings, durable
+  resource reservation contracts and independent provider verification.
+- Async Stripe SDK billing gateways, exact credit-note preview binding, customer
+  balance transaction verification, explicit email suppression, and credential-free
+  billing examples with optional Pydantic AI recipes. Cash-refund/mixed credit
+  notes and immediate/metered/trial subscription cancellation remain unsupported.
+- `StripeActions.refunds`: a runtime-backed operation group with strict refund
+  policy, host payment resolution, private policy binding, durable reservation
+  contracts and independent completion verification.
+- `RefundRequest`, `RefundPayment`, `RefundPolicy`, `RefundHost`,
+  `RefundRepository`, `RefundSnapshot`, `RefundPreview`,
+  `RefundReservationStatus` and `StripeRefundSettings` in the optional Stripe
+  integration. A complete deterministic adoption example and Pydantic AI recipe.
+- Detailed Stripe proposition, naming decisions and implementation/follow-on pipeline.
+
+### Changed
+
+- The Stripe integration is a package; existing public connector imports remain
+  valid. Existing reference-app action identities and stored shapes are unchanged.
+- Shared agent instructions use category-neutral action terminology. Persisted
+  receipts and existing wire identifiers remain unchanged.
+
 ## [0.2.0] - 2026-09-08
 
 ### Fixed
@@ -244,7 +273,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.1.4...v0.1.5

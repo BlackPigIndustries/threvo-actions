@@ -1,4 +1,4 @@
-"""Pydantic AI Capability for confirm-first financial actions."""
+"""Pydantic AI Capability for confirm-first actions."""
 
 # Public annotations remain runtime-resolvable for typing introspection.
 # ruff: noqa: TC001, TC003
@@ -378,7 +378,7 @@ async def _invoke_action_tool(
         command = None
     if command is None:
         arguments.clear()
-        raise ModelRetry("Financial action arguments do not match the declared command schema.")
+        raise ModelRetry("Action arguments do not match the declared command schema.")
     try:
         prepared = await operations.prepare(
             tenant_reference=trusted.tenant_reference,
@@ -431,7 +431,7 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
         operations = _FixedActionOperations(runtime=runtime, definition=definition)
         binding_failure_handler = self.binding_failure_handler
 
-        async def financial_action_tool(
+        async def governed_action_tool(
             ctx: RunContext[DepsT],
             **arguments: object,
         ) -> ActionToolResult:
@@ -460,7 +460,7 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
             return outcome
 
         return Tool[DepsT].from_schema(
-            function=financial_action_tool,
+            function=governed_action_tool,
             name=self.name,
             description=self.description,
             json_schema=definition.command_model.model_json_schema(),
@@ -502,7 +502,7 @@ class ScopedActionToolBinding(
         tool_name = self.name
         binding_failure_handler = self.binding_failure_handler
 
-        async def financial_action_tool(
+        async def governed_action_tool(
             ctx: RunContext[DepsT],
             **arguments: object,
         ) -> ActionToolResult:
@@ -565,7 +565,7 @@ class ScopedActionToolBinding(
             return outcome
 
         return Tool[DepsT].from_schema(
-            function=financial_action_tool,
+            function=governed_action_tool,
             name=self.name,
             description=self.description,
             json_schema=command_model.model_json_schema(),
@@ -593,7 +593,7 @@ class ActionCapability(AbstractCapability[DepsT]):
         if not bindings:
             raise ValueError("at least one action tool binding is required")
         self.id = id
-        self.description = "Prepare and safely resume confirm-first financial actions."
+        self.description = "Prepare and safely resume confirm-first actions."
         self.defer_loading = False
         self._inline_authority_handler = inline_authority_handler
         self._tool_names = frozenset(binding.name for binding in bindings)
@@ -611,8 +611,8 @@ class ActionCapability(AbstractCapability[DepsT]):
 
     def get_instructions(self) -> str:
         return (
-            "Financial action tools prepare a proposal before they can execute. "
-            "A framework approval request is not proof of financial authority. "
+            "Action tools prepare a proposal before they can execute. "
+            "A framework approval request is not proof of execution authority. "
             "Interpret outcomes conservatively. Do not retry binding_unavailable or "
             "operation_outcome_unknown; the host must diagnose or reconcile them. "
             "For invalid_continuation, stop and ask the host for a fresh continuation. "
@@ -659,7 +659,7 @@ class ActionCapability(AbstractCapability[DepsT]):
             continuation = _continuation_metadata(deferred_requests.metadata.get(call.tool_call_id))
             if continuation is None or continuation.tool_name != call.tool_name:
                 approvals[call.tool_call_id] = ToolDenied(
-                    "Financial action continuation metadata is invalid."
+                    "Action continuation metadata is invalid."
                 )
                 continue
             request = DeferredActionRequest(
@@ -672,9 +672,7 @@ class ActionCapability(AbstractCapability[DepsT]):
             if isinstance(approved, Awaitable):
                 approved = await approved
             approvals[call.tool_call_id] = (
-                ToolApproved()
-                if approved
-                else ToolDenied("Financial action authority was not established.")
+                ToolApproved() if approved else ToolDenied("Action authority was not established.")
             )
             metadata[call.tool_call_id] = continuation.model_dump(mode="json")
         if not approvals:

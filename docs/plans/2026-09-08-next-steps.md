@@ -2,6 +2,11 @@
 
 Status: proposed follow-up work. This is a roadmap, not a completed-work record.
 
+The active Stripe DX iteration and ordered follow-on stages are in
+[Stripe Actions: proposition and pipeline](2026-09-10-stripe-actions.md).
+Evaluate ease of applying strong practices and correct human/agent behavior;
+the timing measurements below are secondary historical research suggestions.
+
 ## 1. Qualify a production host
 
 Select one direct-merchant refund use case. Replace reference bearer identities
