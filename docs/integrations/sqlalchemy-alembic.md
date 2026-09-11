@@ -7,7 +7,7 @@ make Alembic's `env.py` dynamically execute whichever library migrations happen
 to be installed.
 
 ```bash
-uv add "threvo-actions[sqlalchemy]==0.3.1"
+uv add "threvo-actions[sqlalchemy]==0.3.2"
 alembic init -t async migrations
 ```
 
