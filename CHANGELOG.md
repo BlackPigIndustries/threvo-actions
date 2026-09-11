@@ -6,6 +6,26 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Fixed
+
+- Custom Stripe gateways no longer require the Stripe SDK merely to import the
+  governed protocols, models, connector or facade. SDK transports load only when
+  a caller supplies a Stripe client or imports an SDK gateway explicitly.
+- `StripeActions` now wires one runtime across configured groups and accepts the
+  runtime's clock, identifiers, event sink, retention store and revision services.
+  Every Stripe deadline check uses that same injectable clock.
+- Retrieved Stripe refunds in `pending` or `requires_action` now produce
+  `PROVISIONAL_ABSENCE`; `TARGET_UNAVAILABLE` remains reserved for incomplete or
+  failed authoritative queries.
+- A concurrent execution-admission conflict reports `in_progress` when the
+  winning proposal is actively executing.
+
+### Documentation
+
+- Explain why live authorization time consumes authority validity but precedes
+  the execution recovery lease, and distinguish pre-proposal authorization
+  errors from durable `blocked` outcomes.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added

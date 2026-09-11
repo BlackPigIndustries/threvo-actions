@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
@@ -31,7 +30,10 @@ from ._operation import (
 from .gateway import StripeAccount, StripeBoundaryError, StripeCustomerId
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from ...registry import AuthorizationPort, PreparationContext
+    from ...runtime import Clock
     from ...stores import ActionStore
 
 StripeInvoiceId = Annotated[str, StringConstraints(pattern=r"^in_[A-Za-z0-9]+$")]
@@ -371,10 +373,18 @@ class _CreditNoteWorkflow(
     action_type = ActionType(namespace="stripe.credit_notes", name="issue", version=1)
 
     def __init__(
-        self, *, config: CreditNoteConfig, gateway: StripeCreditNoteGateway, store: ActionStore
+        self,
+        *,
+        config: CreditNoteConfig,
+        gateway: StripeCreditNoteGateway,
+        store: ActionStore,
+        clock: Clock,
     ) -> None:
         super().__init__(
-            repository=config.host.repository, authorization=config.host.authorization, store=store
+            repository=config.host.repository,
+            authorization=config.host.authorization,
+            store=store,
+            clock=clock,
         )
         self.host = config.host
         self.policy = config.policy
@@ -469,7 +479,7 @@ class _CreditNoteWorkflow(
     async def _submit(
         self, snapshot: CreditNoteSnapshot, *, not_after: datetime
     ) -> ExecutionResult[CreditNoteOutcome]:
-        if datetime.now(UTC) >= not_after:
+        if self.clock.now() >= not_after:
             return ExecutionResult(
                 status=ExecutionStatus.FAILED_KNOWN,
                 reason_code="stripe_submission_deadline_expired",

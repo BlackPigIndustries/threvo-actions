@@ -10,8 +10,19 @@ The host still owns authentication, business eligibility, exact proposal
 approval, durable intent reservation and scheduling. No Stripe SDK import
 enters the core runtime.
 
+Typed gateway protocols, boundary models, `StripeRefundConnector` and
+`StripeActions` can be imported and used with a custom gateway without installing
+the Stripe SDK. The `stripe` extra is required only for `StripeSDKGateway`, the
+billing SDK gateways and authenticated Stripe webhook parsing.
+
 ```bash
 uv add "threvo-actions[stripe]==0.3.0"
+```
+
+For a custom gateway that implements the typed protocols without Stripe's SDK:
+
+```bash
+uv add "threvo-actions==0.3.0"
 ```
 
 Use [the runnable refund application](../examples/stripe-refunds.md) for a
@@ -88,7 +99,7 @@ follow-up; an incomplete scan never proves absence.
 | --- | --- |
 | Exactly bound `succeeded` refund | `VERIFIED_COMPLETION` |
 | Exactly bound `failed` or `canceled` refund | `VERIFIED_TERMINAL_FAILURE` |
-| `pending` or `requires_action` | `TARGET_UNAVAILABLE` with `stripe_refund_pending` |
+| `pending` or `requires_action` | `PROVISIONAL_ABSENCE` with `stripe_refund_pending` |
 | No correlated refund observed | `PROVISIONAL_ABSENCE` |
 | Unavailable target, invalid binding, duplicate match or incomplete pagination | `TARGET_UNAVAILABLE` |
 

@@ -725,7 +725,12 @@ class ActionRuntime:
         )
         if claim is EffectClaimResult.CONFLICT:
             current = await self._required(record.tenant_reference, record.proposal_reference)
-            return self._result(current, OperationOutcome.REPLAYED)
+            return self._result(
+                current,
+                OperationOutcome.IN_PROGRESS
+                if current.lifecycle_status is LifecycleStatus.EXECUTING
+                else OperationOutcome.REPLAYED,
+            )
         if claim is EffectClaimResult.PROPOSAL_NOT_FOUND:
             raise ProposalNotFoundError
         if claim is EffectClaimResult.PROPOSAL_NOT_AUTHORIZED:

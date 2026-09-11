@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
@@ -31,7 +30,10 @@ from ._operation import (
 from .gateway import StripeAccount, StripeBoundaryError, StripeCustomerId
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from ...registry import AuthorizationPort, PreparationContext
+    from ...runtime import Clock
     from ...stores import ActionStore
 
 StripeSubscriptionId = Annotated[str, StringConstraints(pattern=r"^sub_[A-Za-z0-9]+$")]
@@ -234,9 +236,13 @@ class _SubscriptionWorkflow(
         config: SubscriptionCancellationConfig,
         gateway: StripeSubscriptionGateway,
         store: ActionStore,
+        clock: Clock,
     ) -> None:
         super().__init__(
-            repository=config.host.repository, authorization=config.host.authorization, store=store
+            repository=config.host.repository,
+            authorization=config.host.authorization,
+            store=store,
+            clock=clock,
         )
         self.host = config.host
         self.policy = config.policy
@@ -302,13 +308,13 @@ class _SubscriptionWorkflow(
         return (
             observed == snapshot.observed
             and observed.bound_to(binding)
-            and observed.permits(snapshot.operation, now=datetime.now(UTC))
+            and observed.permits(snapshot.operation, now=self.clock.now())
         )
 
     async def _submit(
         self, snapshot: SubscriptionCancellationSnapshot, *, not_after: datetime
     ) -> ExecutionResult[SubscriptionCancellationOutcome]:
-        if datetime.now(UTC) >= min(not_after, snapshot.observed.period_end):
+        if self.clock.now() >= min(not_after, snapshot.observed.period_end):
             return ExecutionResult(
                 status=ExecutionStatus.STALE_NO_EFFECT,
                 reason_code="stripe_cancellation_deadline_expired",

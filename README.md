@@ -58,6 +58,11 @@ uv add "threvo-actions[pydantic-ai]==0.3.0"
 uv add "threvo-actions[stripe]==0.3.0"
 ```
 
+The base installation includes the governed Stripe facade, strict boundary
+models and typed gateway protocols, so custom gateway implementations do not
+install Stripe's SDK. Add the `stripe` extra for the maintained SDK transports
+and authenticated Stripe webhook parsing.
+
 The distribution also bundles an Agent Skills-compatible guide for coding
 agents. Install the copy matching your Python package with:
 

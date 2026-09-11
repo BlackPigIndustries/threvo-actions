@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, ClassVar, Generic, Protocol, TypeVar
 
@@ -23,6 +23,8 @@ from ...registry import (
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from ...authority import AuthorityEvidence
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
     from ...models import ActionType, ConfirmingAuthority, ProposingAgent, RequestingPrincipal
@@ -33,7 +35,7 @@ if TYPE_CHECKING:
         PreparationContext,
         ReadContext,
     )
-    from ...runtime import ActionOperationResult, ActionRuntime, ProposalView
+    from ...runtime import ActionOperationResult, ActionRuntime, Clock, ProposalView
     from ...stores import ActionStore
 
 
@@ -125,10 +127,12 @@ class _Workflow(ABC, Generic[CommandT, SnapshotT, PreviewT, ResultT]):
         repository: StripeActionRepository[SnapshotT, ResultT],
         authorization: AuthorizationPort[CommandT, SnapshotT],
         store: ActionStore,
+        clock: Clock,
     ) -> None:
         self.repository = repository
         self.authorization = authorization
         self.store = store
+        self.clock = clock
 
     @abstractmethod
     async def _prepare(
@@ -213,7 +217,7 @@ class _Workflow(ABC, Generic[CommandT, SnapshotT, PreviewT, ResultT]):
             result = ExecutionResult(
                 status=ExecutionStatus.FAILED_KNOWN, reason_code="stripe_authority_revoked"
             )
-        elif datetime.now(UTC) >= deadline:
+        elif self.clock.now() >= deadline:
             result = ExecutionResult(
                 status=ExecutionStatus.FAILED_KNOWN,
                 reason_code="stripe_submission_deadline_expired",

@@ -1,5 +1,7 @@
 """Optional Stripe SDK integration and governed refund operations."""
 
+from typing import TYPE_CHECKING
+
 from ._operation import (
     StripeActionRepository,
     StripeActionSettings,
@@ -7,7 +9,6 @@ from ._operation import (
     StripeReservationStatus,
 )
 from .actions import RefundPreparationError, StripeActions, StripeRefunds
-from .billing_gateway import StripeCreditNoteSDKGateway, StripeSubscriptionSDKGateway
 from .credit_notes import (
     CreditDisposition,
     CreditNoteCalculatedLine,
@@ -50,7 +51,6 @@ from .gateway import (
     StripeRefundConnector,
     StripeRefundGateway,
     StripeRefundId,
-    StripeSDKGateway,
     verify_refund_webhook,
 )
 from .models import (
@@ -78,6 +78,13 @@ from .subscriptions import (
     SubscriptionObservation,
     SubscriptionOperation,
 )
+
+if TYPE_CHECKING:
+    from .billing_gateway import StripeCreditNoteSDKGateway as StripeCreditNoteSDKGateway
+    from .billing_gateway import (
+        StripeSubscriptionSDKGateway as StripeSubscriptionSDKGateway,
+    )
+    from .sdk_gateway import StripeSDKGateway as StripeSDKGateway
 
 __all__ = [
     "CORRELATION_KEY",
@@ -153,3 +160,19 @@ __all__ = [
     "StripeCreditNoteGateway",
     "StripeCreditNotes",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "StripeSDKGateway":
+        from .sdk_gateway import StripeSDKGateway
+
+        return StripeSDKGateway
+    if name == "StripeSubscriptionSDKGateway":
+        from .billing_gateway import StripeSubscriptionSDKGateway
+
+        return StripeSubscriptionSDKGateway
+    if name == "StripeCreditNoteSDKGateway":
+        from .billing_gateway import StripeCreditNoteSDKGateway
+
+        return StripeCreditNoteSDKGateway
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

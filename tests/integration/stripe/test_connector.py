@@ -109,8 +109,8 @@ def test_timeout_after_acceptance_reconciles_without_resubmitting():
 @pytest.mark.parametrize(
     "status,expected",
     [
-        ("pending", VerificationStatus.TARGET_UNAVAILABLE),
-        ("requires_action", VerificationStatus.TARGET_UNAVAILABLE),
+        ("pending", VerificationStatus.PROVISIONAL_ABSENCE),
+        ("requires_action", VerificationStatus.PROVISIONAL_ABSENCE),
         ("succeeded", VerificationStatus.VERIFIED_COMPLETION),
         ("failed", VerificationStatus.VERIFIED_TERMINAL_FAILURE),
         ("canceled", VerificationStatus.VERIFIED_TERMINAL_FAILURE),
@@ -193,6 +193,25 @@ def test_expired_dispatch_deadline_never_creates_a_refund():
         )
         assert result.status.value == "failed_known"
         assert gateway.calls == 0
+
+    asyncio.run(scenario())
+
+
+def test_dispatch_deadline_uses_the_injected_clock():
+    from threvo_actions.testing import FixedClock
+
+    async def scenario():
+        gateway = FakeGateway()
+        clock = FixedClock(datetime(2026, 9, 12, 10, 0, tzinfo=UTC))
+        connector = StripeRefundConnector(gateway, clock=clock)
+        deadline = clock.now() + timedelta(minutes=5)
+
+        assert (await connector.submit(intent(), not_after=deadline)).status.value == "accepted"
+        clock.advance(timedelta(minutes=5))
+        result = await connector.submit(intent(), not_after=deadline)
+
+        assert result.status.value == "failed_known"
+        assert gateway.calls == 1
 
     asyncio.run(scenario())
 
