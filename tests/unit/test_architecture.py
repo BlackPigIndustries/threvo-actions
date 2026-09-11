@@ -55,6 +55,8 @@ def test_installation_docs_use_an_exact_release_instead_of_a_moving_source() -> 
         relative = path.relative_to(REPOSITORY_ROOT)
         if relative == HISTORICAL_CLEAN_ROOM_REPORT or excluded_roots & set(relative.parts):
             continue
+        if relative.parent == Path("docs/releases") and relative.stem != threvo_actions.__version__:
+            continue
         for version in re.findall(
             r"threvo-actions(?:\[[^]]+\])?==([0-9]+\.[0-9]+\.[0-9]+)", path.read_text()
         ):

@@ -12,7 +12,7 @@ it does not claim storage encryption or deletion from external copies.
 ## Install and migrate explicitly
 
 ```bash
-uv add "threvo-actions[mysql]==0.3.0"
+uv add "threvo-actions[mysql]==0.3.1"
 read -rsp 'MySQL migration DSN: ' ACTIONS_MIGRATOR_DATABASE_URL && printf '\n'
 export ACTIONS_MIGRATOR_DATABASE_URL
 threvo-actions mysql inspect --dsn-env ACTIONS_MIGRATOR_DATABASE_URL

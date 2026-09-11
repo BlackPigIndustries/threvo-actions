@@ -4,7 +4,7 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # Threvo Actions
