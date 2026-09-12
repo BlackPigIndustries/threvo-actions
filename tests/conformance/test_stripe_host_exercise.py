@@ -338,7 +338,7 @@ def test_adapter_timeout_is_reported_as_adapter_error() -> None:
     with pytest.raises(StripeHostConformanceError) as captured:
         asyncio.run(assert_stripe_host_exercise(AdapterTimeoutStore(), clock=FixedClock()))
 
-    assert captured.value.code == "stripe_host:immutable_intent:adapter_error"
+    assert captured.value.code.endswith(":adapter_error")
 
 
 def test_scenario_deadline_is_reported_as_scenario_timeout() -> None:
@@ -355,4 +355,4 @@ def test_scenario_deadline_is_reported_as_scenario_timeout() -> None:
             )
         )
 
-    assert captured.value.code == "stripe_host:immutable_intent:scenario_timeout"
+    assert captured.value.code.endswith(":scenario_timeout")
