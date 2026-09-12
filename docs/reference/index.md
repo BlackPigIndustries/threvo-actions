@@ -6,8 +6,8 @@ database or agent framework.
 
 !!! info "Versioned support"
 
-    Version `0.4.1` is the current supported exact root Python API and CLI.
-    Upgrading requires the [release record's migration review](../releases/0.4.1.md). The
+    Version `0.4.2` is the current supported exact root Python API and CLI.
+    Upgrading requires the [release record's migration review](../releases/0.4.2.md). The
     documented `threvo_actions.experimental` namespace follows its
     separate 120-day evaluation window; it is intentionally absent from the
     root export. Serialized interoperability forms also remain experimental.

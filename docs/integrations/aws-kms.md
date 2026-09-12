@@ -10,7 +10,7 @@ This integration is included in the `0.2.0` release. Maintainers
 evaluating the reviewed source checkout can run
 `uv sync --extra aws-kms --locked`. After the signed release workflow
 completes, install the immutable package with
-`uv add "threvo-actions[aws-kms]==0.4.1"`.
+`uv add "threvo-actions[aws-kms]==0.4.2"`.
 
 The extra installs `cryptography`; it deliberately does not install boto3 or
 another hosted SDK. Adapt the AWS client your application already owns to

@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Literal, Protocol
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol, TypeAlias
 
 from pydantic import AwareDatetime, JsonValue, StringConstraints, TypeAdapter, ValidationError
 
@@ -16,6 +16,7 @@ from .conformance import (
     StripeHostActionGroup,
     StripeHostCloseStatus,
     StripeHostRememberStatus,
+    StripeHostReserveStatus,
 )
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
@@ -34,11 +35,7 @@ class StripeLedgerPhase(StrEnum):
     CLOSED = "closed"
 
 
-class StripeLedgerReservationStatus(StrEnum):
-    ACQUIRED = "acquired"
-    ALREADY_SUBMITTED = "already_submitted"
-    UNAVAILABLE = "unavailable"
-    STALE = "stale"
+StripeLedgerReservationStatus: TypeAlias = StripeHostReserveStatus
 
 
 class StripeLedgerEntry(ExperimentalModel):
@@ -156,6 +153,8 @@ class PostgresStripeLedger:
         requester_reference: str,
         snapshot_data: dict[str, JsonValue],
     ) -> StripeHostRememberStatus:
+        """Persist or compare an immutable intent; raise only without a known result."""
+
         digest = _snapshot_digest(snapshot_data)
         async with self._pool.acquire() as connection, connection.transaction():
             result = await connection.execute(
@@ -190,7 +189,7 @@ class PostgresStripeLedger:
                 or entry.snapshot_digest != digest
                 or entry.snapshot_data != snapshot_data
             ):
-                raise StripePostgresHostError("Stripe intent is already bound")
+                return StripeHostRememberStatus.CONFLICT
             return (
                 StripeHostRememberStatus.CREATED
                 if result == "INSERT 0 1"
@@ -203,7 +202,9 @@ class PostgresStripeLedger:
         tenant_reference: str,
         action_group: StripeHostActionGroup,
         effect_reference: str,
-    ) -> StripeLedgerEntry:
+    ) -> StripeLedgerEntry | None:
+        """Load a tenant-scoped intent, returning ``None`` for known absence."""
+
         async with self._pool.acquire() as connection, connection.transaction():
             row = await self._load_row(
                 connection,
@@ -212,9 +213,7 @@ class PostgresStripeLedger:
                 effect_reference=effect_reference,
                 lock="FOR SHARE",
             )
-        if row is None:
-            raise StripePostgresHostError("Stripe intent is unavailable")
-        return self._entry(row)
+        return None if row is None else self._entry(row)
 
     async def load_in(
         self,
@@ -223,7 +222,7 @@ class PostgresStripeLedger:
         tenant_reference: str,
         action_group: StripeHostActionGroup,
         effect_reference: str,
-    ) -> StripeLedgerEntry:
+    ) -> StripeLedgerEntry | None:
         """Read immutable binding data inside a caller-owned transaction."""
 
         self._require_transaction(connection)
@@ -234,9 +233,7 @@ class PostgresStripeLedger:
             effect_reference=effect_reference,
             lock="",
         )
-        if row is None:
-            raise StripePostgresHostError("Stripe intent is unavailable")
-        return self._entry(row)
+        return None if row is None else self._entry(row)
 
     async def reserve_in(
         self,
@@ -249,6 +246,8 @@ class PostgresStripeLedger:
         snapshot_data: dict[str, JsonValue],
         not_after: datetime,
     ) -> StripeLedgerReservationStatus:
+        """Reserve inside the caller's transaction using the host exercise status type."""
+
         self._require_transaction(connection)
         lock_reference = stripe_resource_lock_reference(
             tenant_reference,
@@ -363,7 +362,7 @@ class PostgresStripeLedger:
         if entry.phase is StripeLedgerPhase.CLOSED:
             if entry.close_kind == close_kind and entry.outcome_data == outcome_data:
                 return StripeHostCloseStatus.MATCHED
-            raise StripePostgresHostError("Stripe intent has a different terminal record")
+            return StripeHostCloseStatus.CONFLICT
         if entry.phase is StripeLedgerPhase.READY and outcome_data is not None:
             raise StripePostgresHostError("Stripe outcome requires a prior reservation")
         encoded = None if outcome_data is None else _json_bytes(outcome_data)

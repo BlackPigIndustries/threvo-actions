@@ -67,9 +67,22 @@ unresolved Stripe reservation.
 
 An exception after commit is an uncertain acknowledgement. Preserve the row and
 reconcile; never convert the exception into `UNAVAILABLE` or retry the provider
-mutation. Exact repeated terminal writes are idempotent. A different terminal
-outcome and any rebinding of tenant, requester, resource or snapshot are
-rejected. Rows are retained after closure so a spent intent cannot reopen.
+mutation.
+
+Expected persistence dispositions are values, while an exception means the
+ledger could not establish a trustworthy disposition:
+
+- `remember` returns `CREATED`, `MATCHED`, or `CONFLICT`;
+- `load` and `load_in` return an entry or `None` for known absence;
+- `reserve_in` returns the shared `StripeHostReserveStatus` vocabulary;
+  `StripeLedgerReservationStatus` remains an alias for compatibility; and
+- terminal writes return `RECORDED`, `MATCHED`, or `CONFLICT`.
+
+Do not catch `StripePostgresHostError` and infer one of these values from its
+message. Reference repositories translate a known typed conflict into their
+own operation failure and let uncertain persistence errors propagate. Exact
+repeated terminal writes are idempotent. Rows are retained after closure so a
+spent intent cannot reopen.
 
 ## Reference implementation
 

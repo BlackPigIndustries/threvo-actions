@@ -13,6 +13,7 @@ from .models import ActionType, ConfirmingAuthority, ExperimentalModel, SafeRefe
 class AuthorityDecision(StrEnum):
     APPROVE = "approve"
     REJECT = "reject"
+    DENY = "reject"
 
 
 class AuthorityBinding(ExperimentalModel):

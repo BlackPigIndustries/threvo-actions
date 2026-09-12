@@ -15,7 +15,7 @@ The package provides:
 
 Install the PostgreSQL dependency with:
 
-    uv add "threvo-actions[postgres]==0.4.1"
+    uv add "threvo-actions[postgres]==0.4.2"
 
 Apply the migration in a serialized deployment step. Constructors perform no
 I/O and never migrate automatically:
@@ -25,6 +25,10 @@ I/O and never migrate automatically:
     )
 
     await migrate_approval_postgres(pool, schema="application_approvals")
+
+Both the migration and `PostgresApprovalRequestStore` require only a connection
+source with `acquire()`. Reads and writes run through the acquired connection;
+custom pool wrappers do not need pool-level `execute` or `fetchrow` methods.
 
 ## Server-owned binding
 
@@ -40,7 +44,7 @@ loading the current proposal. It stores:
 
 The URL or message sent through email, chat, or another transport contains only
 an opaque request reference. A callback supplies that reference plus approve or
-reject. It must not supply tenant, authority, commitment, audience, assurance,
+deny. It must not supply tenant, authority, commitment, audience, assurance,
 or effect fields.
 
 Before recording authority, the host:

@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported exact `0.4.1` Python API and experimental
+`threvo-actions` has a supported exact `0.4.2` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.
@@ -88,6 +88,15 @@ qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
 protected environments remain mandatory. See the
 [`0.4.1` release record](docs/releases/0.4.1.md) and
 [stabilization policy](docs/stabilization.md).
+
+The repository owner's 2026-09-12 direction permits the exact corrective
+`v0.4.2` tag with `skip_adoption_gate=true`. It aligns the packaged PostgreSQL
+ledger with the library-run host exercise, narrows the approval store to its
+acquire-only connection contract, and adds a wire-compatible denial name. It
+does not count as outside adoption or resume feature releases. Candidate
+qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
+protected environments remain mandatory. See the
+[`0.4.2` release record](docs/releases/0.4.2.md).
 
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag

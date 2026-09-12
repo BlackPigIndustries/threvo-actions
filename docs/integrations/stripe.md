@@ -16,13 +16,13 @@ the Stripe SDK. The `stripe` extra is required only for `StripeSDKGateway`, the
 billing SDK gateways and authenticated Stripe webhook parsing.
 
 ```bash
-uv add "threvo-actions[stripe]==0.4.1"
+uv add "threvo-actions[stripe]==0.4.2"
 ```
 
 For a custom gateway that implements the typed protocols without Stripe's SDK:
 
 ```bash
-uv add "threvo-actions==0.4.1"
+uv add "threvo-actions==0.4.2"
 ```
 
 Use [the runnable refund application](../examples/stripe-refunds.md) for a

@@ -156,7 +156,7 @@ class RefundService:
             semantic_effect_reference=record.semantic_effect_reference,
             authority=authority,
             audience=(self.definition.authority_audience,),
-            decision=AuthorityDecision.APPROVE if approve else AuthorityDecision.REJECT,
+            decision=AuthorityDecision.APPROVE if approve else AuthorityDecision.DENY,
             proposal_commitment=record.commitment.digest,
             channel_assurance=self.definition.authority_channel_assurance,
             issued_at=now,

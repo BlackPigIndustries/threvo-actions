@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
@@ -38,6 +39,30 @@ class Pool:
     async def fetchrow(self, query: str, *args: object) -> None:
         del query, args
         return None
+
+
+class ApprovalConnection:
+    def __init__(self) -> None:
+        self.row: dict[str, object] | None = None
+
+    async def execute(self, query: str, *args: object) -> str:
+        if "INSERT INTO" in query and self.row is None:
+            self.row = {"binding_data": args[3], "decision_data": None}
+            return "INSERT 0 1"
+        return "INSERT 0 0"
+
+    async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        del query, args
+        return self.row
+
+
+class AcquireOnlyPool:
+    def __init__(self) -> None:
+        self.connection = ApprovalConnection()
+
+    @asynccontextmanager
+    async def acquire(self) -> AsyncIterator[ApprovalConnection]:
+        yield self.connection
 
 
 def binding() -> ApprovalRequestBinding:
@@ -150,6 +175,23 @@ def test_store_constructor_has_no_database_side_effect() -> None:
     PostgresApprovalRequestStore(pool)
 
     assert pool.acquisitions == 0
+
+
+def test_store_uses_only_the_declared_acquire_connection_source() -> None:
+    async def scenario() -> None:
+        value = binding()
+        store = PostgresApprovalRequestStore(AcquireOnlyPool())
+
+        created = await store.create(value)
+        loaded = await store.get(value.request_reference)
+        for_proposal = await store.for_proposal(
+            value.tenant_reference,
+            value.proposal_reference,
+        )
+
+        assert created == loaded == for_proposal
+
+    asyncio.run(scenario())
 
 
 def test_packaged_approval_migration_is_immutable_and_rendered_safely() -> None:

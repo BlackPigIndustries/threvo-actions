@@ -86,3 +86,15 @@ def test_expired_or_future_issued_authority_is_rejected() -> None:
 
     assert expired.failure is AuthorityValidationFailure.EXPIRED
     assert future.failure is AuthorityValidationFailure.NOT_YET_VALID
+
+
+def test_deny_is_an_additive_name_for_the_existing_reject_wire_value() -> None:
+    assert AuthorityDecision.DENY is AuthorityDecision.REJECT
+    assert AuthorityDecision.DENY.value == "reject"
+    assert AuthorityDecision("reject") is AuthorityDecision.REJECT
+
+    denied = evidence().model_copy(update={"decision": AuthorityDecision.DENY})
+    assert '"decision":"reject"' in denied.model_dump_json()
+    assert AuthorityEvidence.model_validate_json(denied.model_dump_json()).decision is (
+        AuthorityDecision.DENY
+    )

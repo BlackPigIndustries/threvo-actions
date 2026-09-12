@@ -453,7 +453,7 @@ class ActionRuntime:
             )
         accumulated = (*record.authority_evidence, evidence)
         reason_code: str | None
-        if evidence.decision is AuthorityDecision.REJECT:
+        if evidence.decision is AuthorityDecision.DENY:
             target_status = LifecycleStatus.DENIED
             outcome = OperationOutcome.DENIED
             receipt_status = AuthorityReceiptStatus.REJECTED

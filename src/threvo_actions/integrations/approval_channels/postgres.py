@@ -32,29 +32,40 @@ class PostgresApprovalRequestStore:
         self._schema = quote_schema_name(schema)
 
     async def create(self, binding: ApprovalRequestBinding) -> ApprovalRequestRecord:
-        await self._pool.execute(
-            f"""INSERT INTO {self._schema}.approval_requests (
-                request_reference, tenant_reference, proposal_reference, binding_data
-            ) VALUES ($1, $2, $3, $4::jsonb)
-            ON CONFLICT (tenant_reference, proposal_reference) DO NOTHING""",
-            binding.request_reference,
-            binding.tenant_reference,
-            binding.proposal_reference,
-            binding.model_dump_json(),
-        )
-        existing = await self.for_proposal(binding.tenant_reference, binding.proposal_reference)
+        async with self._pool.acquire() as connection:
+            await connection.execute(
+                f"""INSERT INTO {self._schema}.approval_requests (
+                    request_reference, tenant_reference, proposal_reference, binding_data
+                ) VALUES ($1, $2, $3, $4::jsonb)
+                ON CONFLICT (tenant_reference, proposal_reference) DO NOTHING""",
+                binding.request_reference,
+                binding.tenant_reference,
+                binding.proposal_reference,
+                binding.model_dump_json(),
+            )
+            row = await connection.fetchrow(
+                f"""SELECT binding_data, decision_data
+                    FROM {self._schema}.approval_requests
+                    WHERE tenant_reference = $1 AND proposal_reference = $2""",
+                binding.tenant_reference,
+                binding.proposal_reference,
+            )
+        if row is None:
+            raise ApprovalRequestError("approval request is unavailable")
+        existing = self._record(row)
         excluded = {"request_reference", "created_at"}
         if existing.binding.model_dump(exclude=excluded) != binding.model_dump(exclude=excluded):
             raise ApprovalRequestError("approval request is already bound differently")
         return existing
 
     async def get(self, request_reference: str) -> ApprovalRequestRecord:
-        row = await self._pool.fetchrow(
-            f"""SELECT binding_data, decision_data
-                FROM {self._schema}.approval_requests
-                WHERE request_reference = $1""",
-            request_reference,
-        )
+        async with self._pool.acquire() as connection:
+            row = await connection.fetchrow(
+                f"""SELECT binding_data, decision_data
+                    FROM {self._schema}.approval_requests
+                    WHERE request_reference = $1""",
+                request_reference,
+            )
         if row is None:
             raise ApprovalRequestError("approval request is unavailable")
         return self._record(row)
@@ -62,13 +73,14 @@ class PostgresApprovalRequestStore:
     async def for_proposal(
         self, tenant_reference: str, proposal_reference: str
     ) -> ApprovalRequestRecord:
-        row = await self._pool.fetchrow(
-            f"""SELECT binding_data, decision_data
-                FROM {self._schema}.approval_requests
-                WHERE tenant_reference = $1 AND proposal_reference = $2""",
-            tenant_reference,
-            proposal_reference,
-        )
+        async with self._pool.acquire() as connection:
+            row = await connection.fetchrow(
+                f"""SELECT binding_data, decision_data
+                    FROM {self._schema}.approval_requests
+                    WHERE tenant_reference = $1 AND proposal_reference = $2""",
+                tenant_reference,
+                proposal_reference,
+            )
         if row is None:
             raise ApprovalRequestError("approval request is unavailable")
         return self._record(row)
