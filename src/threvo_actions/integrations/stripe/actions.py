@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
     from ...models import ConfirmingAuthority, ProposingAgent, RequestingPrincipal
     from ...receipts import EventSink
+    from ...recovery import ActionRecoveryView
     from ...registry import (
         AuthorityEvaluatorPort,
         ExecutionContext,
@@ -290,6 +291,13 @@ class StripeRefunds:
 
     async def read(self, proposal_reference: str, *, context: ReadContext) -> ProposalView:
         return await self.runtime.read(
+            self.definition, proposal_reference=proposal_reference, context=context
+        )
+
+    async def read_recovery(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionRecoveryView:
+        return await self.runtime.read_recovery(
             self.definition, proposal_reference=proposal_reference, context=context
         )
 

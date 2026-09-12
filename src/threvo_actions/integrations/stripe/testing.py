@@ -140,6 +140,7 @@ class StripeScenarioRepository:
 class StripeScenarioAuthorization:
     def __init__(self) -> None:
         self.enabled = True
+        self.hidden_proposals: set[str] = set()
 
     async def can_prepare(
         self, command: RefundRequest, *, context: PreparationContext
@@ -172,9 +173,9 @@ class StripeScenarioAuthorization:
         )
 
     async def can_read(self, proposal_reference: str, *, context: ReadContext) -> bool:
-        del proposal_reference
         return (
             self.enabled
+            and proposal_reference not in self.hidden_proposals
             and context.tenant_reference == "tenant:demo"
             and context.consumer.reference in {"user:requester", "user:approver"}
         )
