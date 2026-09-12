@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
@@ -328,3 +328,31 @@ def test_library_rejects_a_non_atomic_normal_writer() -> None:
     assert captured.value.code == (
         "stripe_host:normal_writer_exclusion:reservation_bypassed_writer_lock"
     )
+
+
+def test_adapter_timeout_is_reported_as_adapter_error() -> None:
+    class AdapterTimeoutStore(ExercisedStore):
+        async def reset(self, scenario: StripeHostScenario) -> None:
+            raise TimeoutError("database query timed out")
+
+    with pytest.raises(StripeHostConformanceError) as captured:
+        asyncio.run(assert_stripe_host_exercise(AdapterTimeoutStore(), clock=FixedClock()))
+
+    assert captured.value.code == "stripe_host:immutable_intent:adapter_error"
+
+
+def test_scenario_deadline_is_reported_as_scenario_timeout() -> None:
+    class HangingStore(ExercisedStore):
+        async def reset(self, scenario: StripeHostScenario) -> None:
+            await asyncio.Event().wait()
+
+    with pytest.raises(StripeHostConformanceError) as captured:
+        asyncio.run(
+            assert_stripe_host_exercise(
+                HangingStore(),
+                clock=FixedClock(),
+                scenario_timeout=timedelta(milliseconds=1),
+            )
+        )
+
+    assert captured.value.code == "stripe_host:immutable_intent:scenario_timeout"

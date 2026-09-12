@@ -686,16 +686,19 @@ async def assert_stripe_host_exercise(
     for scenario in _REQUIRED_SCENARIOS:
         try:
             async with asyncio.timeout(scenario_timeout.total_seconds()):
-                await _exercise_scenario(adapter, scenario, clock=resolved_clock)
+                try:
+                    await _exercise_scenario(adapter, scenario, clock=resolved_clock)
+                except StripeHostConformanceError:
+                    raise
+                except Exception:
+                    raise StripeHostConformanceError(
+                        f"stripe_host:{scenario.value}:adapter_error"
+                    ) from None
         except StripeHostConformanceError:
             raise
         except TimeoutError:
             raise StripeHostConformanceError(
                 f"stripe_host:{scenario.value}:scenario_timeout"
-            ) from None
-        except Exception:
-            raise StripeHostConformanceError(
-                f"stripe_host:{scenario.value}:adapter_error"
             ) from None
         results.append(
             StripeHostScenarioResult(

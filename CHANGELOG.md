@@ -35,6 +35,8 @@ and uses Semantic Versioning for the supported surface described in
   created or closed an intent.
 - Converge simultaneous approval callbacks that submit the same valid decision
   on the persisted first-write evidence, even when their timestamps differ.
+- Distinguish an adapter's own timeout from expiry of the Stripe host exercise's
+  configurable scenario deadline.
 
 ### Added
 
