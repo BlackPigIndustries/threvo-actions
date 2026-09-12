@@ -459,6 +459,7 @@ class StripeActions:
                     protection_codec=protection_codec,
                 ),
                 runtime=runtime,
+                workflow=workflow,
             )
         if credit_notes is not None:
             if (client is None) == (credit_notes.gateway is None):
@@ -491,6 +492,7 @@ class StripeActions:
                     protection_codec=protection_codec,
                 ),
                 runtime=runtime,
+                workflow=credit_workflow,
             )
 
     @property

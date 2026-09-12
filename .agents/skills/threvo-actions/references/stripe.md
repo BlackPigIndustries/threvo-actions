@@ -118,3 +118,12 @@ Use `examples/stripe_billing/demo.py` for complete deterministic host wiring and
 `docs/integrations/stripe-billing-actions.md`; the reviewed design and follow-on
 qualification pipeline is `docs/plans/2026-09-11-stripe-billing-actions.md`.
 The checked fixture matrix is `docs/testing/stripe-qualification.md`.
+
+The installed `stripe_billing_scenario()` factory is the evaluation entry point;
+replace its policy, gateway, host repository/authorization, and runtime services
+progressively. `examples/stripe_host` implements all three repository protocols
+over one PostgreSQL ledger and a shared application customer-resource lock.
+Billing groups expose authorized `observe_effect(...)` reads for late cases;
+these reads never settle runtime state or release claims. Provider sandbox
+qualification requires disposable subscription and invoice fixtures and remains
+separate from PostgreSQL conformance evidence.

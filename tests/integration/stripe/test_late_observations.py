@@ -5,7 +5,12 @@ import asyncio
 import pytest
 
 from threvo_actions import EvidenceConsumer, LifecycleStatus, ReadContext
-from threvo_actions.integrations.stripe import stripe_refund_scenario
+from threvo_actions.integrations.stripe import (
+    CreditGateway,
+    SubscriptionGateway,
+    stripe_billing_scenario,
+    stripe_refund_scenario,
+)
 from threvo_actions.registry import VerificationStatus
 from threvo_actions.runtime import ProposalNotFoundError
 
@@ -110,5 +115,70 @@ def test_observation_requires_authorized_retained_proposal() -> None:
                 prepared.proposal_reference, context=context()
             )
         assert demo.gateway.refund_reads == reads
+
+    asyncio.run(scenario())
+
+
+def test_late_subscription_observation_preserves_unresolved_runtime() -> None:
+    async def scenario() -> None:
+        demo = stripe_billing_scenario("schedule")
+        assert isinstance(demo.gateway, SubscriptionGateway)
+        prepared = await demo.prepare()
+        await demo.approve(prepared.proposal_reference)
+        await demo.operation.execute(
+            tenant_reference="tenant:demo",
+            proposal_reference=prepared.proposal_reference,
+        )
+        matching = demo.gateway.current
+        demo.gateway.current = matching.model_copy(update={"correlation": ""})
+        for _ in range(demo.operation.definition.max_verification_attempts + 1):
+            await demo.operation.reconcile(
+                tenant_reference="tenant:demo",
+                proposal_reference=prepared.proposal_reference,
+            )
+        before = await demo.store.get("tenant:demo", prepared.proposal_reference)
+        assert before is not None
+        assert before.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED
+        demo.gateway.current = matching
+
+        observation = await demo.actions.subscriptions.observe_effect(
+            prepared.proposal_reference, context=context()
+        )
+
+        assert observation.verification_status is VerificationStatus.VERIFIED_COMPLETION
+        assert observation.outcome is not None
+        assert observation.outcome.status == "scheduled"
+        assert await demo.store.get("tenant:demo", prepared.proposal_reference) == before
+
+    asyncio.run(scenario())
+
+
+def test_late_credit_note_void_is_a_separate_observation() -> None:
+    async def scenario() -> None:
+        demo = stripe_billing_scenario("invoice_reduction")
+        assert isinstance(demo.gateway, CreditGateway)
+        prepared = await demo.prepare()
+        await demo.approve(prepared.proposal_reference)
+        await demo.operation.execute(
+            tenant_reference="tenant:demo",
+            proposal_reference=prepared.proposal_reference,
+        )
+        await demo.operation.reconcile(
+            tenant_reference="tenant:demo",
+            proposal_reference=prepared.proposal_reference,
+        )
+        before = await demo.store.get("tenant:demo", prepared.proposal_reference)
+        assert before is not None and before.lifecycle_status is LifecycleStatus.VERIFIED
+        assert demo.gateway.note is not None
+        demo.gateway.note = demo.gateway.note.model_copy(update={"status": "void"})
+
+        observation = await demo.actions.credit_notes.observe_effect(
+            prepared.proposal_reference, context=context()
+        )
+
+        assert observation.verification_status is VerificationStatus.VERIFIED_TERMINAL_FAILURE
+        assert observation.outcome is not None
+        assert observation.outcome.status == "void"
+        assert await demo.store.get("tenant:demo", prepared.proposal_reference) == before
 
     asyncio.run(scenario())

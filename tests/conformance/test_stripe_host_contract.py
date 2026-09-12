@@ -25,10 +25,11 @@ class Driver:
         disposition: StripeHostScenarioDisposition = StripeHostScenarioDisposition.FAILED,
         raises: StripeHostScenario | None = None,
         mismatch: StripeHostScenario | None = None,
+        action_group: StripeHostActionGroup = StripeHostActionGroup.REFUNDS,
     ) -> None:
         self._descriptor = StripeHostConformanceDescriptor(
-            action_group=StripeHostActionGroup.REFUNDS,
-            profile_identifier="postgres:refund-host:test",
+            action_group=action_group,
+            profile_identifier=f"postgres:{action_group.value}:test",
             capabilities=capabilities
             or StripeHostCapabilities(
                 independent_connections=True,
@@ -67,13 +68,16 @@ class Driver:
         )
 
 
-def test_complete_refund_driver_returns_strict_passing_report() -> None:
-    driver = Driver()
+@pytest.mark.parametrize("action_group", list(StripeHostActionGroup))
+def test_complete_group_driver_returns_strict_passing_report(
+    action_group: StripeHostActionGroup,
+) -> None:
+    driver = Driver(action_group=action_group)
 
     report = asyncio.run(assert_stripe_host_conforms(driver))
 
     assert report.passed is True
-    assert report.action_group is StripeHostActionGroup.REFUNDS
+    assert report.action_group is action_group
     assert report.schema_version == "stripe-host-conformance/v1"
     assert tuple(result.scenario for result in report.results) == tuple(StripeHostScenario)
     assert driver.seen == list(StripeHostScenario)

@@ -9,6 +9,15 @@ from ._operation import (
     StripeReservationStatus,
 )
 from .actions import RefundPreparationError, StripeActions, StripeRefunds
+from .billing_testing import (
+    BillingAuthorization,
+    CreditGateway,
+    InvoiceRepository,
+    StripeBillingScenario,
+    SubscriptionGateway,
+    SubscriptionRepository,
+    stripe_billing_scenario,
+)
 from .composition import RefundConfig, StripeServices, from_services
 from .conformance import (
     StripeHostActionGroup,
@@ -227,11 +236,18 @@ __all__ = [
     "StripeEffectObservation",
     "StripeObservedOutcome",
     "StripeRecoveryCase",
+    "BillingAuthorization",
+    "CreditGateway",
+    "InvoiceRepository",
+    "StripeBillingScenario",
+    "SubscriptionGateway",
+    "SubscriptionRepository",
     "assert_stripe_host_conforms",
     "from_services",
     "migrate_stripe_postgres",
     "render_stripe_postgres_migration",
     "stripe_postgres_migration",
+    "stripe_billing_scenario",
     "stripe_refund_scenario",
 ]
 
