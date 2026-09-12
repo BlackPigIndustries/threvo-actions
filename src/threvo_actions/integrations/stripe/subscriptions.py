@@ -348,7 +348,7 @@ class _SubscriptionWorkflow(
             )
         if not snapshot.matches_result(observed):
             return VerificationResult(
-                status=VerificationStatus.TARGET_UNAVAILABLE,
+                status=VerificationStatus.PROVISIONAL_ABSENCE,
                 reason_code="stripe_cancellation_not_proven",
             )
         return VerificationResult(

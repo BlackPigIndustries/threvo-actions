@@ -218,7 +218,9 @@ serializability or exactly-once execution.
 Cancellation verification requires the operation's correlation plus the exact
 bound subscription/item/customer and desired cancellation state. Another writer
 clearing the marker, reversing the change or changing the period makes the
-outcome unresolved. A subscription already ended before reconciliation also
+outcome `provisional_absence`, because the read succeeded but did not prove this
+action. `target_unavailable` is reserved for a failed or inconsistent provider
+read. A subscription already ended before reconciliation also
 needs host investigation; this adapter does not infer historical scheduling
 from a later canceled state.
 
@@ -243,3 +245,5 @@ Stripe SDK passthrough.
 
 The [reviewed design and pipeline](../plans/2026-09-11-stripe-billing-actions.md)
 tracks durable-host and real-provider qualification separately from fixture tests.
+The current deterministic evidence and its limits are recorded in the
+[Stripe qualification matrix](../testing/stripe-qualification.md).

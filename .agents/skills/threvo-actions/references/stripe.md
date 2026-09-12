@@ -98,9 +98,12 @@ same subscription/invoice, including other actions. Unknown acknowledgements
 retain claims; never resend after empty lookup or expired provider idempotency.
 Stripe lacks atomic compare-and-set: final preflight reduces but cannot eliminate
 external-writer races. A changed/missing subscription correlation remains
-unresolved, even if the current state happens to match the requested state.
+`PROVISIONAL_ABSENCE`, even if the current state happens to match the requested
+state. Reserve `TARGET_UNAVAILABLE` for a provider lookup that failed or returned
+an inconsistent binding.
 
 Use `examples/stripe_billing/demo.py` for complete deterministic host wiring and
 `examples/stripe_billing/agent.py` for existing Pydantic AI bindings. The guide is
 `docs/integrations/stripe-billing-actions.md`; the reviewed design and follow-on
 qualification pipeline is `docs/plans/2026-09-11-stripe-billing-actions.md`.
+The checked fixture matrix is `docs/testing/stripe-qualification.md`.
