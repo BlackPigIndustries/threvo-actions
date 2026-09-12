@@ -43,10 +43,6 @@ class _Acquire(_Transaction, Protocol):
 class ConnectionSource(Protocol):
     def acquire(self) -> _Acquire: ...
 
-    async def execute(self, query: str, *args: object) -> str: ...
-
-    async def fetchrow(self, query: str, *args: object) -> _Row | None: ...
-
 
 @dataclass(frozen=True)
 class ApprovalPostgresMigration:

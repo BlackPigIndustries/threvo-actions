@@ -6,6 +6,27 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-12
+
+### Fixed
+
+- Make known PostgreSQL Stripe ledger outcomes match the host exercise contract:
+  immutable rebindings and conflicting terminal records return `CONFLICT`,
+  known missing intents return `None`, and reservation results use one shared
+  status type. Persistence uncertainty continues to raise and is never inferred
+  from an error message.
+- Remove exception-string translation from the reference PostgreSQL exercise
+  adapter and run the library-owned exercise directly over typed ledger results.
+- Use acquired connections for every approval request store operation and
+  narrow its connection-source protocol to `acquire()`.
+
+### Added
+
+- Add `AuthorityDecision.DENY` as an alias for `REJECT`. Both preserve the
+  existing `"reject"` wire value and stored evidence compatibility.
+- Exercise the approval store through an acquire-only wrapper and retain the
+  real PostgreSQL ledger-to-exercise qualification in CI.
+
 ## [0.4.1] - 2026-09-12
 
 ### Fixed
@@ -393,7 +414,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.1...v0.3.2

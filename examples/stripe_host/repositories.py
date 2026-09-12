@@ -19,7 +19,11 @@ from threvo_actions.integrations.stripe import (
     SubscriptionCancellationOutcome,
     SubscriptionCancellationSnapshot,
 )
-from threvo_actions.integrations.stripe.conformance import StripeHostActionGroup
+from threvo_actions.integrations.stripe.conformance import (
+    StripeHostActionGroup,
+    StripeHostCloseStatus,
+    StripeHostRememberStatus,
+)
 from threvo_actions.integrations.stripe.postgres import (
     PostgresStripeLedger,
     StripeLedgerReservationStatus,
@@ -83,7 +87,7 @@ class PostgresRefundRepository:
         payment = await self._reference_payment(
             snapshot.intent.tenant_reference, snapshot.payment_reference
         )
-        await self._ledger.remember(
+        remembered = await self._ledger.remember(
             tenant_reference=snapshot.intent.tenant_reference,
             action_group=StripeHostActionGroup.REFUNDS,
             effect_reference=snapshot.effect_reference,
@@ -91,6 +95,7 @@ class PostgresRefundRepository:
             requester_reference=requester,
             snapshot_data=model_json_object(snapshot),
         )
+        _require_remembered(remembered)
 
     async def load(self, tenant_reference: str, effect_reference: str) -> RefundSnapshot:
         entry = await self._ledger.load(
@@ -98,6 +103,8 @@ class PostgresRefundRepository:
             action_group=StripeHostActionGroup.REFUNDS,
             effect_reference=effect_reference,
         )
+        if entry is None:
+            raise StripePostgresHostError("Stripe intent is unavailable")
         return RefundSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
 
     async def reserve(
@@ -140,12 +147,13 @@ class PostgresRefundRepository:
                 tenant_reference=tenant_reference,
                 effect_reference=effect_reference,
             )
-            await self._ledger.record_no_submission_in(
+            closed = await self._ledger.record_no_submission_in(
                 connection,
                 tenant_reference=tenant_reference,
                 action_group=StripeHostActionGroup.REFUNDS,
                 effect_reference=effect_reference,
             )
+            _require_closed(closed)
 
     async def record_outcome(
         self,
@@ -159,13 +167,14 @@ class PostgresRefundRepository:
                 tenant_reference=tenant_reference,
                 effect_reference=effect_reference,
             )
-            await self._ledger.record_outcome_in(
+            closed = await self._ledger.record_outcome_in(
                 connection,
                 tenant_reference=tenant_reference,
                 action_group=StripeHostActionGroup.REFUNDS,
                 effect_reference=effect_reference,
                 outcome_data=model_json_object(outcome),
             )
+            _require_closed(closed)
 
     async def _lock_payment_for_close(
         self,
@@ -180,6 +189,8 @@ class PostgresRefundRepository:
             action_group=StripeHostActionGroup.REFUNDS,
             effect_reference=effect_reference,
         )
+        if entry is None:
+            raise StripePostgresHostError("Stripe intent is unavailable")
         snapshot = RefundSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
         payment_value = await connection.fetchval(
             f"""SELECT convert_to(payment_data::text, 'UTF8')
@@ -274,7 +285,7 @@ class PostgresSubscriptionCancellationRepository:
         reference = await self._reference_subscription(
             snapshot.tenant_reference, snapshot.binding.subscription_reference
         )
-        await self._ledger.remember(
+        remembered = await self._ledger.remember(
             tenant_reference=snapshot.tenant_reference,
             action_group=StripeHostActionGroup.SUBSCRIPTIONS,
             effect_reference=snapshot.effect_reference,
@@ -282,6 +293,7 @@ class PostgresSubscriptionCancellationRepository:
             requester_reference=requester,
             snapshot_data=model_json_object(snapshot),
         )
+        _require_remembered(remembered)
 
     async def load(
         self, tenant_reference: str, effect_reference: str
@@ -291,6 +303,8 @@ class PostgresSubscriptionCancellationRepository:
             action_group=StripeHostActionGroup.SUBSCRIPTIONS,
             effect_reference=effect_reference,
         )
+        if entry is None:
+            raise StripePostgresHostError("Stripe intent is unavailable")
         return SubscriptionCancellationSnapshot.model_validate_json(
             _stored_json(entry.snapshot_data)
         )
@@ -357,6 +371,8 @@ class PostgresSubscriptionCancellationRepository:
                 action_group=StripeHostActionGroup.SUBSCRIPTIONS,
                 effect_reference=effect_reference,
             )
+            if entry is None:
+                raise StripePostgresHostError("Stripe intent is unavailable")
             snapshot = SubscriptionCancellationSnapshot.model_validate_json(
                 _stored_json(entry.snapshot_data)
             )
@@ -381,20 +397,21 @@ class PostgresSubscriptionCancellationRepository:
                 reference.customer_reference,
             )
             if outcome is None:
-                await self._ledger.record_no_submission_in(
+                closed = await self._ledger.record_no_submission_in(
                     connection,
                     tenant_reference=tenant_reference,
                     action_group=StripeHostActionGroup.SUBSCRIPTIONS,
                     effect_reference=effect_reference,
                 )
             else:
-                await self._ledger.record_outcome_in(
+                closed = await self._ledger.record_outcome_in(
                     connection,
                     tenant_reference=tenant_reference,
                     action_group=StripeHostActionGroup.SUBSCRIPTIONS,
                     effect_reference=effect_reference,
                     outcome_data=model_json_object(outcome),
                 )
+            _require_closed(closed)
 
     async def _reference_subscription(
         self, tenant_reference: str, subscription_reference: str
@@ -470,7 +487,7 @@ class PostgresCreditNoteRepository:
         reference = await self._reference_invoice(
             snapshot.tenant_reference, snapshot.draft.invoice.invoice_reference
         )
-        await self._ledger.remember(
+        remembered = await self._ledger.remember(
             tenant_reference=snapshot.tenant_reference,
             action_group=StripeHostActionGroup.CREDIT_NOTES,
             effect_reference=snapshot.effect_reference,
@@ -478,6 +495,7 @@ class PostgresCreditNoteRepository:
             requester_reference=requester,
             snapshot_data=model_json_object(snapshot),
         )
+        _require_remembered(remembered)
 
     async def load(self, tenant_reference: str, effect_reference: str) -> CreditNoteSnapshot:
         entry = await self._ledger.load(
@@ -485,6 +503,8 @@ class PostgresCreditNoteRepository:
             action_group=StripeHostActionGroup.CREDIT_NOTES,
             effect_reference=effect_reference,
         )
+        if entry is None:
+            raise StripePostgresHostError("Stripe intent is unavailable")
         return CreditNoteSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
 
     async def reserve(
@@ -548,6 +568,8 @@ class PostgresCreditNoteRepository:
                 action_group=StripeHostActionGroup.CREDIT_NOTES,
                 effect_reference=effect_reference,
             )
+            if entry is None:
+                raise StripePostgresHostError("Stripe intent is unavailable")
             snapshot = CreditNoteSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
             locked = await connection.fetchval(
                 f"""SELECT true FROM {self._app_schema}.invoices
@@ -569,20 +591,21 @@ class PostgresCreditNoteRepository:
                 reference.customer_reference,
             )
             if outcome is None:
-                await self._ledger.record_no_submission_in(
+                closed = await self._ledger.record_no_submission_in(
                     connection,
                     tenant_reference=tenant_reference,
                     action_group=StripeHostActionGroup.CREDIT_NOTES,
                     effect_reference=effect_reference,
                 )
             else:
-                await self._ledger.record_outcome_in(
+                closed = await self._ledger.record_outcome_in(
                     connection,
                     tenant_reference=tenant_reference,
                     action_group=StripeHostActionGroup.CREDIT_NOTES,
                     effect_reference=effect_reference,
                     outcome_data=model_json_object(outcome),
                 )
+            _require_closed(closed)
 
     async def _reference_invoice(
         self, tenant_reference: str, invoice_reference: str
@@ -622,6 +645,16 @@ def _customer_resource(customer_reference: str) -> str:
 
 def _stored_json(value: dict[str, JsonValue]) -> str:
     return json.dumps(value, separators=(",", ":"), sort_keys=True)
+
+
+def _require_remembered(status: StripeHostRememberStatus) -> None:
+    if status is StripeHostRememberStatus.CONFLICT:
+        raise StripePostgresHostError("Stripe intent is already bound")
+
+
+def _require_closed(status: StripeHostCloseStatus) -> None:
+    if status is StripeHostCloseStatus.CONFLICT:
+        raise StripePostgresHostError("Stripe intent has a different terminal record")
 
 
 async def _ensure_customer_resource(

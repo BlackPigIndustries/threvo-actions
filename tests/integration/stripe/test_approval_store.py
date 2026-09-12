@@ -4,11 +4,16 @@ import asyncio
 import json
 import os
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
 asyncpg = pytest.importorskip("asyncpg")
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 from threvo_actions import (  # noqa: E402
     ActionType,
@@ -24,6 +29,16 @@ from threvo_actions.integrations.approval_channels import (  # noqa: E402
     migrate_approval_postgres,
 )
 from threvo_actions.migrations import MigrationStateError  # noqa: E402
+
+
+class AcquireOnlySource:
+    def __init__(self, pool: asyncpg.Pool[asyncpg.Record]) -> None:
+        self._pool = pool
+
+    @asynccontextmanager
+    async def acquire(self) -> AsyncIterator[asyncpg.Connection[asyncpg.Record]]:
+        async with self._pool.acquire() as connection:
+            yield connection
 
 
 def _dsn() -> str:
@@ -48,6 +63,7 @@ def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None
             )
 
         pool = await asyncpg.create_pool(_dsn(), min_size=1, max_size=3, init=configure_json)
+        source = AcquireOnlySource(pool)
         created_at = datetime.now(UTC)
         action_type = ActionType(namespace="example.billing", name="refund", version=1)
         binding = ApprovalRequestBinding(
@@ -82,8 +98,8 @@ def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None
             recorded_at=created_at,
         )
         try:
-            await migrate_approval_postgres(pool, schema=schema)
-            store = PostgresApprovalRequestStore(pool, schema=schema)
+            await migrate_approval_postgres(source, schema=schema)
+            store = PostgresApprovalRequestStore(source, schema=schema)
 
             created = await store.create(binding)
             repeated = await store.create(binding)
@@ -164,7 +180,7 @@ def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None
                 "f" * 64,
             )
             with pytest.raises(MigrationStateError, match="unsupported version"):
-                await migrate_approval_postgres(pool, schema=schema)
+                await migrate_approval_postgres(source, schema=schema)
         finally:
             await pool.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             await pool.close()

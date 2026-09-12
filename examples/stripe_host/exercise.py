@@ -19,9 +19,7 @@ from threvo_actions.integrations.stripe import (
     StripeHostRememberStatus,
     StripeHostReserveStatus,
     StripeHostScenario,
-    StripeLedgerReservationStatus,
     StripePostgresConnectionSource,
-    StripePostgresHostError,
     stripe_resource_lock_reference,
 )
 from threvo_actions.migrations import quote_schema_name
@@ -76,19 +74,14 @@ class PostgresStripeHostExerciseAdapter:
             intent.tenant_reference,
             intent.resource_reference,
         )
-        try:
-            return await self._ledger.remember(
-                tenant_reference=intent.tenant_reference,
-                action_group=intent.action_group,
-                effect_reference=intent.effect_reference,
-                resource_reference=intent.resource_reference,
-                requester_reference=intent.requester_reference,
-                snapshot_data=intent.snapshot_mapping(),
-            )
-        except StripePostgresHostError as error:
-            if str(error) == "Stripe intent is already bound":
-                return StripeHostRememberStatus.CONFLICT
-            raise
+        return await self._ledger.remember(
+            tenant_reference=intent.tenant_reference,
+            action_group=intent.action_group,
+            effect_reference=intent.effect_reference,
+            resource_reference=intent.resource_reference,
+            requester_reference=intent.requester_reference,
+            snapshot_data=intent.snapshot_mapping(),
+        )
 
     async def load(
         self,
@@ -97,16 +90,13 @@ class PostgresStripeHostExerciseAdapter:
         action_group: StripeHostActionGroup,
         effect_reference: str,
     ) -> StripeHostIntentObservation | None:
-        try:
-            entry = await self._ledger.load(
-                tenant_reference=tenant_reference,
-                action_group=action_group,
-                effect_reference=effect_reference,
-            )
-        except StripePostgresHostError as error:
-            if str(error) == "Stripe intent is unavailable":
-                return None
-            raise
+        entry = await self._ledger.load(
+            tenant_reference=tenant_reference,
+            action_group=action_group,
+            effect_reference=effect_reference,
+        )
+        if entry is None:
+            return None
         outcome_digest = (
             None
             if entry.outcome_data is None
@@ -172,9 +162,9 @@ class PostgresStripeHostExerciseAdapter:
                 snapshot_data=intent.snapshot_mapping(),
                 not_after=not_after,
             )
-        if simulate_lost_acknowledgement and result is StripeLedgerReservationStatus.ACQUIRED:
+        if simulate_lost_acknowledgement and result is StripeHostReserveStatus.ACQUIRED:
             return StripeHostReserveStatus.ACKNOWLEDGEMENT_LOST
-        return StripeHostReserveStatus(result.value)
+        return result
 
     async def record_no_submission(self, intent: StripeHostExerciseIntent) -> StripeHostCloseStatus:
         return await self._close(intent, outcome_data=None)
@@ -193,27 +183,22 @@ class PostgresStripeHostExerciseAdapter:
         *,
         outcome_data: dict[str, JsonValue] | None,
     ) -> StripeHostCloseStatus:
-        try:
-            async with self._pool.acquire() as connection, connection.transaction():
-                if outcome_data is None:
-                    result = await self._ledger.record_no_submission_in(
-                        connection,
-                        tenant_reference=intent.tenant_reference,
-                        action_group=intent.action_group,
-                        effect_reference=intent.effect_reference,
-                    )
-                else:
-                    result = await self._ledger.record_outcome_in(
-                        connection,
-                        tenant_reference=intent.tenant_reference,
-                        action_group=intent.action_group,
-                        effect_reference=intent.effect_reference,
-                        outcome_data=outcome_data,
-                    )
-        except StripePostgresHostError as error:
-            if str(error) == "Stripe intent has a different terminal record":
-                return StripeHostCloseStatus.CONFLICT
-            raise
+        async with self._pool.acquire() as connection, connection.transaction():
+            if outcome_data is None:
+                result = await self._ledger.record_no_submission_in(
+                    connection,
+                    tenant_reference=intent.tenant_reference,
+                    action_group=intent.action_group,
+                    effect_reference=intent.effect_reference,
+                )
+            else:
+                result = await self._ledger.record_outcome_in(
+                    connection,
+                    tenant_reference=intent.tenant_reference,
+                    action_group=intent.action_group,
+                    effect_reference=intent.effect_reference,
+                    outcome_data=outcome_data,
+                )
         return result
 
     async def normal_write(

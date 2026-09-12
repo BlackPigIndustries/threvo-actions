@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 from threvo_actions.integrations.stripe import (
     PostgresStripeLedger,
     StripeHostActionGroup,
+    StripeHostCloseStatus,
+    StripeHostRememberStatus,
+    StripeHostReserveStatus,
     StripeLedgerReservationStatus,
     StripePostgresHostError,
     render_stripe_postgres_migration,
@@ -55,8 +58,8 @@ class Connection:
 
 
 class Pool:
-    def __init__(self) -> None:
-        self.connection = Connection()
+    def __init__(self, connection: Connection | None = None) -> None:
+        self.connection = connection or Connection()
         self.acquisitions = 0
 
     @asynccontextmanager
@@ -110,6 +113,72 @@ class LedgerConnection(Connection):
             self.row["outcome_data"] = encoded
             return "UPDATE 1"
         return "UPDATE 0"
+
+
+class ExistingIntentConnection(LedgerConnection):
+    async def execute(self, query: str, *args: object) -> str:
+        if "INSERT INTO" in query:
+            return "INSERT 0 0"
+        return await super().execute(query, *args)
+
+
+def test_ledger_and_exercise_share_one_reservation_status_type() -> None:
+    assert StripeLedgerReservationStatus is StripeHostReserveStatus
+
+
+def test_known_ledger_dispositions_return_values_instead_of_raising() -> None:
+    async def scenario() -> None:
+        existing = ExistingIntentConnection()
+        ledger = PostgresStripeLedger(Pool(existing))
+
+        conflict = await ledger.remember(
+            tenant_reference="tenant:test",
+            action_group=StripeHostActionGroup.REFUNDS,
+            effect_reference="refund:test",
+            resource_reference="payment:test",
+            requester_reference="user:test",
+            snapshot_data={"intent": "changed"},
+        )
+        assert conflict is StripeHostRememberStatus.CONFLICT
+
+        missing = await PostgresStripeLedger(Pool()).load(
+            tenant_reference="tenant:test",
+            action_group=StripeHostActionGroup.REFUNDS,
+            effect_reference="refund:missing",
+        )
+        assert missing is None
+
+        existing.row["phase"] = "closed"
+        existing.row["close_kind"] = "outcome"
+        existing.row["outcome_data"] = json.dumps({"status": "succeeded"}).encode()
+        async with existing.transaction():
+            close_conflict = await ledger.record_outcome_in(
+                existing,
+                tenant_reference="tenant:test",
+                action_group=StripeHostActionGroup.REFUNDS,
+                effect_reference="refund:test",
+                outcome_data={"status": "failed"},
+            )
+        assert close_conflict is StripeHostCloseStatus.CONFLICT
+
+    asyncio.run(scenario())
+
+
+def test_ledger_uncertainty_remains_an_exception() -> None:
+    async def scenario() -> None:
+        ledger = PostgresStripeLedger(Pool())
+
+        with pytest.raises(StripePostgresHostError, match="persistence result is uncertain"):
+            await ledger.remember(
+                tenant_reference="tenant:test",
+                action_group=StripeHostActionGroup.REFUNDS,
+                effect_reference="refund:test",
+                resource_reference="payment:test",
+                requester_reference="user:test",
+                snapshot_data={"intent": "test"},
+            )
+
+    asyncio.run(scenario())
 
 
 def test_resource_lock_reference_is_postgres_safe_and_boundary_unambiguous() -> None:
@@ -188,14 +257,14 @@ def test_reservation_and_terminal_record_are_monotonic_and_idempotent() -> None:
                 effect_reference="refund:test",
                 outcome_data=outcome,
             )
-            with pytest.raises(StripePostgresHostError, match="different terminal"):
-                await ledger.record_outcome_in(
-                    connection,
-                    tenant_reference="tenant:test",
-                    action_group=StripeHostActionGroup.REFUNDS,
-                    effect_reference="refund:test",
-                    outcome_data={"status": "failed"},
-                )
+            conflict = await ledger.record_outcome_in(
+                connection,
+                tenant_reference="tenant:test",
+                action_group=StripeHostActionGroup.REFUNDS,
+                effect_reference="refund:test",
+                outcome_data={"status": "failed"},
+            )
+            assert conflict is StripeHostCloseStatus.CONFLICT
 
     asyncio.run(scenario())
 

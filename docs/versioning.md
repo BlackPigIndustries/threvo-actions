@@ -22,9 +22,9 @@ release cadence separately affects whether adopters can evaluate and trust a
 supported line. The [0.4 stabilization policy](stabilization.md) pauses feature
 releases until its evidence gates pass.
 
-## Supported at `0.4.1`
+## Supported at `0.4.2`
 
-The following surfaces are supported at the exact `0.4.1` release:
+The following surfaces are supported at the exact `0.4.2` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -51,8 +51,13 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.4.1` without another explicitly
+safety check is not permitted after `0.4.2` without another explicitly
 documented exception.
+
+`0.4.2` aligns the PostgreSQL Stripe ledger's expected dispositions with the
+library-orchestrated exercise, narrows the approval store to an acquire-only
+connection source, and adds `AuthorityDecision.DENY` as a wire-compatible alias
+for `REJECT`. Follow the [`0.4.2` migration record](releases/0.4.2.md).
 
 `0.4.1` corrects the meaning of Stripe host qualification, adds a
 library-orchestrated exercise, completes gradual-reveal forwarding for recovery
@@ -194,7 +199,7 @@ does not let an older library silently accept a newer migration history.
 ## Version changes
 
 - Later `0.4.z` releases: backward-compatible fixes and additions to the
-  supported `0.4.1` surface unless an explicit corrective exception is
+  supported `0.4.2` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

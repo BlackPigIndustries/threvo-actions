@@ -153,6 +153,7 @@ nav:
   - Project:
       - Stabilization policy: stabilization.md
       - Versioning: versioning.md
+      - Release record 0.4.2: releases/0.4.2.md
       - Release record 0.4.1: releases/0.4.1.md
       - Release record 0.4.0: releases/0.4.0.md
       - Stripe target customers: product/stripe-target-clients.md

@@ -1,9 +1,9 @@
 # 0.4 stabilization policy
 
-Status: active after 0.4.1.
+Status: active after 0.4.2.
 
 The project is holding feature releases and public-surface expansion after the
-0.4.1 corrective release. Development may continue on develop, but no new
+0.4.2 corrective release. Development may continue on develop, but no new
 connector, Stripe action group, lifecycle, or authoring abstraction is eligible
 for publication during this period.
 
@@ -37,6 +37,6 @@ service, deterministic Stripe scenarios, and reference application are
 maintainer-controlled. They qualify the published implementation but do not
 satisfy the outside-adoption condition.
 
-No outside participant or production observation is recorded for 0.4.1.
+No outside participant or production observation is recorded for 0.4.2.
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
 source of truth. This corrective release does not claim otherwise.
