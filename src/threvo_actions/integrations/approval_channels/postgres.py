@@ -93,7 +93,7 @@ class PostgresApprovalRequestStore:
                     "approval decision does not match the request binding"
                 ) from None
             if current.decision is not None:
-                if current.decision != decision:
+                if current.decision.decision is not decision.decision:
                     raise ApprovalRequestError("approval request already has a decision")
                 return current
             result = await connection.execute(

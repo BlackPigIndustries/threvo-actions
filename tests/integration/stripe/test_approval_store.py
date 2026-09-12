@@ -112,6 +112,43 @@ def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None
             with pytest.raises(ApprovalRequestError, match="does not match"):
                 await store.record_decision(binding.request_reference, mismatched)
 
+            concurrent_binding = binding.model_copy(
+                update={
+                    "request_reference": "approval-request:concurrent",
+                    "proposal_reference": "proposal:concurrent",
+                    "semantic_effect_reference": "effect:concurrent",
+                    "proposal_commitment": "commitment:concurrent",
+                }
+            )
+            concurrent_evidence = evidence.model_copy(
+                update={
+                    "proposal_instance_reference": concurrent_binding.proposal_reference,
+                    "semantic_effect_reference": concurrent_binding.semantic_effect_reference,
+                    "proposal_commitment": concurrent_binding.proposal_commitment,
+                }
+            )
+            first_callback = decision.model_copy(
+                update={"evidence": concurrent_evidence, "recorded_at": created_at}
+            )
+            second_callback_at = created_at + timedelta(microseconds=1)
+            second_callback = decision.model_copy(
+                update={
+                    "evidence": concurrent_evidence.model_copy(
+                        update={"issued_at": second_callback_at}
+                    ),
+                    "recorded_at": second_callback_at,
+                }
+            )
+            await store.create(concurrent_binding)
+
+            converged = await asyncio.gather(
+                store.record_decision(concurrent_binding.request_reference, first_callback),
+                store.record_decision(concurrent_binding.request_reference, second_callback),
+            )
+
+            assert converged[0] == converged[1]
+            assert converged[0].decision in (first_callback, second_callback)
+
             await pool.execute(
                 f'INSERT INTO "{schema}".approval_requests '  # noqa: S608 -- UUID schema.
                 "(request_reference, tenant_reference, proposal_reference, binding_data) "

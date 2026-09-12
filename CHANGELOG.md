@@ -33,6 +33,8 @@ and uses Semantic Versioning for the supported surface described in
 - Derive Stripe ledger remember and close dispositions inside their database
   transactions so concurrent qualification calls cannot misreport which write
   created or closed an intent.
+- Converge simultaneous approval callbacks that submit the same valid decision
+  on the persisted first-write evidence, even when their timestamps differ.
 
 ### Added
 
