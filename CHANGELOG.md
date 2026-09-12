@@ -27,6 +27,12 @@ and uses Semantic Versioning for the supported surface described in
 - Accept authority evidence whose bounded lifetime ends before its approval
   request while rejecting evidence outside the request window. Validate that
   binding before the first decision is persisted.
+- Reject unknown future approval-store migrations, accept both textual and
+  decoded JSONB values, normalize corrupt records to the store error boundary,
+  and require exact binding-valid decision replays.
+- Derive Stripe ledger remember and close dispositions inside their database
+  transactions so concurrent qualification calls cannot misreport which write
+  created or closed an intent.
 
 ### Added
 
@@ -381,7 +387,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.0...v0.3.1

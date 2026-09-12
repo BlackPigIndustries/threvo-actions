@@ -6,4 +6,5 @@ store, and explicit migration helpers.
 ::: threvo_actions.integrations.approval_channels
     options:
       show_root_heading: true
-      members_order: source
+      show_source: false
+      members: true

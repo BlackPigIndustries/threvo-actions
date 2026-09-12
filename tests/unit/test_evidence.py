@@ -22,6 +22,7 @@ from threvo_actions import (
 from threvo_actions.evidence import (
     ActionEvidenceBundle,
     EvidenceValidationReason,
+    EvidenceValidationReport,
     EvidenceValidationStatus,
     FrozenJsonObject,
     evidence_digest,
@@ -40,13 +41,14 @@ from threvo_actions.experimental import (
 from threvo_actions.experimental import (
     validate_evidence_bundle as experimental_validate_evidence_bundle,
 )
+from threvo_actions.recovery import ActionRecoveryView as CanonicalActionRecoveryView
 from threvo_actions.runtime import ProposalNotFoundError
 
 
 def test_evidence_v1_is_an_experimental_export_with_a_strict_frozen_shape() -> None:
     assert ExperimentalActionEvidenceBundle is ActionEvidenceBundle
-    assert ExperimentalEvidenceValidationReport is not None
-    assert ActionRecoveryView is not None
+    assert ExperimentalEvidenceValidationReport is EvidenceValidationReport
+    assert ActionRecoveryView is CanonicalActionRecoveryView
     assert experimental_validate_evidence_bundle is validate_evidence_bundle
     assert experimental_render_evidence_html is render_evidence_html
     assert ActionEvidenceBundle.model_config["frozen"] is True

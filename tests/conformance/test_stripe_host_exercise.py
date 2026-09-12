@@ -213,21 +213,26 @@ def test_library_executes_and_decides_every_scenario() -> None:
 
 
 def test_adapter_cannot_self_declare_a_scenario_passed() -> None:
-    class SelfDeclaringDriver:
-        descriptor = ExercisedStore.descriptor
+    class SelfDeclaringDriver(ExercisedStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.self_attestation_calls = 0
 
         async def run_scenario(self, scenario: StripeHostScenario) -> object:
+            self.self_attestation_calls += 1
             return {"scenario": scenario, "disposition": "passed"}
 
-    with pytest.raises(StripeHostConformanceError) as captured:
-        asyncio.run(
-            assert_stripe_host_exercise(
-                cast("StripeHostExerciseAdapter", SelfDeclaringDriver()),
-                clock=FixedClock(),
-            )
+    adapter = SelfDeclaringDriver()
+    report = asyncio.run(
+        assert_stripe_host_exercise(
+            cast("StripeHostExerciseAdapter", adapter),
+            clock=FixedClock(),
         )
+    )
 
-    assert captured.value.code == "stripe_host:immutable_intent:adapter_error"
+    assert report.passed is True
+    assert adapter.self_attestation_calls == 0
+    assert adapter.calls.count("reserve") >= 14
 
 
 def test_library_rejects_a_broken_race_implementation() -> None:
@@ -251,6 +256,42 @@ def test_library_rejects_a_broken_race_implementation() -> None:
         asyncio.run(assert_stripe_host_exercise(BrokenRaceStore(), clock=FixedClock()))
 
     assert captured.value.code == "stripe_host:same_effect_race:race_not_serialized"
+
+
+@pytest.mark.parametrize(
+    ("scenario_name", "expected_code"),
+    [
+        (
+            "closed_intent_non_reopening",
+            "stripe_host:closed_intent_non_reopening:reserve_failed",
+        ),
+        ("outcome_idempotence", "stripe_host:outcome_idempotence:reserve_failed"),
+    ],
+)
+def test_library_refuses_to_close_without_acquiring_reservation(
+    scenario_name: str,
+    expected_code: str,
+) -> None:
+    class MissingAdmissionStore(ExercisedStore):
+        async def reserve(
+            self,
+            intent: StripeHostExerciseIntent,
+            *,
+            not_after: datetime,
+            simulate_lost_acknowledgement: bool = False,
+        ) -> StripeHostReserveStatus:
+            if scenario_name in intent.effect_reference:
+                return StripeHostReserveStatus.STALE
+            return await super().reserve(
+                intent,
+                not_after=not_after,
+                simulate_lost_acknowledgement=simulate_lost_acknowledgement,
+            )
+
+    with pytest.raises(StripeHostConformanceError) as captured:
+        asyncio.run(assert_stripe_host_exercise(MissingAdmissionStore(), clock=FixedClock()))
+
+    assert captured.value.code == expected_code
 
 
 def test_library_rejects_a_non_atomic_normal_writer() -> None:

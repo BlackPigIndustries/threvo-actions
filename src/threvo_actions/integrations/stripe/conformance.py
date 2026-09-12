@@ -576,7 +576,8 @@ async def _exercise_scenario(
 
     if scenario is StripeHostScenario.CLOSED_INTENT_NON_REOPENING:
         await adapter.remember(first)
-        await adapter.reserve(first, not_after=future)
+        acquired = await adapter.reserve(first, not_after=future)
+        _require(scenario, acquired is StripeHostReserveStatus.ACQUIRED, "reserve_failed")
         closed = await adapter.record_no_submission(first)
         repeated = await adapter.reserve(first, not_after=future)
         _require(scenario, closed is StripeHostCloseStatus.RECORDED, "close_not_recorded")
@@ -591,7 +592,8 @@ async def _exercise_scenario(
         outcome: dict[str, JsonValue] = {"status": "succeeded", "amount": "10.00"}
         changed_outcome: dict[str, JsonValue] = {"status": "failed", "amount": "10.00"}
         await adapter.remember(first)
-        await adapter.reserve(first, not_after=future)
+        acquired = await adapter.reserve(first, not_after=future)
+        _require(scenario, acquired is StripeHostReserveStatus.ACQUIRED, "reserve_failed")
         recorded = await adapter.record_outcome(first, outcome_data=outcome)
         outcome_repeated = await adapter.record_outcome(first, outcome_data=outcome)
         outcome_conflict = await adapter.record_outcome(first, outcome_data=changed_outcome)

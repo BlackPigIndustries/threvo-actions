@@ -69,11 +69,6 @@ class PostgresStripeHostExerciseAdapter:
         )
 
     async def remember(self, intent: StripeHostExerciseIntent) -> StripeHostRememberStatus:
-        existing = await self.load(
-            tenant_reference=intent.tenant_reference,
-            action_group=intent.action_group,
-            effect_reference=intent.effect_reference,
-        )
         await self._pool.execute(
             f"""INSERT INTO {self._fixture_schema}.exercise_resources (
                 tenant_reference, resource_reference, revision
@@ -82,7 +77,7 @@ class PostgresStripeHostExerciseAdapter:
             intent.resource_reference,
         )
         try:
-            await self._ledger.remember(
+            return await self._ledger.remember(
                 tenant_reference=intent.tenant_reference,
                 action_group=intent.action_group,
                 effect_reference=intent.effect_reference,
@@ -94,11 +89,6 @@ class PostgresStripeHostExerciseAdapter:
             if str(error) == "Stripe intent is already bound":
                 return StripeHostRememberStatus.CONFLICT
             raise
-        return (
-            StripeHostRememberStatus.MATCHED
-            if existing is not None
-            else StripeHostRememberStatus.CREATED
-        )
 
     async def load(
         self,
@@ -194,22 +184,17 @@ class PostgresStripeHostExerciseAdapter:
         *,
         outcome_data: dict[str, JsonValue] | None,
     ) -> StripeHostCloseStatus:
-        before = await self.load(
-            tenant_reference=intent.tenant_reference,
-            action_group=intent.action_group,
-            effect_reference=intent.effect_reference,
-        )
         try:
             async with self._pool.acquire() as connection, connection.transaction():
                 if outcome_data is None:
-                    await self._ledger.record_no_submission_in(
+                    result = await self._ledger.record_no_submission_in(
                         connection,
                         tenant_reference=intent.tenant_reference,
                         action_group=intent.action_group,
                         effect_reference=intent.effect_reference,
                     )
                 else:
-                    await self._ledger.record_outcome_in(
+                    result = await self._ledger.record_outcome_in(
                         connection,
                         tenant_reference=intent.tenant_reference,
                         action_group=intent.action_group,
@@ -220,11 +205,7 @@ class PostgresStripeHostExerciseAdapter:
             if str(error) == "Stripe intent has a different terminal record":
                 return StripeHostCloseStatus.CONFLICT
             raise
-        return (
-            StripeHostCloseStatus.MATCHED
-            if before is not None and before.phase is StripeHostIntentPhase.CLOSED
-            else StripeHostCloseStatus.RECORDED
-        )
+        return result
 
     async def normal_write(
         self,

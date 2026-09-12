@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from typing import TYPE_CHECKING, Protocol
+
+from pydantic import ValidationError
 
 from ...migrations import quote_schema_name
 from .models import (
@@ -83,11 +86,16 @@ class PostgresApprovalRequestStore:
             if row is None:
                 raise ApprovalRequestError("approval request is unavailable")
             current = self._record(row)
+            try:
+                decided = ApprovalRequestRecord(binding=current.binding, decision=decision)
+            except ValidationError:
+                raise ApprovalRequestError(
+                    "approval decision does not match the request binding"
+                ) from None
             if current.decision is not None:
-                if current.decision.decision is not decision.decision:
+                if current.decision != decision:
                     raise ApprovalRequestError("approval request already has a decision")
                 return current
-            decided = ApprovalRequestRecord(binding=current.binding, decision=decision)
             result = await connection.execute(
                 f"""UPDATE {self._schema}.approval_requests
                     SET decision_data = $2::jsonb
@@ -105,21 +113,24 @@ class PostgresApprovalRequestStore:
 
     @staticmethod
     def _record(row: _Row) -> ApprovalRequestRecord:
-        binding = PostgresApprovalRequestStore._json_source(row["binding_data"])
-        decision = row["decision_data"]
-        return ApprovalRequestRecord(
-            binding=ApprovalRequestBinding.model_validate_json(binding),
-            decision=(
-                None
-                if decision is None
-                else ApprovalDecisionRecord.model_validate_json(
-                    PostgresApprovalRequestStore._json_source(decision)
-                )
-            ),
-        )
+        try:
+            binding = PostgresApprovalRequestStore._json_source(row["binding_data"])
+            decision = row["decision_data"]
+            return ApprovalRequestRecord(
+                binding=ApprovalRequestBinding.model_validate_json(binding),
+                decision=(
+                    None
+                    if decision is None
+                    else ApprovalDecisionRecord.model_validate_json(
+                        PostgresApprovalRequestStore._json_source(decision)
+                    )
+                ),
+            )
+        except (TypeError, ValueError, ValidationError):
+            raise ApprovalRequestError("stored approval request data is corrupt") from None
 
     @staticmethod
     def _json_source(value: object) -> str | bytes | bytearray:
         if isinstance(value, (str, bytes, bytearray)):
             return value
-        raise ApprovalRequestError("stored approval request data is corrupt")
+        return json.dumps(value, separators=(",", ":"), sort_keys=True)

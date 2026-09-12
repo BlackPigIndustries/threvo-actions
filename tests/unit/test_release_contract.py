@@ -249,7 +249,7 @@ def test_release_041_corrective_bypass_is_explicit_default_off_and_not_reusable(
     assert "default: false" in workflow
     assert 'test "$RELEASE_TAG" = "v0.4.1"' in workflow
     assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
-    assert "one-time v0.4.1 corrective-release bypass" in workflow
+    assert "Using the repository owner's one-time v0.4.1 corrective-release bypass." in workflow
     assert "release=v0.4.1" not in adoption_record
 
 

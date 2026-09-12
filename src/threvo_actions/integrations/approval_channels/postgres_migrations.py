@@ -29,6 +29,8 @@ class _Connection(Protocol):
 
     async def fetchrow(self, query: str, *args: object) -> _Row | None: ...
 
+    async def fetch(self, query: str, *args: object) -> list[_Row]: ...
+
     async def fetchval(self, query: str, *args: object) -> object | None: ...
 
     def transaction(self) -> _Transaction: ...
@@ -113,10 +115,15 @@ async def migrate_approval_postgres(
                 applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
             )"""
         )
-        row = await connection.fetchrow(
-            f"SELECT filename, checksum FROM {quoted}.schema_migrations WHERE version = 1"
+        rows = await connection.fetch(
+            f"SELECT version, filename, checksum FROM {quoted}.schema_migrations ORDER BY version"
         )
-        if row is not None:
+        if any(row["version"] != migration.version for row in rows):
+            raise MigrationStateError(
+                "approval PostgreSQL migration history contains an unsupported version"
+            )
+        if rows:
+            row = rows[0]
             if row["filename"] != migration.filename or row["checksum"] != migration.checksum:
                 raise MigrationStateError("approval PostgreSQL migration history is inconsistent")
             return migration

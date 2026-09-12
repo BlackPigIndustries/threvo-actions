@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -22,6 +23,7 @@ from threvo_actions.integrations.approval_channels import (  # noqa: E402
     PostgresApprovalRequestStore,
     migrate_approval_postgres,
 )
+from threvo_actions.migrations import MigrationStateError  # noqa: E402
 
 
 def _dsn() -> str:
@@ -36,7 +38,16 @@ def _dsn() -> str:
 def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None:
     async def scenario() -> None:
         schema = f"approval_store_{uuid.uuid4().hex[:12]}"
-        pool = await asyncpg.create_pool(_dsn(), min_size=1, max_size=3)
+
+        async def configure_json(connection: asyncpg.Connection[asyncpg.Record]) -> None:
+            await connection.set_type_codec(
+                "jsonb",
+                schema="pg_catalog",
+                encoder=lambda value: value if isinstance(value, str) else json.dumps(value),
+                decoder=json.loads,
+            )
+
+        pool = await asyncpg.create_pool(_dsn(), min_size=1, max_size=3, init=configure_json)
         created_at = datetime.now(UTC)
         action_type = ActionType(namespace="example.billing", name="refund", version=1)
         binding = ApprovalRequestBinding(
@@ -82,9 +93,41 @@ def test_packaged_approval_store_migrates_and_preserves_first_decision() -> None
             assert created == repeated
             assert recorded == replayed
             assert recorded.decision == decision
-            rejected = decision.model_copy(update={"decision": AuthorityDecision.REJECT})
+            rejected_evidence = evidence.model_copy(update={"decision": AuthorityDecision.REJECT})
+            rejected = ApprovalDecisionRecord(
+                decision=AuthorityDecision.REJECT,
+                evidence=rejected_evidence,
+                recorded_at=created_at,
+            )
             with pytest.raises(ApprovalRequestError, match="already has a decision"):
                 await store.record_decision(binding.request_reference, rejected)
+
+            mismatched = decision.model_copy(
+                update={
+                    "evidence": evidence.model_copy(
+                        update={"expires_at": binding.expires_at + timedelta(seconds=1)}
+                    )
+                }
+            )
+            with pytest.raises(ApprovalRequestError, match="does not match"):
+                await store.record_decision(binding.request_reference, mismatched)
+
+            await pool.execute(
+                f'INSERT INTO "{schema}".approval_requests '  # noqa: S608 -- UUID schema.
+                "(request_reference, tenant_reference, proposal_reference, binding_data) "
+                "VALUES ('approval-request:corrupt', 'tenant:corrupt', "
+                "'proposal:corrupt', '{}'::jsonb)"
+            )
+            with pytest.raises(ApprovalRequestError, match="stored approval request data"):
+                await store.get("approval-request:corrupt")
+
+            await pool.execute(
+                f'INSERT INTO "{schema}".schema_migrations '  # noqa: S608 -- UUID schema.
+                "(version, filename, checksum) VALUES (2, 'future.sql', $1)",
+                "f" * 64,
+            )
+            with pytest.raises(MigrationStateError, match="unsupported version"):
+                await migrate_approval_postgres(pool, schema=schema)
         finally:
             await pool.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             await pool.close()

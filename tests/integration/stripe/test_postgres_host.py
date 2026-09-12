@@ -22,6 +22,7 @@ from examples.stripe_host import (  # noqa: E402
 )
 
 from threvo_actions import Money  # noqa: E402
+from threvo_actions.evidence import FrozenJsonObject  # noqa: E402
 from threvo_actions.integrations.stripe import (  # noqa: E402
     CreditDisposition,
     CreditNoteSnapshot,
@@ -32,7 +33,12 @@ from threvo_actions.integrations.stripe import (  # noqa: E402
     RefundSnapshot,
     StripeAccount,
     StripeHostActionGroup,
+    StripeHostCloseStatus,
     StripeHostExerciseDescriptor,
+    StripeHostExerciseIntent,
+    StripeHostRememberStatus,
+    StripeHostReserveStatus,
+    StripeHostScenario,
     StripePostgresHostError,
     StripeReservationStatus,
     SubscriptionCancellationSnapshot,
@@ -48,7 +54,10 @@ def _dsn() -> str:
         "THREVO_ACTIONS_STRIPE_TEST_DSN"
     )
     if value is None:
-        pytest.skip("set THREVO_ACTIONS_TEST_POSTGRES_DSN to run PostgreSQL integration tests")
+        pytest.skip(
+            "set THREVO_ACTIONS_TEST_POSTGRES_DSN or "
+            "THREVO_ACTIONS_STRIPE_TEST_DSN to run PostgreSQL integration tests"
+        )
     return value
 
 
@@ -277,6 +286,32 @@ def test_library_orchestrated_host_exercise_runs_against_postgres() -> None:
             assert report.passed is True
             assert report.execution_basis == "library_orchestrated"
             assert len(report.results) == 12
+
+            await adapter.reset(StripeHostScenario.IMMUTABLE_INTENT)
+            intent = StripeHostExerciseIntent(
+                tenant_reference="exercise-tenant:atomic-status",
+                action_group=StripeHostActionGroup.REFUNDS,
+                effect_reference="exercise-effect:atomic-status",
+                resource_reference="exercise-resource:atomic-status",
+                requester_reference="exercise-requester:atomic-status",
+                snapshot_data=FrozenJsonObject.from_mapping({"revision": 0}),
+            )
+            remembered = await asyncio.gather(adapter.remember(intent), adapter.remember(intent))
+            assert remembered.count(StripeHostRememberStatus.CREATED) == 1
+            assert remembered.count(StripeHostRememberStatus.MATCHED) == 1
+            assert (
+                await adapter.reserve(
+                    intent,
+                    not_after=datetime.now(UTC) + timedelta(minutes=1),
+                )
+                is StripeHostReserveStatus.ACQUIRED
+            )
+            closed = await asyncio.gather(
+                adapter.record_outcome(intent, outcome_data={"status": "succeeded"}),
+                adapter.record_outcome(intent, outcome_data={"status": "succeeded"}),
+            )
+            assert closed.count(StripeHostCloseStatus.RECORDED) == 1
+            assert closed.count(StripeHostCloseStatus.MATCHED) == 1
         finally:
             await pool.execute(f'DROP SCHEMA IF EXISTS "{fixture_schema}" CASCADE')
             await pool.execute(f'DROP SCHEMA IF EXISTS "{ledger_schema}" CASCADE')
