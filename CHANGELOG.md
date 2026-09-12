@@ -6,6 +6,26 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Added
+
+- Progressive Stripe composition with typed service bundles, deterministic
+  refund and billing scenarios, and per-layer runtime customization.
+- Reusable PostgreSQL Stripe repositories for refunds, subscription
+  cancellations, and credit notes, including shared customer-resource
+  exclusion, normal-writer guards, durable work discovery, and recovery leases.
+- Executable host conformance, opt-in Stripe sandbox qualification, minimized
+  evidence export, and late provider observations for uncertain outcomes.
+- Public recovery views and Pydantic AI tool bindings that expose safe next
+  steps, operator intervention, approval requests, and authenticated decisions.
+- A server-bound approval-channel reference implementation with immutable
+  PostgreSQL records and first-write-wins decision semantics.
+
+### Documentation
+
+- Adoption protocols, integration recipes, target-client guidance, recovery
+  operations, and an unreleased migration and release handoff use `uv`-first
+  installation and execution instructions.
+
 ## [0.3.2] - 2026-09-12
 
 ### Fixed

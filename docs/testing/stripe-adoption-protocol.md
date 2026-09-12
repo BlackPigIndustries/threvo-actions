@@ -47,7 +47,11 @@ The provider mutation count must remain one in the lost-response scenario. The p
 
 ## Second-action exercise
 
-After the shared billing recipes are available, the same participant integrates either period-end subscription cancellation or one supported credit-note disposition. It must reuse the same runtime services, tenant/account mapping, resource-conflict model, worker and evidence interfaces. A second bespoke lifecycle does not qualify.
+The same participant integrates either period-end subscription cancellation or
+one supported credit-note disposition using the installed billing scenario and
+concrete host recipe as references. It must reuse the same runtime services,
+tenant/account mapping, customer-resource conflict model, worker, late-case,
+approval, and evidence interfaces. A second bespoke lifecycle does not qualify.
 
 Run every applicable conformance and provider scenario for that disposition. Record unsupported host behavior as such instead of changing the library's completion predicate to fit the fixture.
 

@@ -44,7 +44,7 @@ async with pool.acquire() as connection, connection.transaction():
         tenant_reference=tenant,
         action_group=StripeHostActionGroup.REFUNDS,
         effect_reference=snapshot.effect_reference,
-        resource_reference=f"payment:{payment_reference}",
+        resource_reference=f"customer:{customer_reference}",
         snapshot_data=model_json_object(snapshot),
         not_after=deadline,
     )
@@ -57,8 +57,9 @@ before checking unresolved intents. This serializes different Stripe action
 groups that use the same resource reference. It does not block an application's
 ordinary writer by itself. Every mutation path for that canonical resource must
 take the same row lock or enforce an equivalent database guard. The reference
-schema includes a trigger that rejects updates and deletes while the payment has
-an unresolved reservation.
+schema includes a shared customer-resource row and triggers that reject payment,
+subscription, or invoice updates and deletes while that customer has an
+unresolved Stripe reservation.
 
 An exception after commit is an uncertain acknowledgement. Preserve the row and
 reconcile; never convert the exception into `UNAVAILABLE` or retry the provider
@@ -70,9 +71,10 @@ rejected. Rows are retained after closure so a spent intent cannot reopen.
 
 `examples/stripe_host` contains:
 
-- a `PostgresRefundRepository` implementing the maintained `RefundRepository`;
-- a canonical `ReferencePayment` row and guarded application schema;
-- a composition boundary that creates `RefundHost`; and
+- concrete refund, subscription-cancellation, and credit-note repositories;
+- canonical `ReferencePayment`, `ReferenceSubscription`, and `ReferenceInvoice`
+  rows mapped to one guarded customer resource;
+- composition boundaries for all three maintained host protocols; and
 - proposal-bound reference envelope encryption for evaluation.
 
 The repository uses byte-oriented JSON reads so behavior does not depend on an
@@ -95,3 +97,8 @@ database case is reported as skipped, not passed. Run the separate
 [Stripe host conformance exercise](../testing/stripe-host-conformance.md) against
 the adopter's schema and normal writer before using the repository pattern for
 live effects.
+
+The host-owned approval request and recovery case tables are reference
+application migrations, not part of the library ledger. Apply them through the
+application's normal migration system and preserve their immutable decision and
+observation records according to its retention policy.

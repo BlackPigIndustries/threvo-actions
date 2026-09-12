@@ -74,7 +74,7 @@ different evidence classes; neither silently stands in for the other.
 
 As of 12 September 2026, this implementation checkout had neither
 `THREVO_ACTIONS_STRIPE_SANDBOX_API_KEY` nor
-`THREVO_ACTIONS_STRIPE_TEST_DSN` configured. All seven collected cases were
+`THREVO_ACTIONS_STRIPE_TEST_DSN` configured. All six collected cases were
 skipped as `not_exercised`; no Stripe resource was created or changed.
 Provider qualification therefore remains pending until a retained manual
 workflow report records successful execution.

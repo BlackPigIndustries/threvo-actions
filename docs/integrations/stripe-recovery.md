@@ -1,7 +1,8 @@
 # Stripe late observations and recovery cases
 
-`actions.refunds.observe_effect(...)` performs an authorized, independently
-bound Stripe read without changing the action lifecycle. It returns a strict
+`actions.refunds.observe_effect(...)`, `actions.subscriptions.observe_effect(...)`,
+and `actions.credit_notes.observe_effect(...)` perform authorized, independently
+bound Stripe reads without changing the action lifecycle. Each returns a strict
 `StripeEffectObservation` with the proposal/effect binding, observation time,
 verification classification, minimized outcome, external correlation, and safe
 reason code.
@@ -22,9 +23,10 @@ await cases.append_authoritative_observation(observation)
 ```
 
 The runtime applies the same tenant, action-type, `can_read`, and erasure checks
-before creating the provider observation context. The refund workflow loads the
-original retained host intent and reuses the exact account, charge, amount, and
-correlation predicates used by normal verification. A mismatch or incomplete
+before creating the provider observation context. Each workflow loads the
+original retained host intent and reuses its normal exact verification
+predicates: refund binding, subscription period and correlation, or credit-note
+calculation and allocation. A mismatch or incomplete
 lookup stays unavailable or provisional; desired current state does not prove
 historical causation.
 
@@ -49,5 +51,6 @@ reference public procedure intentionally has no endpoint for releasing a claim
 after terminal uncertainty; that requires a separately reviewed host process
 with authoritative evidence and cross-intent checks.
 
-Refund observation is available first. Subscription and credit-note observation
-use the same result shape after their host/provider qualification is completed.
+All three groups return the same minimized observation envelope. The outcome
+contains only the group's safe status and optional amount; provider identifiers
+remain in the private gateway boundary.

@@ -6,6 +6,7 @@ Leave unknown or unexercised fields explicit. Do not replace them with a pass.
 
 - Evidence class:
 - Action group and disposition:
+- Public scenario factory or starting facade:
 - Outside host owner or durable pseudonym:
 - Independence statement:
 - Maintainer:
@@ -45,6 +46,7 @@ Leave unknown or unexercised fields explicit. Do not replace them with a pass.
 | Cross-tenant and unauthorized reads |  |  |  |
 | Erasure and evidence export |  |  |  |
 | Second action through shared services |  |  |  |
+| Server-bound approval callback |  |  |  |
 
 ## Assistance and failures
 

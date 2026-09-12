@@ -122,6 +122,13 @@ Construct `ActionRuntime` with `databases.action_store` and
 ports to resolve canonical state, authorize, execute the governed mutation,
 and verify the authoritative result.
 
+For Stripe actions, keep `PostgresStripeLedger` in its library-owned schema and
+put the customer-resource mapping, normal-writer guards, approval requests, and
+recovery cases in the Alembic-owned business schema. The concrete
+`examples/stripe_host` repositories show the transaction seam. Apply the Stripe
+ledger migration before the Alembic revision that starts writing ledger-backed
+intents; constructors never apply either migration.
+
 The readiness checks fail startup when migrations are pending, either account
 owns the action tables, required privileges are missing, or dangerous
 cross-lane privileges exist. They are read-only and safe to repeat.

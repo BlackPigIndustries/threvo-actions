@@ -142,5 +142,18 @@ Existing applications may continue to use `ActionToolBinding` with a fixed
 expert runtime. Registering an `ActionRecipe` never exposes a tool by itself;
 tool exposure remains an explicit integration decision.
 
+For operator and support agents, `ActionRecoveryToolBinding` exposes the same
+authorized `read_recovery` projection as direct callers. It accepts a proposal
+reference, resolves `ReadContext` from trusted dependencies, and returns safe
+conditions and recommended steps. Those steps remain advice; the tool cannot
+approve, execute, reconcile, acknowledge a case, or supply success evidence.
+The Stripe reference app enables this extra tool only through its explicit
+`agent_recovery_enabled` setting.
+
+Human decisions that span requests should use the
+[authenticated approval-channel recipe](approval-channels.md). Pydantic AI's
+framework approval remains continuation control and never replaces the host's
+server-bound `AuthorityEvidence`.
+
 See the [Pydantic AI API reference](../reference/pydantic-ai.md) for every
 integration type.

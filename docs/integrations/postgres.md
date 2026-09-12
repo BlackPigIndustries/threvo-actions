@@ -151,6 +151,12 @@ runtime = ActionRuntime(
 )
 ```
 
+Create a separate `PostgresActionWorkSource(runtime_pool)` when a worker needs
+bounded, tenant-scoped discovery of expired, executable, or due verification
+work. The discovery source reads existing lifecycle columns and does not become
+the queue or acquire execution authority. Pair it with a host-owned lease
+schedule as shown in the [recovery worker recipe](recovery-worker.md).
+
 Here, `clock` implements `Clock`, `identifiers` implements
 `IdentifierProvider`, and the two DSNs come from your application's secret
 configuration. The complete program above supplies concrete versions.

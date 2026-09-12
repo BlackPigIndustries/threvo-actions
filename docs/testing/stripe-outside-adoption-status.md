@@ -20,8 +20,9 @@ authorize use of:
 When that dependency exists, follow the
 [outside-host protocol](stripe-adoption-protocol.md) and create a new record
 from the [evidence template](templates/stripe-adoption-entry.md). Preserve
-failed, assisted, and unexercised scenarios. After billing qualification, the
-same participant must repeat the second-action exercise through shared runtime,
+failed, assisted, and unexercised scenarios. The billing repositories and
+runners are now implemented; the same participant must repeat the second-action
+exercise through shared runtime,
 worker, conflict, and evidence services.
 
 Until both exercises are recorded, the library can describe its implemented
