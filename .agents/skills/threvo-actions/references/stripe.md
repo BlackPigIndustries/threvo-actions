@@ -65,6 +65,9 @@ could not complete or its binding was inconsistent.
 Treat authenticated webhooks as lookup hints and deduplicate them. Keep a
 durable sweep so lost jobs or events do not strand proposals. Late failures
 belong to a separate host case; do not rewrite old receipts or replay a refund.
+Use the authorized `actions.refunds.observe_effect(...)` read for those cases.
+It reuses normal correlation checks without consuming a verification attempt,
+settling the runtime, recording an outcome, or releasing the host claim.
 Back off failed or unchanged recovery attempts from the end of processing;
 claim each bounded attempt immediately before running it. Keep
 order writers coordinated with unresolved refund reservations. Protection

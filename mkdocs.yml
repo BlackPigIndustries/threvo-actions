@@ -98,6 +98,7 @@ nav:
       - Stripe billing actions: integrations/stripe-billing-actions.md
       - Stripe PostgreSQL host: integrations/stripe-postgres-host.md
       - Recovery worker: integrations/recovery-worker.md
+      - Stripe recovery cases: integrations/stripe-recovery.md
       - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md

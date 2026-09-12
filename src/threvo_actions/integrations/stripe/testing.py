@@ -187,6 +187,7 @@ class StripeScenarioGateway:
         self.submissions = 0
         self.refund: RefundObservation | None = None
         self.refunded_minor = 0
+        self.refund_reads = 0
 
     async def charge(self, intent: RefundIntent) -> ChargeObservation:
         return ChargeObservation(
@@ -224,6 +225,7 @@ class StripeScenarioGateway:
 
     async def refunds(self, intent: RefundIntent, after: str | None) -> RefundPage:
         del intent, after
+        self.refund_reads += 1
         return RefundPage(
             refunds=() if self.refund is None else (self.refund,),
             has_more=False,

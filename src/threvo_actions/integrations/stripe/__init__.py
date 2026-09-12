@@ -91,6 +91,12 @@ from .postgres_migrations import (
     render_stripe_postgres_migration,
     stripe_postgres_migration,
 )
+from .recovery import (
+    StripeCaseAcknowledgement,
+    StripeEffectObservation,
+    StripeObservedOutcome,
+    StripeRecoveryCase,
+)
 from .subscriptions import (
     StripeSubscriptionGateway,
     StripeSubscriptions,
@@ -165,6 +171,7 @@ __all__ = [
     "StripeHostScenarioDisposition",
     "StripeHostScenarioResult",
     "StripeBoundaryError",
+    "StripeCaseAcknowledgement",
     "StripeChargeId",
     "StripeRefundConnector",
     "StripeRefundGateway",
@@ -217,6 +224,9 @@ __all__ = [
     "InvoiceObservation",
     "StripeCreditNoteGateway",
     "StripeCreditNotes",
+    "StripeEffectObservation",
+    "StripeObservedOutcome",
+    "StripeRecoveryCase",
     "assert_stripe_host_conforms",
     "from_services",
     "migrate_stripe_postgres",

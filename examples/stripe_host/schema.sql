@@ -25,6 +25,38 @@ CREATE TABLE stripe_host_app.recovery_schedule (
     PRIMARY KEY (tenant_reference, proposal_reference)
 );
 
+CREATE TABLE stripe_host_app.recovery_cases (
+    tenant_reference text NOT NULL,
+    case_reference text NOT NULL,
+    proposal_reference text NOT NULL,
+    semantic_effect_reference text NOT NULL,
+    action_group text NOT NULL,
+    opened_at timestamptz NOT NULL,
+    retain_until timestamptz NOT NULL,
+    PRIMARY KEY (tenant_reference, case_reference)
+);
+
+CREATE TABLE stripe_host_app.recovery_case_observations (
+    tenant_reference text NOT NULL,
+    case_reference text NOT NULL,
+    observation_reference text NOT NULL,
+    observed_at timestamptz NOT NULL,
+    observation_data jsonb NOT NULL,
+    PRIMARY KEY (tenant_reference, case_reference, observation_reference),
+    FOREIGN KEY (tenant_reference, case_reference)
+        REFERENCES stripe_host_app.recovery_cases (tenant_reference, case_reference)
+);
+
+CREATE TABLE stripe_host_app.recovery_case_acknowledgements (
+    tenant_reference text NOT NULL,
+    case_reference text NOT NULL,
+    operator_reference text NOT NULL,
+    acknowledged_at timestamptz NOT NULL,
+    PRIMARY KEY (tenant_reference, case_reference),
+    FOREIGN KEY (tenant_reference, case_reference)
+        REFERENCES stripe_host_app.recovery_cases (tenant_reference, case_reference)
+);
+
 CREATE OR REPLACE FUNCTION stripe_host_app.guard_reserved_payment()
 RETURNS trigger
 LANGUAGE plpgsql

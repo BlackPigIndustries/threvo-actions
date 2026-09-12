@@ -16,6 +16,7 @@ from ...registry import (
 )
 from ...runtime import ActionRuntime, SystemClock
 from ._operation import _definition
+from .conformance import StripeHostActionGroup
 from .credit_notes import (
     CreditNoteConfig,
     CreditNoteOutcome,
@@ -34,6 +35,7 @@ from .models import (
     RefundReservationStatus,
     RefundSnapshot,
 )
+from .recovery import StripeEffectObservation, StripeObservedOutcome
 from .subscriptions import (
     StripeSubscriptions,
     SubscriptionCancellationConfig,
@@ -211,6 +213,14 @@ class _RefundWorkflow:
         return result
 
     async def verify(self, *, context: ExecutionContext) -> VerificationResult[RefundOutcome]:
+        result = await self.observe(context=context)
+        if result.result is not None:
+            await self.host.repository.record_outcome(
+                context.tenant_reference, context.semantic_effect_reference, result.result
+            )
+        return result
+
+    async def observe(self, *, context: ExecutionContext) -> VerificationResult[RefundOutcome]:
         snapshot = await self.host.repository.load(
             context.tenant_reference, context.semantic_effect_reference
         )
@@ -219,14 +229,10 @@ class _RefundWorkflow:
             or snapshot.effect_reference != context.semantic_effect_reference
         ):
             return VerificationResult(
-                status=VerificationStatus.TARGET_UNAVAILABLE, reason_code="refund_intent_mismatch"
+                status=VerificationStatus.TARGET_UNAVAILABLE,
+                reason_code="refund_intent_mismatch",
             )
-        result = await self.connector.verify(snapshot.intent)
-        if result.result is not None:
-            await self.host.repository.record_outcome(
-                context.tenant_reference, context.semantic_effect_reference, result.result
-            )
-        return result
+        return await self.connector.verify(snapshot.intent)
 
     async def authorize_erasure(self, proposal_reference: str, *, context: ReadContext) -> bool:
         return False
@@ -244,9 +250,11 @@ class StripeRefunds:
         *,
         definition: ActionDefinition[RefundRequest, RefundSnapshot, RefundPreview, RefundOutcome],
         runtime: ActionRuntime,
+        workflow: _RefundWorkflow,
     ) -> None:
         self.definition = definition
         self.runtime = runtime
+        self._workflow = workflow
 
     async def prepare(
         self,
@@ -308,6 +316,33 @@ class StripeRefunds:
     ) -> ActionRecoveryView:
         return await self.runtime.read_recovery(
             self.definition, proposal_reference=proposal_reference, context=context
+        )
+
+    async def observe_effect(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> StripeEffectObservation:
+        observation_context = await self.runtime.observation_context(
+            self.definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+        result = await self._workflow.observe(context=observation_context)
+        return StripeEffectObservation(
+            action_group=StripeHostActionGroup.REFUNDS,
+            proposal_reference=proposal_reference,
+            semantic_effect_reference=observation_context.semantic_effect_reference,
+            observed_at=observation_context.observed_at,
+            verification_status=result.status,
+            outcome=(
+                None
+                if result.result is None
+                else StripeObservedOutcome(
+                    status=result.result.status,
+                    amount=result.result.amount,
+                )
+            ),
+            external_reference=result.external_reference,
+            reason_code=result.reason_code,
         )
 
 
@@ -521,4 +556,8 @@ class StripeActions:
             verification_lease_duration=settings.verification_lease_duration,
             max_verification_attempts=settings.max_verification_attempts,
         )
-        self._refunds = StripeRefunds(definition=definition, runtime=runtime)
+        self._refunds = StripeRefunds(
+            definition=definition,
+            runtime=runtime,
+            workflow=workflow,
+        )

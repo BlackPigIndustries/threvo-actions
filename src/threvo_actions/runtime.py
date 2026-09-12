@@ -978,6 +978,24 @@ class ActionRuntime:
             ),
         )
 
+    async def observation_context(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ExecutionContext:
+        """Authorize a read-only target observation and bind it to stored identity."""
+
+        record = await self._required(context.tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if not await definition.authorization.can_read(proposal_reference, context=context):
+            raise ProposalNotFoundError
+        if record.erasure_pending_at is not None or record.erased_at is not None:
+            raise ProposalNotFoundError
+        return self._execution_context(record, observed_at=self._clock.now())
+
     async def _read_effect_owner(
         self,
         *,
