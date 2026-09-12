@@ -321,6 +321,13 @@ class StripeHostExerciseReport(ActionModel):
     profile_identifier: SafeReference
     results: tuple[StripeHostScenarioResult, ...] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def includes_every_scenario_once(self) -> StripeHostExerciseReport:
+        scenarios = tuple(result.scenario for result in self.results)
+        if len(scenarios) != len(StripeHostScenario) or set(scenarios) != set(StripeHostScenario):
+            raise ValueError("exercise report must include every scenario exactly once")
+        return self
+
     @property
     def passed(self) -> bool:
         return all(
@@ -499,8 +506,18 @@ async def _exercise_scenario(
                 checkpoint=checkpoint,
             )
         )
+        checkpoint_task = asyncio.create_task(checkpoint.wait_until_checked())
         try:
-            await checkpoint.wait_until_checked()
+            completed, _ = await asyncio.wait(
+                (checkpoint_task, writer_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if writer_task in completed:
+                await writer_task
+                raise StripeHostConformanceError(
+                    f"stripe_host:{scenario.value}:writer_checkpoint_not_held"
+                )
+            await checkpoint_task
             while_writer_open = await adapter.reserve(
                 first,
                 not_after=future,
@@ -515,9 +532,10 @@ async def _exercise_scenario(
             normal = await writer_task
         finally:
             checkpoint.release()
-            if not writer_task.done():
-                writer_task.cancel()
-                await asyncio.gather(writer_task, return_exceptions=True)
+            for task in (checkpoint_task, writer_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(checkpoint_task, writer_task, return_exceptions=True)
         reserved = await adapter.reserve(first, not_after=future)
         _require(scenario, normal is StripeHostNormalWriteStatus.APPLIED, "writer_not_applied")
         _require(scenario, reserved is StripeHostReserveStatus.STALE, "writer_drift_not_detected")

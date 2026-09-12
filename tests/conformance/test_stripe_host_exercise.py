@@ -14,6 +14,7 @@ from threvo_actions.integrations.stripe import (
     StripeHostConformanceError,
     StripeHostExerciseDescriptor,
     StripeHostExerciseIntent,
+    StripeHostExerciseReport,
     StripeHostIntentObservation,
     StripeHostIntentPhase,
     StripeHostNormalWriteCheckpoint,
@@ -21,6 +22,8 @@ from threvo_actions.integrations.stripe import (
     StripeHostRememberStatus,
     StripeHostReserveStatus,
     StripeHostScenario,
+    StripeHostScenarioDisposition,
+    StripeHostScenarioResult,
     assert_stripe_host_exercise,
 )
 
@@ -238,6 +241,35 @@ def test_adapter_cannot_self_declare_a_scenario_passed() -> None:
     assert adapter.calls.count("reserve") >= 14
 
 
+@pytest.mark.parametrize(
+    "results",
+    [
+        (
+            StripeHostScenarioResult(
+                scenario=StripeHostScenario.IMMUTABLE_INTENT,
+                disposition=StripeHostScenarioDisposition.PASSED,
+            ),
+        ),
+        tuple(
+            StripeHostScenarioResult(
+                scenario=StripeHostScenario.IMMUTABLE_INTENT,
+                disposition=StripeHostScenarioDisposition.PASSED,
+            )
+            for _ in StripeHostScenario
+        ),
+    ],
+)
+def test_exercise_report_requires_every_scenario_once(
+    results: tuple[StripeHostScenarioResult, ...],
+) -> None:
+    with pytest.raises(ValueError, match="every scenario exactly once"):
+        StripeHostExerciseReport(
+            action_group=StripeHostActionGroup.REFUNDS,
+            profile_identifier="memory:incomplete-report",
+            results=results,
+        )
+
+
 def test_library_rejects_a_broken_race_implementation() -> None:
     class BrokenRaceStore(ExercisedStore):
         async def reserve(
@@ -328,6 +360,29 @@ def test_library_rejects_a_non_atomic_normal_writer() -> None:
     assert captured.value.code == (
         "stripe_host:normal_writer_exclusion:reservation_bypassed_writer_lock"
     )
+
+
+def test_writer_failure_before_checkpoint_is_an_adapter_error() -> None:
+    class FailingWriterStore(ExercisedStore):
+        async def normal_write(
+            self,
+            *,
+            tenant_reference: str,
+            resource_reference: str,
+            checkpoint: StripeHostNormalWriteCheckpoint,
+        ) -> StripeHostNormalWriteStatus:
+            raise RuntimeError("connection failed before lock acquisition")
+
+    with pytest.raises(StripeHostConformanceError) as captured:
+        asyncio.run(
+            assert_stripe_host_exercise(
+                FailingWriterStore(),
+                clock=FixedClock(),
+                scenario_timeout=timedelta(seconds=1),
+            )
+        )
+
+    assert captured.value.code == "stripe_host:normal_writer_exclusion:adapter_error"
 
 
 def test_adapter_timeout_is_reported_as_adapter_error() -> None:

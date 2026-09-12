@@ -37,6 +37,8 @@ and uses Semantic Versioning for the supported surface described in
   on the persisted first-write evidence, even when their timestamps differ.
 - Distinguish an adapter's own timeout from expiry of the Stripe host exercise's
   configurable scenario deadline.
+- Reject incomplete or duplicate Stripe exercise reports, and surface an
+  ordinary-writer failure immediately if it occurs before the race checkpoint.
 
 ### Added
 
