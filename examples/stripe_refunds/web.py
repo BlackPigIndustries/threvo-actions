@@ -17,6 +17,7 @@ from pydantic_ai.usage import UsageLimits
 from examples.stripe_host.approvals import ApprovalRequestError, ApprovalRequestView
 from threvo_actions import (
     ActionOperationResult,
+    AuthorityDecision,
     AuthorizationDeniedError,
     ProposalNotFoundError,
     ProposalView,
@@ -165,7 +166,7 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
         return await service.decide_approval_request(
             who,
             request_reference,
-            callback.decision,
+            AuthorityDecision(callback.decision),
         )
 
     @app.get("/api/proposals/{proposal}/recovery")

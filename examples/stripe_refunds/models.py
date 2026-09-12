@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, model_validator
 
-from threvo_actions import AuthorityDecision, Money
+from threvo_actions import Money
 from threvo_actions.integrations.stripe import RefundSnapshot, StripeAccount, StripeChargeId
 from threvo_actions.models import CurrencyCode, ExperimentalModel, SafeReference
 
@@ -70,7 +70,7 @@ class ApprovalRequestCommand(ExperimentalModel):
 
 
 class ApprovalCallback(ExperimentalModel):
-    decision: AuthorityDecision
+    decision: Literal["approve", "reject"]
 
 
 class IntentRecord(ExperimentalModel):

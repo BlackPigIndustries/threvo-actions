@@ -497,8 +497,20 @@ def test_recovery_sweeps_do_not_starve_work_behind_duplicate_proposals():
             for _ in range(102):
                 proposal = await service.prepare(requester, command())
                 await service.decide(approver, proposal.proposal_reference, True)
+            original_order = await service.repository.order("tenant:one", "order:one")
+            await service.repository.add_order(
+                original_order.model_copy(
+                    update={"order_reference": "order:later", "charge_id": "ch_later"}
+                )
+            )
             legitimate = await service.prepare(
-                requester, command().model_copy(update={"intent_reference": "intent:later"})
+                requester,
+                command().model_copy(
+                    update={
+                        "intent_reference": "intent:later",
+                        "order_reference": "order:later",
+                    }
+                ),
             )
             await service.decide(approver, legitimate.proposal_reference, True)
             await service.sweep()
@@ -524,7 +536,7 @@ def test_failure_backoff_starts_after_the_attempt_finishes(monkeypatch):
                 nonlocal attempts
                 attempts += 1
                 await service.repository.pool.execute(
-                    """UPDATE stripe_refund_app.work_schedule
+                    """UPDATE stripe_refund_app.recovery_schedule
                        SET next_attempt_at=CURRENT_TIMESTAMP - interval '1 second'"""
                 )
                 raise AppError("unavailable")
@@ -533,7 +545,7 @@ def test_failure_backoff_starts_after_the_attempt_finishes(monkeypatch):
             await service.sweep()
             seconds = await service.repository.pool.fetchval(
                 """SELECT EXTRACT(EPOCH FROM next_attempt_at - CURRENT_TIMESTAMP)
-                   FROM stripe_refund_app.work_schedule WHERE proposal_reference=$1""",
+                   FROM stripe_refund_app.recovery_schedule WHERE proposal_reference=$1""",
                 proposal.proposal_reference,
             )
             assert seconds > 20

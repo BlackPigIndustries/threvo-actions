@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS stripe_intent_monitoring ON stripe_refund_app.intents
     (tenant_reference, next_check_at) WHERE phase IN ('submitted', 'settled');
 CREATE INDEX IF NOT EXISTS stripe_intent_cases ON stripe_refund_app.intents
     (tenant_reference, effect_reference) WHERE case_open;
-CREATE TABLE IF NOT EXISTS stripe_refund_app.work_schedule (
+CREATE TABLE IF NOT EXISTS stripe_refund_app.recovery_schedule (
     tenant_reference text NOT NULL,
     proposal_reference text NOT NULL,
     lease_token text NOT NULL,

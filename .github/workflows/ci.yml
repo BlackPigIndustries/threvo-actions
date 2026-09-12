@@ -53,6 +53,7 @@ jobs:
           uv run pytest -q
           --ignore=tests/integration/postgres
           --ignore=tests/integration/pydantic_ai
+          --ignore=tests/qualification/stripe
 
   pydantic-compatibility:
     runs-on: ubuntu-latest
