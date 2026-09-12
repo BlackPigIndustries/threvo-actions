@@ -25,6 +25,12 @@ from .canonical import (
     canonicalize_v1,
     commitment_payload_v1,
 )
+from .evidence import (
+    ActionEvidenceBundle,
+    EvidenceValidationReport,
+    render_evidence_html,
+    validate_evidence_bundle,
+)
 from .models import (
     ActionType,
     AuthoritativeTarget,
@@ -57,6 +63,7 @@ from .receipts import (
     VerificationReceipt,
     VerificationReceiptStatus,
 )
+from .recovery import ActionRecoveryView
 from .registry import (
     ActionDefinition,
     ActionNotRegisteredError,
@@ -118,9 +125,11 @@ __all__ = [
     "Action",
     "ActionConfigurationError",
     "ActionDefinition",
+    "ActionEvidenceBundle",
     "ActionNotRegisteredError",
     "ActionOperationResult",
     "ActionRegistry",
+    "ActionRecoveryView",
     "ActionRuntime",
     "ActionStore",
     "ActionType",
@@ -152,6 +161,7 @@ __all__ = [
     "EffectKind",
     "EventSink",
     "EvidenceConsumer",
+    "EvidenceValidationReport",
     "ExecutionContext",
     "ExecutionReceipt",
     "ExecutionReceiptStatus",
@@ -216,9 +226,11 @@ __all__ = [
     "canonicalize_v1",
     "commitment_payload_v1",
     "resolve_runtime_revision",
+    "render_evidence_html",
     "validate_authority_evidence",
+    "validate_evidence_bundle",
     "validate_proposal_create",
     "validate_proposal_update",
 ]
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"

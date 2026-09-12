@@ -13,6 +13,7 @@ from threvo_actions.integrations.stripe import (
     StripeHostScenarioDisposition,
     StripeHostScenarioResult,
     assert_stripe_host_conforms,
+    collect_stripe_host_attestation,
 )
 
 
@@ -74,13 +75,24 @@ def test_complete_group_driver_returns_strict_passing_report(
 ) -> None:
     driver = Driver(action_group=action_group)
 
-    report = asyncio.run(assert_stripe_host_conforms(driver))
+    with pytest.warns(DeprecationWarning):
+        report = asyncio.run(assert_stripe_host_conforms(driver))
 
     assert report.passed is True
     assert report.action_group is action_group
     assert report.schema_version == "stripe-host-conformance/v1"
+    assert report.assessment_basis == "driver_attestation"
+    assert report.conformance_established is False
     assert tuple(result.scenario for result in report.results) == tuple(StripeHostScenario)
     assert driver.seen == list(StripeHostScenario)
+
+
+def test_attestation_name_does_not_claim_library_execution() -> None:
+    report = asyncio.run(collect_stripe_host_attestation(Driver()))
+
+    assert report.passed is True
+    assert report.conformance_established is False
+    assert report.assessment_basis == "driver_attestation"
 
 
 @pytest.mark.parametrize(
@@ -101,7 +113,7 @@ def test_missing_required_capability_cannot_produce_a_passing_report(capability:
     driver = Driver(capabilities=StripeHostCapabilities.model_validate(values))
 
     with pytest.raises(StripeHostConformanceError) as caught:
-        asyncio.run(assert_stripe_host_conforms(driver))
+        asyncio.run(collect_stripe_host_attestation(driver))
 
     assert caught.value.code == f"stripe_host:capability:{capability}:not_exercised"
     assert driver.seen == []
@@ -120,7 +132,7 @@ def test_broken_or_unexercised_scenario_fails_closed(
     )
 
     with pytest.raises(StripeHostConformanceError) as caught:
-        asyncio.run(assert_stripe_host_conforms(driver))
+        asyncio.run(collect_stripe_host_attestation(driver))
 
     assert caught.value.code == f"stripe_host:same_effect_race:{disposition.value}"
 
@@ -129,7 +141,7 @@ def test_driver_exception_is_sanitized() -> None:
     driver = Driver(raises=StripeHostScenario.LOST_RESERVATION_ACKNOWLEDGEMENT)
 
     with pytest.raises(StripeHostConformanceError) as caught:
-        asyncio.run(assert_stripe_host_conforms(driver))
+        asyncio.run(collect_stripe_host_attestation(driver))
 
     assert caught.value.code == "stripe_host:lost_reservation_acknowledgement:driver_error"
     assert "database-secret-value" not in str(caught.value)
@@ -143,14 +155,14 @@ def test_driver_cancellation_is_not_converted_to_a_conformance_failure() -> None
             raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(assert_stripe_host_conforms(CancelledDriver()))
+        asyncio.run(collect_stripe_host_attestation(CancelledDriver()))
 
 
 def test_mismatched_scenario_result_is_rejected() -> None:
     driver = Driver(mismatch=StripeHostScenario.SAME_EFFECT_RACE)
 
     with pytest.raises(StripeHostConformanceError) as caught:
-        asyncio.run(assert_stripe_host_conforms(driver))
+        asyncio.run(collect_stripe_host_attestation(driver))
 
     assert caught.value.code == "stripe_host:same_effect_race:mismatched_result"
 

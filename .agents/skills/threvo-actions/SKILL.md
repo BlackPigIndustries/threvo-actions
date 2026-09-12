@@ -4,7 +4,7 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.4.0"
+  version: "0.4.1"
 ---
 
 # Threvo Actions
@@ -135,7 +135,7 @@ For SDK-backed Stripe refunds, install the optional `stripe` extra through uv an
 durable intent reservation and reconciliation scheduling in the host. Never
 resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
 
-At the current supported 0.3.x surface, prefer `StripeActions.refunds` for a new direct-charge
+At the current supported 0.4.1 surface, prefer `StripeActions.refunds` for a new direct-charge
 refund integration. Bind
 `RefundHost` to the existing authorization port and a durable `RefundRepository`,
 declare `RefundPolicy` currency ceilings and `StripeRefundSettings` authority
@@ -148,17 +148,23 @@ services, pass the host clock, identifiers, event sink, retention store and exac
 revision through `StripeActions`; one runtime and clock are shared by all groups.
 Map an observed pending refund to provisional absence, not target unavailability.
 
-The 0.3.x surface also includes independent `StripeActions.subscriptions` and
+The 0.4.1 surface also includes independent `StripeActions.subscriptions` and
 `StripeActions.credit_notes` groups. Read the billing section in
 [references/stripe.md](references/stripe.md). Cancellation scheduling is not
 termination; invoice reduction and customer balance credit are not cash refunds.
 Do not expose raw SDK calls, invent an allocation or automatically email customers.
 Start evaluation with `stripe_refund_scenario()` or
 `stripe_billing_scenario()`, then replace policy, gateway, host services, and
-runtime services one layer at a time. Use `read_recovery` for actionable
-operator state, `observe_effect` for separately attributed late reads, and
-`export_evidence` for an authorized unsigned projection. None grants authority
-or makes a provider mutation safe to resend.
+runtime services one layer at a time. Stripe action groups expose
+`observe_effect` for separately attributed late provider reads. The core runtime
+and gradual-reveal `BoundAction` expose `read_recovery`, `export_evidence`, and
+`observation_context`; the last is the authorized input for a custom read-only
+observer. None grants authority or makes a provider mutation safe to resend.
+
+Use `assert_stripe_host_exercise` for repository qualification. Its adapter
+provides primitive operations while the library schedules and evaluates every
+scenario. The deprecated `assert_stripe_host_conforms` only validates a legacy
+driver self-attestation and never establishes that repository tests ran.
 
 ## Add an agent framework only at the edge
 

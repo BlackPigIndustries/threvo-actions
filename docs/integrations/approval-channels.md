@@ -1,57 +1,75 @@
-# Authenticated approval channels
+# Authenticated approval requests
 
-The Stripe reference host demonstrates a first-party approval request and
-callback boundary without making message delivery part of the action runtime.
-The host may put an opaque request reference in email, chat, or its own UI. The
-recipient must still authenticate to the host before reading or deciding it.
+Version 0.4.1 includes an installable, transport-neutral reference for binding
+an approval request to one exact proposal. It is available from
+**threvo_actions.integrations.approval_channels** and does not require the
+source repository's examples directory.
+
+The package provides:
+
+- strict ApprovalRequestBinding, ApprovalRequestView, ApprovalDecisionRecord,
+  and ApprovalRequestRecord models;
+- PostgresApprovalRequestStore with immutable bindings and first-write-wins
+  decisions; and
+- a checksummed migration plus explicit render and migrate functions.
+
+Install the PostgreSQL dependency with:
+
+    uv add "threvo-actions[postgres]==0.4.1"
+
+Apply the migration in a serialized deployment step. Constructors perform no
+I/O and never migrate automatically:
+
+    from threvo_actions.integrations.approval_channels import (
+        migrate_approval_postgres,
+    )
+
+    await migrate_approval_postgres(pool, schema="application_approvals")
 
 ## Server-owned binding
 
-`POST /api/approval-requests` accepts only a proposal reference and an intended
-approver reference from an authenticated requester. Before returning an opaque
-request reference, the host persists:
+The host creates the request only after authenticating the requester and
+loading the current proposal. It stores:
 
 - tenant and proposal instance;
 - semantic effect and action type;
 - exact proposal commitment;
 - intended authenticated authority;
-- authority audience and channel assurance;
+- authority audience and channel assurance; and
 - creation and expiry times.
 
-The callback accepts only the request reference in the URL and an `approve` or
-`reject` decision. It cannot submit tenant, authority, commitment, audience,
-assurance, or effect fields. Those fields are loaded from the immutable binding
-and compared with the current proposal before the existing
-`record_authority(...)` boundary is called.
+The URL or message sent through email, chat, or another transport contains only
+an opaque request reference. A callback supplies that reference plus approve or
+reject. It must not supply tenant, authority, commitment, audience, assurance,
+or effect fields.
 
-```json
-{"decision": "approve"}
-```
+Before recording authority, the host:
 
-The first decision is persisted with its exact `AuthorityEvidence` before it is
-forwarded to the runtime. A repeated callback reuses those bytes. Concurrent
-matching callbacks converge on the first record; a contradictory callback is
-refused. If the HTTP response is lost after authority was recorded, a retry is
-an idempotent replay. If it was lost before authority recording, the same
-persisted evidence is retried. Current approver rights are evaluated again by
-the action authorization port on every runtime call.
+1. authenticates the person following the request;
+2. loads the immutable binding by opaque reference;
+3. verifies the authenticated identity is the intended authority;
+4. reloads the proposal and compares its tenant, action, effect, commitment,
+   audience, assurance, and expiry;
+5. evaluates current approval rights; and
+6. persists the exact decision and AuthorityEvidence before calling
+   record_authority.
 
-## Host responsibilities
+Repeated matching callbacks reuse the persisted evidence. Concurrent matching
+callbacks converge on the first record. A contradictory callback is refused.
+If the HTTP response is lost, retrying uses the same bound evidence.
 
-The example bearer tokens are sandbox credentials. A production host must bind
-the request to its authenticated tenant session, protect the opaque reference in
-transit, rate-limit reads and callbacks, and record access in its audit system.
-It must also define how approver revocation changes `can_decide`. A delivery
-service receives only the opaque request reference and a host URL; it does not
-receive protected snapshots, provider IDs, or authority evidence.
+## What the package does not do
 
-Expiry never grants an extension. The host refuses a first decision after the
-bound proposal expires. Approval records do not execute Stripe operations;
-normal runtime execution and independent verification remain required.
+The store does not authenticate users, send notifications, authorize decisions,
+or execute an action. The host owns those responsibilities. A delivery provider
+never becomes business authority and should receive only the opaque reference
+and host URL.
 
-`examples/stripe_host/approvals.py` contains the Pydantic records and PostgreSQL
-store. `examples/stripe_host/migrations/approval_requests.sql` is the reusable
-host migration, and the refund reference application includes the same table in
-its local schema. Third-party webhook signatures and identity mappings require
-a channel-specific design; they are outside this first-party recipe.
+The host must bind every read and decision to its authenticated tenant session,
+protect references in transit, rate-limit endpoints, define approver-revocation
+behavior, and record access under its audit policy.
 
+The source repository's Stripe refund application demonstrates the complete
+HTTP wiring. Its bearer tokens are sandbox credentials. The application imports
+the same installed models and PostgreSQL store that adopters receive from the
+wheel.

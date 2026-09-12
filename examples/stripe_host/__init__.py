@@ -16,6 +16,7 @@ from .approvals import (
     ApprovalRequestView,
     PostgresApprovalRequestStore,
 )
+from .exercise import PostgresStripeHostExerciseAdapter
 from .models import ReferenceInvoice, ReferencePayment, ReferenceSubscription
 from .repositories import (
     PostgresCreditNoteRepository,
@@ -32,6 +33,7 @@ __all__ = [
     "PostgresCreditNoteRepository",
     "PostgresApprovalRequestStore",
     "PostgresRefundRepository",
+    "PostgresStripeHostExerciseAdapter",
     "PostgresSubscriptionCancellationRepository",
     "ReferenceInvoice",
     "ReferencePayment",

@@ -3,6 +3,9 @@
 `ActionRuntime.read_recovery(...)` explains the current operational condition
 of one authorized proposal without changing it. Stripe action groups expose the
 same call as `read_recovery(proposal_reference, context=...)`.
+The experimental gradual-reveal `BoundAction` forwards the same operation and
+also forwards `export_evidence` and `observation_context`; callers do not need
+private binding state.
 
 The returned `ActionRecoveryView` is a strict, frozen
 `threvo.actions.recovery/v1` projection. It includes the source revision,
@@ -60,5 +63,6 @@ Missing proposals, action-type mismatches, denied reads, and cross-tenant reads
 use the existing masked `ProposalNotFoundError` contract. Erased records omit
 expiry, scheduling, attempts, reason, last observation, and owner details.
 
-Import these experimental types from `threvo_actions.recovery` while the v1
-projection is being qualified. Unknown fields and coercions fail validation.
+`ActionRecoveryView` is also exported from `threvo_actions` in 0.4.1. Import the
+complete supporting vocabulary from `threvo_actions.recovery`. Unknown fields
+and coercions fail validation.

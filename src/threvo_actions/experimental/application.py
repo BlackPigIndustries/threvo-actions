@@ -23,6 +23,7 @@ from pydantic import (
 
 from ..authority import AuthorityEvidence
 from ..canonical import CommitmentProviderPort, ProtectionCodecPort
+from ..evidence import ActionEvidenceBundle
 from ..models import (
     ActionType,
     AuthoritativeTarget,
@@ -34,11 +35,13 @@ from ..models import (
     SafeReference,
 )
 from ..receipts import EventSink
+from ..recovery import ActionRecoveryView
 from ..registry import (
     ActionDefinition,
     AuthorityEvaluatorPort,
     AuthorizationPort,
     DefinitionConformanceError,
+    ExecutionContext,
     GovernedExecutorPort,
     PreparationPort,
     ReadContext,
@@ -339,6 +342,51 @@ class BoundAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     ) -> ProposalView:
         definition, runtime = self._state.parts()
         return await runtime.read(
+            definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+
+    async def read_recovery(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionRecoveryView:
+        """Describe safe recovery options through the bound action."""
+
+        definition, runtime = self._state.parts()
+        return await runtime.read_recovery(
+            definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+
+    async def export_evidence(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionEvidenceBundle:
+        """Export one authorized, minimized proposal revision."""
+
+        definition, runtime = self._state.parts()
+        return await runtime.export_evidence(
+            definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+
+    async def observation_context(
+        self,
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ExecutionContext:
+        """Authorize a read-only target observation for a custom adapter."""
+
+        definition, runtime = self._state.parts()
+        return await runtime.observation_context(
             definition,
             proposal_reference=proposal_reference,
             context=context,

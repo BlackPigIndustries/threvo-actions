@@ -22,6 +22,7 @@ from threvo_actions.integrations.stripe import (
     StripePostgresHostError,
     render_stripe_postgres_migration,
     stripe_postgres_migration,
+    stripe_resource_lock_reference,
 )
 
 
@@ -109,6 +110,15 @@ class LedgerConnection(Connection):
             self.row["outcome_data"] = encoded
             return "UPDATE 1"
         return "UPDATE 0"
+
+
+def test_resource_lock_reference_is_postgres_safe_and_boundary_unambiguous() -> None:
+    first = stripe_resource_lock_reference("tenant:a", "resource:b:c")
+    second = stripe_resource_lock_reference("tenant:a:resource", "b:c")
+
+    assert "\0" not in first
+    assert first != second
+    assert json.loads(first) == ["tenant:a", "resource:b:c"]
 
 
 def test_ledger_constructor_has_no_database_side_effect() -> None:

@@ -185,6 +185,7 @@ def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None
         "v0.3.1",
         "v0.3.2",
         "v0.4.0",
+        "v0.4.1",
     ]
 
 
@@ -234,6 +235,18 @@ def test_release_040_adoption_bypass_is_explicit_default_off_and_not_reusable() 
     assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
     assert "Using the repository owner's one-time v0.4.0 adoption-gate bypass." in workflow
     assert "release=v0.4.0" not in adoption_record
+
+
+def test_release_041_corrective_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert "skip_adoption_gate:" in workflow
+    assert "default: false" in workflow
+    assert 'test "$RELEASE_TAG" = "v0.4.1"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "one-time v0.4.1 corrective-release bypass" in workflow
+    assert "release=v0.4.1" not in adoption_record
 
 
 def test_contributor_release_order_matches_manual_candidate_promotion() -> None:
@@ -397,9 +410,11 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "Action",
         "ActionConfigurationError",
         "ActionDefinition",
+        "ActionEvidenceBundle",
         "ActionNotRegisteredError",
         "ActionOperationResult",
         "ActionRegistry",
+        "ActionRecoveryView",
         "ActionRuntime",
         "ActionStore",
         "ActionType",
@@ -431,6 +446,7 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "EffectKind",
         "EventSink",
         "EvidenceConsumer",
+        "EvidenceValidationReport",
         "ExecutionContext",
         "ExecutionReceipt",
         "ExecutionReceiptStatus",
@@ -495,7 +511,9 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "canonicalize_v1",
         "commitment_payload_v1",
         "resolve_runtime_revision",
+        "render_evidence_html",
         "validate_authority_evidence",
+        "validate_evidence_bundle",
         "validate_proposal_create",
         "validate_proposal_update",
     }

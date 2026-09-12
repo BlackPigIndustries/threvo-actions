@@ -6,6 +6,47 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-12
+
+### Fixed
+
+- Reclassify the 0.4.0 Stripe host report as driver attestation with
+  conformance_established=false. The deprecated compatibility function no
+  longer documents or serializes that report as proof that repository tests
+  ran.
+- Forward recovery reads, evidence export, and authorized observation context
+  through experimental BoundAction without exposing its private binding state.
+- Correct stale 0.3.x Stripe skill guidance and distinguish group-level
+  observe_effect from the core runtime's observation_context.
+- Encode the Stripe PostgreSQL advisory-lock identity as unambiguous JSON
+  instead of NUL-delimited text, which PostgreSQL rejects, and publish the same
+  helper for coordinated ordinary writers.
+- Reconstruct strict reference-host snapshots through Pydantic's JSON boundary
+  so Decimal values round-trip from JSONB, and resolve the reference models'
+  runtime annotations.
+- Accept authority evidence whose bounded lifetime ends before its approval
+  request while rejecting evidence outside the request window. Validate that
+  binding before the first decision is persisted.
+
+### Added
+
+- A library-orchestrated Stripe host exercise whose adapter exposes primitive
+  operations while the library schedules races, requests fault injection, and
+  decides every scenario result.
+- An installable approval-channel package with strict Pydantic request records,
+  first-write-wins PostgreSQL persistence, and an immutable explicit migration.
+- Supported root imports for the principal recovery and evidence types and
+  helpers.
+
+### Documentation
+
+- Freeze the threvo.actions.evidence/v1 document shape and move supported
+  evidence and recovery records to a neutral strict Pydantic model base.
+- Rewrite the repository README around the problem the library solves, its host
+  responsibilities, progressive entry points, and explicit non-goals.
+- Begin the 0.4 feature-release hold. Outside-host adoption remains pending and
+  maintainer tests are not represented as independent qualification.
+
 ## [0.4.0] - 2026-09-12
 
 ### Added
@@ -15,8 +56,9 @@ and uses Semantic Versioning for the supported surface described in
 - Reusable PostgreSQL Stripe repositories for refunds, subscription
   cancellations, and credit notes, including shared customer-resource
   exclusion, normal-writer guards, durable work discovery, and recovery leases.
-- Executable host conformance, opt-in Stripe sandbox qualification, minimized
-  evidence export, and late provider observations for uncertain outcomes.
+- Driver-attested host scenarios, opt-in Stripe sandbox qualification,
+  minimized evidence export, and late provider observations for uncertain
+  outcomes.
 - Public recovery views and Pydantic AI tool bindings that expose safe next
   steps, operator intervention, approval requests, and authenticated decisions.
 - A server-bound approval-channel reference implementation with immutable

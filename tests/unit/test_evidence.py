@@ -13,7 +13,24 @@ from tests.unit.test_runtime import (
     runtime_parts,
 )
 
-from threvo_actions import EvidenceConsumer, LifecycleStatus, ReadContext
+from threvo_actions import (
+    ActionEvidenceBundle as RootActionEvidenceBundle,
+)
+from threvo_actions import (
+    ActionRecoveryView,
+    EvidenceConsumer,
+    LifecycleStatus,
+    ReadContext,
+)
+from threvo_actions import (
+    EvidenceValidationReport as RootEvidenceValidationReport,
+)
+from threvo_actions import (
+    render_evidence_html as root_render_evidence_html,
+)
+from threvo_actions import (
+    validate_evidence_bundle as root_validate_evidence_bundle,
+)
 from threvo_actions.evidence import (
     ActionEvidenceBundle,
     EvidenceValidationReason,
@@ -24,6 +41,41 @@ from threvo_actions.evidence import (
     validate_evidence_bundle,
 )
 from threvo_actions.runtime import ProposalNotFoundError
+
+
+def test_evidence_v1_is_a_stable_root_export_with_frozen_shape() -> None:
+    assert RootActionEvidenceBundle is ActionEvidenceBundle
+    assert RootEvidenceValidationReport is not None
+    assert ActionRecoveryView is not None
+    assert root_validate_evidence_bundle is validate_evidence_bundle
+    assert root_render_evidence_html is render_evidence_html
+    assert ActionEvidenceBundle.model_config["frozen"] is True
+    assert ActionEvidenceBundle.model_config["strict"] is True
+    assert tuple(ActionEvidenceBundle.model_fields) == (
+        "schema_version",
+        "authenticity",
+        "exported_at",
+        "exporter_runtime_revision",
+        "proposal_reference",
+        "action_type",
+        "semantic_effect_reference",
+        "effect_kind",
+        "source_revision",
+        "lifecycle_status",
+        "created_at",
+        "expires_at",
+        "erased",
+        "display_preview",
+        "safe_result",
+        "authority_summaries",
+        "receipts",
+        "embedded_receipt_schema_versions",
+        "omitted",
+        "content_digest",
+    )
+    assert ActionEvidenceBundle.model_fields["schema_version"].default == (
+        "threvo.actions.evidence/v1"
+    )
 
 
 def _context() -> ReadContext:

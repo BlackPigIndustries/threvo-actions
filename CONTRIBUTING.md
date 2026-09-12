@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported exact `0.2.0` Python API and experimental
+`threvo-actions` has a supported exact `0.4.1` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.
@@ -78,6 +78,16 @@ Stripe sandbox evidence remain pending and are not implied by publication.
 Candidate qualification, signed tags, artifact identity, TestPyPI/PyPI
 verification, and protected release environments remain mandatory. See the
 [`0.4.0` release record](docs/releases/0.4.0.md).
+
+The repository owner's 2026-09-12 direction also permits the exact corrective
+`v0.4.1` tag with `skip_adoption_gate=true`. This exception exists to correct
+the host-conformance claim, complete the 0.4 gradual-reveal surface, and package
+the already documented approval recipe before the feature-release hold. It does
+not count as outside adoption or permit another release. Candidate
+qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
+protected environments remain mandatory. See the
+[`0.4.1` release record](docs/releases/0.4.1.md) and
+[stabilization policy](docs/stabilization.md).
 
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag

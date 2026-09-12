@@ -4,13 +4,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from examples.stripe_host.approvals import (
-    ApprovalDecisionRecord,
-    ApprovalRequestBinding,
-    ApprovalRequestError,
-    ApprovalRequestView,
-    PostgresApprovalRequestStore,
-)
 from examples.stripe_host.worker import PostgresRecoveryLeaseSchedule, RecoveryWorker
 from threvo_actions import (
     ActionOperationResult,
@@ -24,6 +17,13 @@ from threvo_actions import (
     ProposalView,
     ReadContext,
     RequestingPrincipal,
+)
+from threvo_actions.integrations.approval_channels import (
+    ApprovalDecisionRecord,
+    ApprovalRequestBinding,
+    ApprovalRequestError,
+    ApprovalRequestView,
+    PostgresApprovalRequestStore,
 )
 from threvo_actions.integrations.stripe import (
     RefundHost,
@@ -60,7 +60,7 @@ class RefundService:
         self.settings = settings
         self.repository = RefundRepository(pool)
         self.store = PostgresActionStore(pool)
-        self.approval_requests = PostgresApprovalRequestStore(pool)
+        self.approval_requests = PostgresApprovalRequestStore(pool, schema="stripe_refund_app")
         self.connector = connector
         protection = PostgresProtection(pool, bytes.fromhex(settings.master_key.get_secret_value()))
         authorization = RefundAuthorization(

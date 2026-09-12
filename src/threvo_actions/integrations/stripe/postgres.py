@@ -80,6 +80,16 @@ def _snapshot_digest(value: dict[str, JsonValue]) -> str:
     return hashlib.sha256(_json_bytes(value)).hexdigest()
 
 
+def stripe_resource_lock_reference(tenant_reference: str, resource_reference: str) -> str:
+    """Encode the shared PostgreSQL advisory-lock identity without ambiguity."""
+
+    return json.dumps(
+        [tenant_reference, resource_reference],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
 def _object(value: object) -> dict[str, JsonValue]:
     try:
         if isinstance(value, bytes):
@@ -229,7 +239,10 @@ class PostgresStripeLedger:
         not_after: datetime,
     ) -> StripeLedgerReservationStatus:
         self._require_transaction(connection)
-        lock_reference = f"{tenant_reference}\0{resource_reference}"
+        lock_reference = stripe_resource_lock_reference(
+            tenant_reference,
+            resource_reference,
+        )
         await connection.fetchval(
             "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
             lock_reference,

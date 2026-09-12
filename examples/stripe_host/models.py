@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from threvo_actions.integrations.stripe import (
     CreditNoteInvoice,
     RefundPayment,
     SubscriptionBinding,
 )
-
-if TYPE_CHECKING:
-    from threvo_actions.models import SafeReference
+from threvo_actions.models import (  # noqa: TC001  # why: Pydantic resolves it at runtime.
+    SafeReference,
+)
 
 
 class ReferencePayment(RefundPayment):

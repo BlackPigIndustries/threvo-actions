@@ -30,10 +30,14 @@ ActionNamespace = Annotated[
 ]
 
 
-class ExperimentalModel(BaseModel):
-    """Strict, immutable base for the experimental public contract."""
+class ActionModel(BaseModel):
+    """Strict, immutable base whose stability is declared by its public contract."""
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+
+class ExperimentalModel(ActionModel):
+    """Compatibility base for contracts that are explicitly experimental."""
 
 
 class Money(ExperimentalModel):

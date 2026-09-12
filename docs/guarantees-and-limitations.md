@@ -5,8 +5,8 @@ replace the application that knows whether an action is allowed or the system
 that knows whether the financial effect occurred. Every guarantee below is
 therefore assigned to the component that actually supplies it.
 
-The documented Python API and CLI are supported at the exact `0.4.0` release;
-upgrading requires the [documented migration review](releases/0.4.0.md).
+The documented Python API and CLI are supported at the exact `0.4.1` release;
+upgrading requires the [documented migration review](releases/0.4.1.md).
 Serialized interoperability forms remain experimental. These are implementation
 guarantees for a tested release, not a promise that the host application or an
 external financial system implemented its side correctly. See
