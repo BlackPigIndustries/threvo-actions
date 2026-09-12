@@ -78,6 +78,19 @@ Run focused host tests first, then supported Python-version, strict type-check,
 lint, security, artifact-build, and clean-wheel smoke gates. Custom adapters
 still need domain-specific tests; generic conformance is only a baseline.
 
+Stripe host repositories also run the schema-independent driver from
+`threvo_actions.integrations.stripe`:
+
+```python
+report = await assert_stripe_host_conforms(driver)
+```
+
+The v1 driver must use independent connections, exercise the ordinary
+application writer, and inject a lost reservation acknowledgement after commit.
+A `not_exercised` result cannot pass. Reports are scoped to one action group;
+refund conformance never implies subscription or credit-note conformance. See
+`docs/testing/stripe-host-conformance.md` for the complete scenario contract.
+
 Store authors must supply two physical connection sources to the independent
 store check; the helper cannot prove independence from the adapter objects.
 They must also test transaction rollback, tenant isolation, migration upgrades,

@@ -106,6 +106,9 @@ nav:
   - Testing:
       - Testing helpers: testing/helpers.md
       - Conformance testing: testing/conformance.md
+      - Stripe host conformance: testing/stripe-host-conformance.md
+      - Stripe qualification matrix: testing/stripe-qualification.md
+      - Stripe adoption protocol: testing/stripe-adoption-protocol.md
       - Clean-room adoption result: testing/clean-room-adoption-2026-08-30.md
       - Gradual-reveal adoption record: testing/gradual-reveal-adoption.md
       - Security model: threat-model.md

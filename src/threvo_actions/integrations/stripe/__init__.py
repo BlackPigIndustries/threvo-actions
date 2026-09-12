@@ -9,6 +9,18 @@ from ._operation import (
     StripeReservationStatus,
 )
 from .actions import RefundPreparationError, StripeActions, StripeRefunds
+from .conformance import (
+    StripeHostActionGroup,
+    StripeHostCapabilities,
+    StripeHostConformanceDescriptor,
+    StripeHostConformanceDriver,
+    StripeHostConformanceError,
+    StripeHostConformanceReport,
+    StripeHostScenario,
+    StripeHostScenarioDisposition,
+    StripeHostScenarioResult,
+    assert_stripe_host_conforms,
+)
 from .credit_notes import (
     CreditDisposition,
     CreditNoteCalculatedLine,
@@ -107,6 +119,15 @@ __all__ = [
     "StripeAccount",
     "StripeAccountId",
     "StripeActions",
+    "StripeHostActionGroup",
+    "StripeHostCapabilities",
+    "StripeHostConformanceDescriptor",
+    "StripeHostConformanceDriver",
+    "StripeHostConformanceError",
+    "StripeHostConformanceReport",
+    "StripeHostScenario",
+    "StripeHostScenarioDisposition",
+    "StripeHostScenarioResult",
     "StripeBoundaryError",
     "StripeChargeId",
     "StripeRefundConnector",
@@ -159,6 +180,7 @@ __all__ = [
     "InvoiceObservation",
     "StripeCreditNoteGateway",
     "StripeCreditNotes",
+    "assert_stripe_host_conforms",
 ]
 
 
