@@ -1,5 +1,14 @@
 # Target Stripe customers
 
+The first adoption target is a direct merchant with a real PostgreSQL-backed refund workflow, an identifiable finance or operations owner, and ordinary application writers that can be included in concurrency tests. The team must be able to run an isolated Stripe sandbox and implement the library's repository Protocol against its own schema. A wrapper around the bundled example does not qualify as outside adoption.
+
+Use the [outside-host protocol](../testing/stripe-adoption-protocol.md) to collect evidence. Recruit or contact a host only through an explicitly authorized business process; this document does not grant that authority.
+
+AP2 is a possible future purchase-authorization input, not authority for the
+current refund and billing actions. See the
+[AP2 compatibility decision](../design/ap2-compatibility.md) for the required
+trust, host-policy and implementation gates.
+
 ## Initial customer
 
 A Python-based SaaS business or commerce platform that uses Stripe and wants
