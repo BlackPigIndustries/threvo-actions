@@ -152,6 +152,11 @@ contract; this facade does not migrate its pending proposals or database rows.
 Its SQL is a reference for reservation and recovery behavior, not a drop-in
 `RefundRepository` implementation for these new snapshot shapes.
 
+For new hosts, use the maintained facade repository in `examples/stripe_host`
+and the shared [PostgreSQL Stripe host ledger](stripe-postgres-host.md). Its
+transaction-scoped methods compose with the application's canonical resource
+lock and do not apply migrations from constructors.
+
 ## Use with Pydantic AI
 
 Use `ActionToolBinding` with `actions.refunds.definition` and `ActionCapability`

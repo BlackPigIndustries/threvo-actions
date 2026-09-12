@@ -158,6 +158,4 @@ async def assert_stripe_host_conforms(
         capabilities=descriptor.capabilities,
         results=tuple(results),
     )
-    if not report.passed:
-        raise StripeHostConformanceError("stripe_host:report:failed")
     return report

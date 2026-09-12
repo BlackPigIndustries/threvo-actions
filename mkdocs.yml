@@ -96,6 +96,7 @@ nav:
       - Stripe refunds: integrations/stripe.md
       - Stripe Actions: integrations/stripe-actions.md
       - Stripe billing actions: integrations/stripe-billing-actions.md
+      - Stripe PostgreSQL host: integrations/stripe-postgres-host.md
       - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
