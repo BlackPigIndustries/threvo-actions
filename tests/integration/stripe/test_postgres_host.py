@@ -14,6 +14,7 @@ asyncpg = pytest.importorskip("asyncpg")
 from examples.stripe_host import (  # noqa: E402
     PostgresCreditNoteRepository,
     PostgresRefundRepository,
+    PostgresStripeHostExerciseAdapter,
     PostgresSubscriptionCancellationRepository,
     ReferenceInvoice,
     ReferencePayment,
@@ -21,6 +22,7 @@ from examples.stripe_host import (  # noqa: E402
 )
 
 from threvo_actions import Money  # noqa: E402
+from threvo_actions.evidence import FrozenJsonObject  # noqa: E402
 from threvo_actions.integrations.stripe import (  # noqa: E402
     CreditDisposition,
     CreditNoteSnapshot,
@@ -30,19 +32,32 @@ from threvo_actions.integrations.stripe import (  # noqa: E402
     RefundReservationStatus,
     RefundSnapshot,
     StripeAccount,
+    StripeHostActionGroup,
+    StripeHostCloseStatus,
+    StripeHostExerciseDescriptor,
+    StripeHostExerciseIntent,
+    StripeHostRememberStatus,
+    StripeHostReserveStatus,
+    StripeHostScenario,
     StripePostgresHostError,
     StripeReservationStatus,
     SubscriptionCancellationSnapshot,
     SubscriptionRepository,
+    assert_stripe_host_exercise,
     migrate_stripe_postgres,
     stripe_billing_scenario,
 )
 
 
 def _dsn() -> str:
-    value = os.environ.get("THREVO_ACTIONS_TEST_POSTGRES_DSN")
+    value = os.environ.get("THREVO_ACTIONS_TEST_POSTGRES_DSN") or os.environ.get(
+        "THREVO_ACTIONS_STRIPE_TEST_DSN"
+    )
     if value is None:
-        pytest.skip("set THREVO_ACTIONS_TEST_POSTGRES_DSN to run PostgreSQL integration tests")
+        pytest.skip(
+            "set THREVO_ACTIONS_TEST_POSTGRES_DSN or "
+            "THREVO_ACTIONS_STRIPE_TEST_DSN to run PostgreSQL integration tests"
+        )
     return value
 
 
@@ -172,6 +187,19 @@ def test_postgres_billing_repositories_share_customer_reservations() -> None:
             await credit_demo.prepare()
             credit_snapshot = next(iter(credit_demo.repository.snapshots.values()))
             assert isinstance(credit_snapshot, CreditNoteSnapshot)
+            credit_snapshot = CreditNoteSnapshot.model_validate(
+                {
+                    **credit_snapshot.model_dump(),
+                    "tenant_reference": "tenant:test",
+                    "draft": {
+                        **credit_snapshot.draft.model_dump(),
+                        "invoice": {
+                            **credit_snapshot.draft.invoice.model_dump(),
+                            "tenant_reference": "tenant:test",
+                        },
+                    },
+                }
+            )
             credit_invoice = ReferenceInvoice.model_validate(
                 {
                     **credit_snapshot.draft.invoice.model_dump(),
@@ -220,6 +248,72 @@ def test_postgres_billing_repositories_share_customer_reservations() -> None:
                 )
         finally:
             await pool.execute(f'DROP SCHEMA IF EXISTS "{app_schema}" CASCADE')
+            await pool.execute(f'DROP SCHEMA IF EXISTS "{ledger_schema}" CASCADE')
+            await pool.close()
+
+    asyncio.run(scenario())
+
+
+def test_library_orchestrated_host_exercise_runs_against_postgres() -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4().hex[:12]
+        ledger_schema = f"stripe_ledger_{suffix}"
+        fixture_schema = f"stripe_exercise_{suffix}"
+        pool = await asyncpg.create_pool(_dsn(), min_size=2, max_size=8)
+        try:
+            await migrate_stripe_postgres(pool, schema=ledger_schema)
+            await pool.execute(f'CREATE SCHEMA "{fixture_schema}"')
+            await pool.execute(
+                f"""CREATE TABLE "{fixture_schema}".exercise_resources (
+                    tenant_reference text NOT NULL,
+                    resource_reference text NOT NULL,
+                    revision integer NOT NULL,
+                    PRIMARY KEY (tenant_reference, resource_reference)
+                )"""  # noqa: S608
+            )
+            adapter = PostgresStripeHostExerciseAdapter(
+                pool,
+                descriptor=StripeHostExerciseDescriptor(
+                    action_group=StripeHostActionGroup.REFUNDS,
+                    profile_identifier="postgres:reference-host:ci",
+                ),
+                ledger_schema=ledger_schema,
+                fixture_schema=fixture_schema,
+            )
+
+            report = await assert_stripe_host_exercise(adapter)
+
+            assert report.passed is True
+            assert report.execution_basis == "library_orchestrated"
+            assert len(report.results) == 12
+
+            await adapter.reset(StripeHostScenario.IMMUTABLE_INTENT)
+            intent = StripeHostExerciseIntent(
+                tenant_reference="exercise-tenant:atomic-status",
+                action_group=StripeHostActionGroup.REFUNDS,
+                effect_reference="exercise-effect:atomic-status",
+                resource_reference="exercise-resource:atomic-status",
+                requester_reference="exercise-requester:atomic-status",
+                snapshot_data=FrozenJsonObject.from_mapping({"revision": 0}),
+            )
+            remembered = await asyncio.gather(adapter.remember(intent), adapter.remember(intent))
+            assert remembered.count(StripeHostRememberStatus.CREATED) == 1
+            assert remembered.count(StripeHostRememberStatus.MATCHED) == 1
+            assert (
+                await adapter.reserve(
+                    intent,
+                    not_after=datetime.now(UTC) + timedelta(minutes=1),
+                )
+                is StripeHostReserveStatus.ACQUIRED
+            )
+            closed = await asyncio.gather(
+                adapter.record_outcome(intent, outcome_data={"status": "succeeded"}),
+                adapter.record_outcome(intent, outcome_data={"status": "succeeded"}),
+            )
+            assert closed.count(StripeHostCloseStatus.RECORDED) == 1
+            assert closed.count(StripeHostCloseStatus.MATCHED) == 1
+        finally:
+            await pool.execute(f'DROP SCHEMA IF EXISTS "{fixture_schema}" CASCADE')
             await pool.execute(f'DROP SCHEMA IF EXISTS "{ledger_schema}" CASCADE')
             await pool.close()
 

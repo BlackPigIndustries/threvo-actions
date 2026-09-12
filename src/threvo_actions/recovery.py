@@ -6,7 +6,7 @@ from typing import Literal, Protocol
 
 from pydantic import AwareDatetime
 
-from .models import ActionType, ExperimentalModel, LifecycleStatus, SafeReference
+from .models import ActionModel, ActionType, LifecycleStatus, SafeReference
 from .receipts import VerificationReceiptStatus
 
 
@@ -61,7 +61,7 @@ class ActionEffectOwnership(StrEnum):
     OBSERVATION_UNCERTAIN = "observation_uncertain"
 
 
-class ActionRecoveryStep(ExperimentalModel):
+class ActionRecoveryStep(ActionModel):
     """A safe next operation; it never carries authority or grants permission."""
 
     operation: ActionRecoveryOperation
@@ -69,7 +69,7 @@ class ActionRecoveryStep(ExperimentalModel):
     reason_code: SafeReference | None = None
 
 
-class ActionRecoveryOwnerView(ExperimentalModel):
+class ActionRecoveryOwnerView(ActionModel):
     """Minimized sibling-owner state returned only after owner read authorization."""
 
     proposal_reference: SafeReference
@@ -79,7 +79,7 @@ class ActionRecoveryOwnerView(ExperimentalModel):
     next_check_at: AwareDatetime | None = None
 
 
-class ActionRecoveryView(ExperimentalModel):
+class ActionRecoveryView(ActionModel):
     """Versioned, read-only explanation of one proposal's recovery state."""
 
     schema_version: Literal["threvo.actions.recovery/v1"] = "threvo.actions.recovery/v1"
@@ -100,14 +100,14 @@ class ActionRecoveryView(ExperimentalModel):
     recommended_steps: tuple[ActionRecoveryStep, ...] = ()
 
 
-class ActionWorkCursor(ExperimentalModel):
+class ActionWorkCursor(ActionModel):
     """Stable keyset position within one caller-pinned discovery cutoff."""
 
     due_at: AwareDatetime
     proposal_reference: SafeReference
 
 
-class ActionWorkItem(ExperimentalModel):
+class ActionWorkItem(ActionModel):
     """Minimal due-work reference; it contains no preview or private state."""
 
     action_type: ActionType
@@ -117,7 +117,7 @@ class ActionWorkItem(ExperimentalModel):
     reason_code: SafeReference | None = None
 
 
-class ActionWorkPage(ExperimentalModel):
+class ActionWorkPage(ActionModel):
     """One bounded tenant-scoped page at an explicit scan cutoff."""
 
     tenant_reference: SafeReference

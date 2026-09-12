@@ -6,7 +6,15 @@ No consenting outside application owner, adopter-owned repository, or isolated
 host environment was available during implementation. The maintainers therefore
 did not run the outside-host exercise, contact a prospective participant, use a
 customer database, or create an adoption entry. The reference application,
-fake scenarios, PostgreSQL recipe, and sandbox runner do not satisfy this gate.
+deterministic scenarios, PostgreSQL recipe, library-orchestrated host exercise,
+and sandbox runner do not satisfy this gate.
+
+Version 0.4.1 corrects the qualification mechanism: the library now creates the
+fixtures, invokes primitive adapter operations, schedules the races, and judges
+all twelve outcomes. The reference PostgreSQL adapter runs that exercise against
+the real `PostgresStripeLedger` and an ordinary writer path in CI. This is strong
+maintainer regression evidence. It is not outside adoption because the adapter,
+database, application writer, and execution are still maintainer-controlled.
 
 The blocking dependency is an identified outside host owner who can provide and
 authorize use of:

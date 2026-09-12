@@ -14,7 +14,6 @@ from pydantic_ai import DeferredToolRequests
 from pydantic_ai.models import infer_model
 from pydantic_ai.usage import UsageLimits
 
-from examples.stripe_host.approvals import ApprovalRequestError, ApprovalRequestView
 from threvo_actions import (
     ActionOperationResult,
     AuthorityDecision,
@@ -23,6 +22,10 @@ from threvo_actions import (
     ProposalView,
 )
 from threvo_actions.evidence import ActionEvidenceBundle, render_evidence_html
+from threvo_actions.integrations.approval_channels import (
+    ApprovalRequestError,
+    ApprovalRequestView,
+)
 from threvo_actions.integrations.stripe import StripeBoundaryError, verify_refund_webhook
 from threvo_actions.models import ExperimentalModel
 from threvo_actions.recovery import ActionRecoveryView  # noqa: TC001

@@ -56,7 +56,11 @@ The ledger takes a transaction-scoped advisory lock for tenant + resource
 before checking unresolved intents. This serializes different Stripe action
 groups that use the same resource reference. It does not block an application's
 ordinary writer by itself. Every mutation path for that canonical resource must
-take the same row lock or enforce an equivalent database guard. The reference
+take the same row lock or enforce an equivalent database guard. When sharing
+the advisory lock directly, derive its text input with
+`stripe_resource_lock_reference(tenant_reference, resource_reference)` and pass
+that value to `hashtextextended`; this avoids delimiter ambiguity and PostgreSQL
+text-encoding errors. The reference
 schema includes a shared customer-resource row and triggers that reject payment,
 subscription, or invoice updates and deletes while that customer has an
 unresolved Stripe reservation.
@@ -94,11 +98,12 @@ uv run pytest -q tests/unit/test_stripe_postgres.py \
 
 Set `THREVO_ACTIONS_TEST_POSTGRES_DSN` to exercise PostgreSQL. Without it the
 database case is reported as skipped, not passed. Run the separate
-[Stripe host conformance exercise](../testing/stripe-host-conformance.md) against
+[Stripe host exercise](../testing/stripe-host-conformance.md) against
 the adopter's schema and normal writer before using the repository pattern for
 live effects.
 
-The host-owned approval request and recovery case tables are reference
-application migrations, not part of the library ledger. Apply them through the
-application's normal migration system and preserve their immutable decision and
-observation records according to its retention policy.
+The approval request store and its checksummed migration are installed under
+`threvo_actions.integrations.approval_channels`. It remains separate from the
+Stripe ledger and must be applied explicitly. Recovery-case tables remain
+application-owned. Preserve decision and observation records according to the
+host retention policy.

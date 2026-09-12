@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from threvo_actions.canonical import model_json_object
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     import asyncpg
+    from pydantic import JsonValue
 
 
 class PostgresRefundRepository:
@@ -96,7 +98,7 @@ class PostgresRefundRepository:
             action_group=StripeHostActionGroup.REFUNDS,
             effect_reference=effect_reference,
         )
-        return RefundSnapshot.model_validate(entry.snapshot_data)
+        return RefundSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
 
     async def reserve(
         self, snapshot: RefundSnapshot, *, not_after: datetime
@@ -178,7 +180,7 @@ class PostgresRefundRepository:
             action_group=StripeHostActionGroup.REFUNDS,
             effect_reference=effect_reference,
         )
-        snapshot = RefundSnapshot.model_validate(entry.snapshot_data)
+        snapshot = RefundSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
         payment_value = await connection.fetchval(
             f"""SELECT convert_to(payment_data::text, 'UTF8')
                 FROM {self._app_schema}.payments
@@ -289,7 +291,9 @@ class PostgresSubscriptionCancellationRepository:
             action_group=StripeHostActionGroup.SUBSCRIPTIONS,
             effect_reference=effect_reference,
         )
-        return SubscriptionCancellationSnapshot.model_validate(entry.snapshot_data)
+        return SubscriptionCancellationSnapshot.model_validate_json(
+            _stored_json(entry.snapshot_data)
+        )
 
     async def reserve(
         self, snapshot: SubscriptionCancellationSnapshot, *, not_after: datetime
@@ -353,7 +357,9 @@ class PostgresSubscriptionCancellationRepository:
                 action_group=StripeHostActionGroup.SUBSCRIPTIONS,
                 effect_reference=effect_reference,
             )
-            snapshot = SubscriptionCancellationSnapshot.model_validate(entry.snapshot_data)
+            snapshot = SubscriptionCancellationSnapshot.model_validate_json(
+                _stored_json(entry.snapshot_data)
+            )
             locked = await connection.fetchval(
                 f"""SELECT true FROM {self._app_schema}.subscriptions
                     WHERE tenant_reference = $1 AND subscription_reference = $2
@@ -479,7 +485,7 @@ class PostgresCreditNoteRepository:
             action_group=StripeHostActionGroup.CREDIT_NOTES,
             effect_reference=effect_reference,
         )
-        return CreditNoteSnapshot.model_validate(entry.snapshot_data)
+        return CreditNoteSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
 
     async def reserve(
         self, snapshot: CreditNoteSnapshot, *, not_after: datetime
@@ -542,7 +548,7 @@ class PostgresCreditNoteRepository:
                 action_group=StripeHostActionGroup.CREDIT_NOTES,
                 effect_reference=effect_reference,
             )
-            snapshot = CreditNoteSnapshot.model_validate(entry.snapshot_data)
+            snapshot = CreditNoteSnapshot.model_validate_json(_stored_json(entry.snapshot_data))
             locked = await connection.fetchval(
                 f"""SELECT true FROM {self._app_schema}.invoices
                     WHERE tenant_reference = $1 AND invoice_reference = $2 FOR UPDATE""",
@@ -612,6 +618,10 @@ class PostgresCreditNoteRepository:
 
 def _customer_resource(customer_reference: str) -> str:
     return f"customer:{customer_reference}"
+
+
+def _stored_json(value: dict[str, JsonValue]) -> str:
+    return json.dumps(value, separators=(",", ":"), sort_keys=True)
 
 
 async def _ensure_customer_resource(

@@ -30,6 +30,7 @@ from threvo_actions.experimental import (
 from threvo_actions.models import (
     ActionType,
     AuthoritativeTarget,
+    EvidenceConsumer,
     GovernedExecutor,
     RequestingPrincipal,
 )
@@ -40,6 +41,7 @@ from threvo_actions.registry import (
     GovernedExecutorPort,
     PreparationPort,
     PreparedAction,
+    ReadContext,
     RetentionPort,
     StateResolverPort,
     VerifierPort,
@@ -354,6 +356,53 @@ def test_bound_facade_has_no_public_definition_or_runtime_escape() -> None:
     assert "definition" not in public_names
     assert "runtime" not in public_names
     assert "components" not in public_names
+
+
+def test_bound_facade_forwards_recovery_evidence_and_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
+    context = ReadContext(
+        tenant_reference="tenant:test",
+        consumer=EvidenceConsumer(reference="operator:test"),
+    )
+    values = {
+        "read_recovery": object(),
+        "export_evidence": object(),
+        "observation_context": object(),
+    }
+
+    with application.bind(registered, dependencies=Dependencies()) as bound:
+        definition, runtime = bound._state.parts()
+        calls: dict[str, AsyncMock] = {}
+        for name, value in values.items():
+            method = AsyncMock(return_value=value)
+            monkeypatch.setattr(runtime, name, method)
+            calls[name] = method
+
+        assert (
+            asyncio.run(bound.read_recovery(proposal_reference="proposal:test", context=context))
+            is values["read_recovery"]
+        )
+        assert (
+            asyncio.run(bound.export_evidence(proposal_reference="proposal:test", context=context))
+            is values["export_evidence"]
+        )
+        assert (
+            asyncio.run(
+                bound.observation_context(proposal_reference="proposal:test", context=context)
+            )
+            is values["observation_context"]
+        )
+
+    for method in calls.values():
+        method.assert_awaited_once_with(
+            definition,
+            proposal_reference="proposal:test",
+            context=context,
+        )
 
 
 def test_repeated_bindings_keep_tenant_scoped_services_separate() -> None:

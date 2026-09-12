@@ -1,268 +1,189 @@
 # threvo-actions
 
-`threvo-actions` is a Python runtime for governed actions: consequential
-application changes that require bound approval, controlled execution and
-authoritative verification. It starts with financial actions and is
-framework-neutral: hosts retain business truth, authorization, governed
-execution, authoritative verification, and retention policy.
+Most applications already have code that can issue a refund, cancel a
+subscription, change a supplier record, or perform another consequential
+operation. The difficult part is making that code safe to call after a human or
+agent proposes the change.
+
+**threvo-actions** provides the control lifecycle around that operation. It
+binds approval to the exact proposed effect, checks current authorization and
+business state again before execution, prevents competing proposals from
+submitting the same effect, records typed receipts, and keeps uncertain provider
+outcomes in recovery until an authoritative query resolves them.
+
+The application remains responsible for its business data, authorization rules,
+database transactions, credentials, and external-system clients. The library
+does not replace Stripe or another SDK and does not decide who may approve.
+
+Use it when an operation has all of these properties:
+
+- a preview or agent proposal must not execute by itself;
+- approval must apply to exact data rather than a broad tool call;
+- the underlying record can change between approval and execution;
+- a timeout may mean that an external effect happened;
+- retries and concurrent workers must not duplicate the effect; and
+- operators need a clear, safe recovery path.
+
+For an ordinary reversible CRUD update with no separate authority or ambiguous
+external effect, this lifecycle may be unnecessary.
 
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
-for the runnable quickstart, one guide per feature, complete runnable
-examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
-integrations, the optional Stripe action groups, and the full API reference.
+or start with the [first-action guide](docs/getting-started/first-action.md).
 
 > [!IMPORTANT]
-> Version `0.4.0` is the current supported exact release. Its correctness and
-> security changes require the documented migration review before upgrading. The
-> namespaced gradual-reveal API, receipt serialization,
-> canonicalization, database schemas, and the example cross-service envelope
-> remain experimental. Read the [versioning policy](docs/versioning.md) before
-> upgrading.
+> Version **0.4.1** is the current supported release. Pin the exact patch for
+> consequential actions and review the [versioning policy](docs/versioning.md).
+> Receipt serialization, canonicalization, physical database layouts, and the
+> namespaced gradual-reveal authoring API retain their documented experimental
+> status.
 
-## Stripe action path
+Run equivalence tests before every patch upgrade when using the experimental
+authoring API, and read migration notes before every minor-line upgrade.
 
-The `StripeActions.refunds` interface combines validated policy,
-host payment resolution and reservation with the existing runtime. This facade is
-included in 0.4.0. Read the
-[Stripe Actions guide](docs/integrations/stripe-actions.md), run
-`uv run --extra stripe python -m examples.stripe_actions.demo` from this checkout,
-and follow the [progressive integration guide](docs/integrations/stripe-actions.md).
-
-The facade also provides `StripeActions.subscriptions` for scheduling or
-withdrawing period-end cancellation and `StripeActions.credit_notes` for reducing
-an open invoice or crediting a paid invoice's customer balance. Each group can be
-configured independently. See the [billing action guide](docs/integrations/stripe-billing-actions.md)
-and [reviewed implementation plan](docs/plans/2026-09-11-stripe-billing-actions.md).
-Run all four credential-free scenarios with
-`uv run --extra stripe python -m examples.stripe_billing.demo`. Cancellation
-scheduling does not end service immediately, and credit
-notes in this scope do not refund cash or send customer email.
-
-Start with `stripe_refund_scenario()` or `stripe_billing_scenario()` and replace
-one layer at a time: policy, provider gateway, host repository/authorization,
-then runtime storage, protection, identifiers, clock, and events. The supplied
-fakes and durable host use the same request/result models and `StripeActions`
-facade. Production integration guidance includes the
-[PostgreSQL customer-resource ledger](docs/integrations/stripe-postgres-host.md),
-[recovery worker](docs/integrations/recovery-worker.md),
-[late-observation cases](docs/integrations/stripe-recovery.md),
-[evidence export](docs/reference/evidence.md), and
-[authenticated approval callbacks](docs/integrations/approval-channels.md).
-
-## Installation
+## Install
 
 Python 3.11 through 3.13 is supported.
 
-```bash
-uv add "threvo-actions==0.4.0"
-```
+    uv add "threvo-actions==0.4.1"
 
-Install only after the signed `v0.4.0` tag completes the TestPyPI and PyPI
-release workflow. Do not install a moving branch for a financial-action
-runtime.
+Install only the integrations the application uses:
 
-PostgreSQL, MySQL, SQLAlchemy/Alembic, and Pydantic AI integrations are
-optional. SQLite uses the Python standard library and is included in the base
-installation:
+    uv add "threvo-actions[postgres]==0.4.1"
+    uv add "threvo-actions[mysql]==0.4.1"
+    uv add "threvo-actions[sqlalchemy]==0.4.1"
+    uv add "threvo-actions[pydantic-ai]==0.4.1"
+    uv add "threvo-actions[stripe]==0.4.1"
 
-```bash
-uv add "threvo-actions[postgres]==0.4.0"
-uv add "threvo-actions[mysql]==0.4.0"
-uv add "threvo-actions[sqlalchemy]==0.4.0"
-uv add "threvo-actions[pydantic-ai]==0.4.0"
-uv add "threvo-actions[stripe]==0.4.0"
-```
+The base package includes the governed Stripe facade and its typed gateway
+protocols. The Stripe extra adds the maintained Stripe SDK transports and
+authenticated webhook parsing. Custom gateways do not require the Stripe SDK.
 
-The base installation includes the governed Stripe facade, strict boundary
-models and typed gateway protocols, so custom gateway implementations do not
-install Stripe's SDK. Add the `stripe` extra for the maintained SDK transports
-and authenticated Stripe webhook parsing.
+## The lifecycle
 
-The distribution also bundles an Agent Skills-compatible guide for coding
-agents. Install the copy matching your Python package with:
+Every governed action follows the same sequence:
 
-```bash
-THREVO_ACTIONS_SKILL_DIR=$(threvo-actions skill path) || exit 1
-npx skills add "$THREVO_ACTIONS_SKILL_DIR" \
-  --skill threvo-actions --agent '*' --yes
-```
+1. **Prepare** reads canonical application state and creates a minimized preview
+   plus a protected private snapshot.
+2. **Record authority** stores an authenticated decision bound to the tenant,
+   proposal, semantic effect, commitment, audience, assurance, and expiry.
+3. **Resolve again** reloads current state and rejects material drift.
+4. **Execute** performs the host-owned mutation behind an atomic precondition
+   and semantic-effect admission.
+5. **Verify** queries the authoritative target. Request acceptance is not
+   treated as completion.
+6. **Recover** explains whether to wait, reconcile, expire, replace, or request
+   operator attention without recommending an unsafe resend.
+7. **Export evidence** creates an authorized, minimized
+   experimental *threvo.actions.evidence/v1* record with explicit omissions;
+   exact-version pins are required while adopters evaluate that document shape.
 
-See the [coding-agent guide](docs/integrations/coding-agents.md) for source-repo
-and global installation options.
+The core has no database driver, web framework, agent framework, hosted-service
+SDK, or dependency on the Threvo application.
 
-## Current contract
+## Start simple, then replace boundaries
 
-The package provides strict, immutable Pydantic v2 boundary models plus an
-ordinary-Python confirm-first runtime and concurrency-correct in-memory store.
-New integrations should start with the supported typed `Action` facade or the
-public `ActionDefinition`. Applications may opt into the namespaced
-experimental `ActionApplication` and `ActionSpec` only when they pin an exact
-patch, rerun expert-path equivalence tests before every patch upgrade, and
-review migration notes before every minor-line upgrade. All three paths compile
-to the same expert runtime. Its explicit ports own
-preparation, live authorization, authority evaluation, state re-resolution,
-atomic execution, authoritative verification, snapshot protection, keyed
-commitments, and retention decisions.
+The supported `Action` facade is the normal entry point. `ActionDefinition`
+and `ActionRuntime` expose every port when an application needs direct
+control. `ActionApplication` under `threvo_actions.experimental` provides
+shorter, scoped composition for exact-pinned adopters. All three use the same
+runtime semantics.
 
-The runtime persists only a protected private snapshot and a separate minimized
-display preview. Tenant-scoped revision checks guard every transition, while a
-separate semantic-effect claim prevents competing proposals from admitting the
-same effect. Transport acceptance remains verification-pending until the host's
-authoritative verifier reports a terminal business outcome.
+Storage can start with the in-memory implementation for tests. PostgreSQL,
+MySQL 8, and SQLite adapters have explicit migrations and documented support
+boundaries. The Pydantic AI integration exposes typed tools while keeping
+framework approval flags and conversation history outside the authority model.
 
-The optional PostgreSQL adapter supplies guarded persistence, explicit
-advisory-locked migrations, a credential-free complete SQL renderer, and
-separate runtime/retention privilege boundaries. Its three action roles can
-target a dedicated database when deployments need maximum isolation from host
-business persistence.
-The optional MySQL 8 adapter supplies InnoDB-backed guarded persistence,
-immutable explicit migrations, and security-definer runtime/retention lanes.
-The SQLite adapter supplies explicit migrations and durable storage for local
-development, evaluation, tests, and bounded single-writer deployments; it does
-not claim database-role separation or general multi-worker production safety.
-The SQLAlchemy/Alembic recipe keeps host business persistence and migrations
-separate from qualified asyncpg action stores and the library-owned ledger. It
-runs the library migration before Alembic as a serialized deployment step
-rather than dynamically invoking installed package code from `env.py`.
-The optional Pydantic AI Capability exposes typed command tools while treating
-framework approvals and message history as untrusted continuation material.
-See the [PostgreSQL guide](docs/postgres.md),
-[MySQL guide](docs/integrations/mysql.md),
-[SQLAlchemy/Alembic guide](docs/integrations/sqlalchemy-alembic.md), and
-[Pydantic AI guide](docs/integrations/pydantic-ai.md). The public conformance
-helpers and local reference applications exercise the same runtime against a
-PSP refund and a cross-service supplier-destination change. Application code
-continues to own canonical state and all business mutations.
+- [Core action guide](docs/reference/action.md)
+- [PostgreSQL](docs/postgres.md)
+- [MySQL 8](docs/integrations/mysql.md)
+- [SQLite](docs/integrations/sqlite.md)
+- [SQLAlchemy and Alembic](docs/integrations/sqlalchemy-alembic.md)
+- [Pydantic AI](docs/integrations/pydantic-ai.md)
+- [Recovery views](docs/reference/recovery.md)
+- [Evidence exports](docs/reference/evidence.md)
 
-The layers are progressive. Start with a documented facade and supplied local
-dependencies, replace one host boundary at a time, and use `ActionDefinition`
-when the application needs direct control over every port. The simple and
-expert paths use the same runtime semantics; convenience never supplies live
-business authorization or production persistence.
+## Stripe actions
 
-## Guarantees
+**StripeActions** currently covers:
 
-- Core imports require only Pydantic and the Python standard library.
-- Money uses `Decimal` and always carries an uppercase three-letter currency;
-  hosts validate the currency or payment rail's permitted precision.
-- Boundary timestamps are timezone-aware.
-- Participant roles and receipt families use closed discriminators.
-- Boundary models reject extra fields and implicit type coercion.
-- Receipt serialization uses the internal experimental version `internal/v0`.
-- Canonical JSON uses a versioned, float-free profile with proposal-scoped,
-  domain-separated keyed commitments.
-- Authority evidence binds tenant, action/version, proposal instance, semantic
-  effect, commitment, audience, channel assurance, issue time, and expiry.
-- Failed-unknown effects re-enter authoritative verification, never blind send
-  eligibility. Bounded retries terminalize as verification-unresolved.
-- Private-state erasure destroys host key material and leaves a minimized
-  lifecycle tombstone.
+- direct-charge refunds;
+- scheduling and withdrawing period-end subscription cancellation;
+- reducing supported open invoices with credit notes; and
+- crediting a supported paid invoice to the customer's Stripe balance.
 
-Commitment and protection providers must make destruction idempotent. The
-runtime records erasure intent before calling them so an interrupted erasure
-stays hidden and can safely resume without losing its opaque key handles.
-The full responsibility matrix is in
-[Guarantees and limitations](docs/guarantees-and-limitations.md).
+Each group uses typed Pydantic policy, host-owned resource resolution and
+reservation, Stripe correlation, and independent verification. Unsupported
+cases fail closed. Cancellation scheduling does not prove service termination,
+and a customer-balance credit is not a cash refund.
 
-## Conformance and reference applications
+Start with **stripe_refund_scenario()** or **stripe_billing_scenario()**, then
+replace policy, gateway, repository and authorization, followed by runtime
+storage, protection, identifiers, clock, and events.
 
-`threvo_actions.conformance` provides pytest-independent checks for action
-stores, commitment/protection providers, runtime lifecycle behavior, recursive
-seeded-canary leakage, and deterministic performance profiles. Passing these
-generic checks is a baseline; every host action and external connector still
-needs domain-specific adversarial tests.
+- [Stripe actions](docs/integrations/stripe-actions.md)
+- [Billing actions](docs/integrations/stripe-billing-actions.md)
+- [PostgreSQL Stripe ledger](docs/integrations/stripe-postgres-host.md)
+- [Host exercises](docs/testing/stripe-host-conformance.md)
+- [Recovery worker](docs/integrations/recovery-worker.md)
+- [Installable approval requests](docs/integrations/approval-channels.md)
 
-Official store security profiles make the tested writer topology, privilege
-boundary, per-guarantee enforcement level, and data-handling exclusions
-inspectable. The independent-connection scenario exercises one-winner revisions
-and semantic-effect admission through separately created connection sources.
-Its report is reproducible test evidence, not a signed, deployment, or
-compliance certificate.
+## What is enforced
 
-The [refund example](examples/refund/app.py) proves stable per-intent PSP
-idempotency, atomic live-balance reservation, timeout-after-acceptance recovery,
-provisional versus final absence, exact returned-effect binding, and
-authoritative completion. The
-[supplier-destination example](examples/supplier_destination/app.py) runs an
-initiator and supplier-master receiver as two local FastAPI services. Its
-`application/v0` envelope is private to the example and is not a proposed
-protocol. It demonstrates confidential extracted details, dual authority,
-authenticated trigger and receiver boundaries, receiver-side state and request
-binding checks, and a later payment bound to a verified destination version.
+- Strict, frozen Pydantic v2 boundaries reject extra fields and coercion.
+- Money uses Decimal with an explicit currency.
+- Authority evidence is bound to one exact proposal and expires.
+- Every execution repeats live authorization and state resolution.
+- Tenant-scoped compare-and-set transitions and semantic-effect claims control
+  concurrent workers.
+- Failed-unknown submissions reconcile; they do not become blind retries.
+- Only authoritative verification produces a verified lifecycle outcome.
+- Recovery advice carries no authority and excludes unsafe execution steps for
+  provider-pending effects.
+- Evidence exports omit private snapshots, protected payloads, custody data,
+  replayable authority evidence, and tenant identity.
 
-Run both without external accounts:
+See [Guarantees and limitations](docs/guarantees-and-limitations.md) and the
+[threat model](docs/threat-model.md) for the exact responsibility boundary.
 
-```bash
-uv run pytest -q examples/refund/test_example.py
-uv run pytest -q examples/supplier_destination/test_example.py
-```
+## What is not claimed
 
-The repeatable overhead harness and the current local measurements are in the
-[runtime benchmark](docs/benchmarks/runtime-overhead.md). The adoption-timing
-gate has a published [measurement methodology](docs/integration-surface-methodology.md),
-and a coding-agent clean-room run passed the task-specific timing targets.
-
-## Non-goals and limitations
-
-This package does not provide distributed exactly-once execution, an
+The package does not provide distributed exactly-once execution, an
 authorization policy engine, a payment protocol, compliance certification, or
-an audit-completeness product. The in-memory store is deterministic and
-concurrency-correct but process-local; the SQLite adapter has a bounded-use
-support tier; and the PostgreSQL adapter still relies on target-side idempotency
-and authoritative verification. A receipt records typed
-lifecycle evidence; it does not by itself prove that the host authorized an
-action or that an external effect completed. `finance.action/v1` is not a
-published standard.
+an audit-completeness product. A receipt reports what the runtime recorded. An
+unsigned evidence export can prove internal consistency but cannot authenticate
+its exporter.
 
-Do not place raw payment credentials, private canonical snapshots, internal host
-identifiers, or unnecessary personal data in generic models, previews, errors,
-telemetry, fixtures, or receipts. See the [threat model](docs/threat-model.md).
+The legacy **assert_stripe_host_conforms()** API validates a driver's
+self-attestation and is deprecated in 0.4.1; it does not prove that repository
+tests ran. Use the library-orchestrated **assert_stripe_host_exercise()**
+contract, where the adapter exposes primitive operations and the library runs
+and judges the scenarios.
 
-## Extension
+Outside-host adoption and live Stripe sandbox qualification remain recorded
+evidence gates. Reference applications and maintainer-run fixtures do not count
+as independent production qualification.
 
-The contract is deliberately small. Host-specific commands, results, business
-rules, authorization, and external-system clients stay outside the core. The
-included approval requirements count already authenticated and host-authorized
-evidence; they do not grant permission to approve.
-Optional persistence and agent adapters depend inward on these contracts; the
-core does not import an adapter, database driver, web framework, agent
-framework, ORM, or hosted-service SDK.
+## Run the examples
 
-## Stripe refund application
+    uv sync --extra stripe-app --locked
+    uv run pytest -q examples/refund/test_example.py
+    uv run pytest -q examples/supplier_destination/test_example.py
+    uv run python -m examples.stripe_actions.demo
+    uv run python -m examples.stripe_billing.demo
+    uv run python -m examples.stripe_refunds --help
 
-The [Stripe reference app](examples/stripe_refunds/README.md) includes a Greek
-and English browser UI, Pydantic AI assistant, independent finance approval,
-PostgreSQL intent reservation, protected proposals, recovery sweeping,
-late-failure cases, minimized evidence export, and server-bound approval
-requests. It runs in Stripe sandbox mode and refuses live credentials.
+The Stripe refund application includes a browser UI, Pydantic AI assistant,
+independent finance approval, protected PostgreSQL proposals, recovery
+sweeping, evidence export, and server-bound approval requests. It refuses live
+credentials.
 
-```bash
-uv sync --extra stripe-app --locked
-uv run python -m examples.stripe_refunds --help
-```
+## Coding-agent guide
 
-See the [connector contract](docs/integrations/stripe.md),
-[target Stripe customers](docs/product/stripe-target-clients.md), and
-[outside-host adoption protocol](docs/testing/stripe-adoption-protocol.md). A Stripe refund object is
-accepted transport; independent verification establishes the operation's
-completion milestone. No blind resend or unlimited idempotency is claimed.
+The distribution contains a version-matched Agent Skills guide:
 
-## Migration
+    THREVO_ACTIONS_SKILL_DIR=$(threvo-actions skill path) || exit 1
+    npx skills add "$THREVO_ACTIONS_SKILL_DIR" \
+      --skill threvo-actions --agent '*' --yes
 
-The documented Python imports and CLI are supported at `0.4.0`. Pin the exact
-release, review the [`0.4.0` migration](docs/releases/0.4.0.md), and keep
-host adapters at the application boundary.
-The current `develop` additions have an
-[0.4.0 migration and evidence record](docs/releases/0.4.0.md);
-it does not select or authorize a release version.
-Experimental interoperability surfaces may change in a minor `0.x` release;
-the [versioning policy](docs/versioning.md) defines the exact boundary.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, verification, security, and
-change requirements.
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE).
+The guide teaches coding agents the same authority, persistence, recovery, and
+verification boundaries as the Python documentation.

@@ -12,7 +12,11 @@ from pydantic import AwareDatetime, JsonValue, StringConstraints, TypeAdapter, V
 
 from ...migrations import quote_schema_name
 from ...models import ExperimentalModel, SafeReference
-from .conformance import StripeHostActionGroup
+from .conformance import (
+    StripeHostActionGroup,
+    StripeHostCloseStatus,
+    StripeHostRememberStatus,
+)
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 
@@ -80,6 +84,16 @@ def _snapshot_digest(value: dict[str, JsonValue]) -> str:
     return hashlib.sha256(_json_bytes(value)).hexdigest()
 
 
+def stripe_resource_lock_reference(tenant_reference: str, resource_reference: str) -> str:
+    """Encode the shared PostgreSQL advisory-lock identity without ambiguity."""
+
+    return json.dumps(
+        [tenant_reference, resource_reference],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
 def _object(value: object) -> dict[str, JsonValue]:
     try:
         if isinstance(value, bytes):
@@ -141,10 +155,10 @@ class PostgresStripeLedger:
         resource_reference: str,
         requester_reference: str,
         snapshot_data: dict[str, JsonValue],
-    ) -> None:
+    ) -> StripeHostRememberStatus:
         digest = _snapshot_digest(snapshot_data)
         async with self._pool.acquire() as connection, connection.transaction():
-            await connection.execute(
+            result = await connection.execute(
                 f"""INSERT INTO {self._schema}.intents (
                     tenant_reference, action_group, effect_reference, resource_reference,
                     requester_reference, snapshot_digest, snapshot_data
@@ -158,6 +172,8 @@ class PostgresStripeLedger:
                 digest,
                 _json_bytes(snapshot_data),
             )
+            if result not in {"INSERT 0 0", "INSERT 0 1"}:
+                raise StripePostgresHostError("Stripe intent persistence result is uncertain")
             row = await self._load_row(
                 connection,
                 tenant_reference=tenant_reference,
@@ -175,6 +191,11 @@ class PostgresStripeLedger:
                 or entry.snapshot_data != snapshot_data
             ):
                 raise StripePostgresHostError("Stripe intent is already bound")
+            return (
+                StripeHostRememberStatus.CREATED
+                if result == "INSERT 0 1"
+                else StripeHostRememberStatus.MATCHED
+            )
 
     async def load(
         self,
@@ -229,7 +250,10 @@ class PostgresStripeLedger:
         not_after: datetime,
     ) -> StripeLedgerReservationStatus:
         self._require_transaction(connection)
-        lock_reference = f"{tenant_reference}\0{resource_reference}"
+        lock_reference = stripe_resource_lock_reference(
+            tenant_reference,
+            resource_reference,
+        )
         await connection.fetchval(
             "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
             lock_reference,
@@ -289,8 +313,8 @@ class PostgresStripeLedger:
         tenant_reference: str,
         action_group: StripeHostActionGroup,
         effect_reference: str,
-    ) -> None:
-        await self._close_in(
+    ) -> StripeHostCloseStatus:
+        return await self._close_in(
             connection,
             tenant_reference=tenant_reference,
             action_group=action_group,
@@ -306,8 +330,8 @@ class PostgresStripeLedger:
         action_group: StripeHostActionGroup,
         effect_reference: str,
         outcome_data: dict[str, JsonValue],
-    ) -> None:
-        await self._close_in(
+    ) -> StripeHostCloseStatus:
+        return await self._close_in(
             connection,
             tenant_reference=tenant_reference,
             action_group=action_group,
@@ -323,7 +347,7 @@ class PostgresStripeLedger:
         action_group: StripeHostActionGroup,
         effect_reference: str,
         outcome_data: dict[str, JsonValue] | None,
-    ) -> None:
+    ) -> StripeHostCloseStatus:
         self._require_transaction(connection)
         row = await self._load_row(
             connection,
@@ -338,7 +362,7 @@ class PostgresStripeLedger:
         close_kind = "outcome" if outcome_data is not None else "no_submission"
         if entry.phase is StripeLedgerPhase.CLOSED:
             if entry.close_kind == close_kind and entry.outcome_data == outcome_data:
-                return
+                return StripeHostCloseStatus.MATCHED
             raise StripePostgresHostError("Stripe intent has a different terminal record")
         if entry.phase is StripeLedgerPhase.READY and outcome_data is not None:
             raise StripePostgresHostError("Stripe outcome requires a prior reservation")
@@ -358,6 +382,7 @@ class PostgresStripeLedger:
         )
         if result != "UPDATE 1":
             raise StripePostgresHostError("Stripe terminal record is uncertain")
+        return StripeHostCloseStatus.RECORDED
 
     async def _load_row(
         self,

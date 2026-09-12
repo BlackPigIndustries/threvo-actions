@@ -5,7 +5,7 @@ of one stored proposal revision. Stripe action groups expose the same operation
 through their `export_evidence(...)` methods.
 
 ```python
-from threvo_actions.evidence import validate_evidence_bundle
+from threvo_actions.experimental import ActionEvidenceBundle, validate_evidence_bundle
 
 bundle = await actions.refunds.export_evidence(
     proposal_reference,
@@ -21,6 +21,24 @@ wrong-action, cross-tenant, and unauthorized references use the same
 `ProposalNotFoundError` boundary as ordinary reads. An erased proposal exports
 only its tombstone identity and an explicit `erased_source_evidence` omission;
 destroyed evidence is never reconstructed.
+
+`ActionEvidenceBundle`, `EvidenceValidationReport`,
+`validate_evidence_bundle`, and `render_evidence_html` are available from
+`threvo_actions.experimental` in 0.4.1. The complete supporting vocabulary
+remains in `threvo_actions.evidence`.
+
+## Version contract
+
+`threvo.actions.evidence/v1` is an experimental external document contract.
+Pin the exact package version when storing or exchanging it, and review release
+migration notes before upgrading. Producers do not add unknown fields locally
+because strict consumers reject them. A later pre-1.0 minor release may revise
+the shape or introduce a successor after publishing migration guidance.
+
+Evidence models use `ExperimentalModel`, which supplies `extra="forbid"`,
+strict validation and frozen values. Those properties make each value safe to
+handle; they do not promise cross-release schema stability. Stable promotion
+requires the outside-adoption evidence in [Versioning](../versioning.md).
 
 ## Envelope contents
 

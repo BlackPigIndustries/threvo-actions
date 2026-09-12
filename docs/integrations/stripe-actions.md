@@ -4,7 +4,7 @@ This guide covers refunds. The independently configurable subscription
 cancellation and credit-note groups are documented in the
 [billing action guide](stripe-billing-actions.md).
 
-Included in 0.4.0 through the optional `stripe` extra. For checkout
+Included in 0.4.1 through the optional `stripe` extra. For checkout
 development, run `uv sync --extra dev --extra stripe --extra pydantic-ai`.
 
 `StripeActions.refunds` packages the reviewed refund lifecycle around the Stripe
@@ -37,7 +37,7 @@ runtime. Replace one boundary at a time:
 2. Replace `RefundConfig.gateway` with your typed fake or Stripe SDK client while
    retaining the scenario host.
 3. Replace `RefundConfig.host` with your authenticated repository and
-   authorization ports, then run the host conformance exercise.
+   authorization ports, then run the library-orchestrated host exercise.
 4. Replace `StripeServices` with durable storage, managed protection,
    observability, identifiers, and a pinned runtime revision.
 

@@ -1,7 +1,7 @@
 [project]
 name = "threvo-actions"
-version = "0.4.0"
-description = "Typed contracts for approving, executing and verifying governed actions"
+version = "0.4.1"
+description = "Approval, execution, verification, and recovery controls for consequential actions"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11,<3.14"
@@ -130,7 +130,10 @@ extend-exclude = ["docs/**/*.md"]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "S", "TCH"]
 
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["threvo_actions.models.ExperimentalModel"]
+runtime-evaluated-base-classes = [
+    "threvo_actions.models.ActionModel",
+    "threvo_actions.models.ExperimentalModel",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
@@ -144,7 +147,10 @@ runtime-evaluated-base-classes = ["threvo_actions.models.ExperimentalModel"]
 "src/threvo_actions/stores/postgres.py" = ["S608"]
 "src/threvo_actions/integrations/stripe/postgres.py" = ["S608"]
 "src/threvo_actions/integrations/stripe/postgres_migrations.py" = ["S608"]
+"src/threvo_actions/integrations/approval_channels/postgres.py" = ["S608"]
+"src/threvo_actions/integrations/approval_channels/postgres_migrations.py" = ["S608"]
 "examples/stripe_host/repositories.py" = ["S608"]
+"examples/stripe_host/exercise.py" = ["S608"]
 "examples/stripe_host/protection.py" = ["S608"]
 "examples/stripe_host/approvals.py" = ["S608"]
 

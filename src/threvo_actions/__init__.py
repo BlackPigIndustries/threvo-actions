@@ -57,6 +57,7 @@ from .receipts import (
     VerificationReceipt,
     VerificationReceiptStatus,
 )
+from .recovery import ActionRecoveryView
 from .registry import (
     ActionDefinition,
     ActionNotRegisteredError,
@@ -121,6 +122,7 @@ __all__ = [
     "ActionNotRegisteredError",
     "ActionOperationResult",
     "ActionRegistry",
+    "ActionRecoveryView",
     "ActionRuntime",
     "ActionStore",
     "ActionType",
@@ -221,4 +223,4 @@ __all__ = [
     "validate_proposal_update",
 ]
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
