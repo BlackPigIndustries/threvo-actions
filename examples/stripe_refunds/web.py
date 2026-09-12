@@ -14,6 +14,7 @@ from pydantic_ai import DeferredToolRequests
 from pydantic_ai.models import infer_model
 from pydantic_ai.usage import UsageLimits
 
+from examples.stripe_host.approvals import ApprovalRequestError, ApprovalRequestView
 from threvo_actions import (
     ActionEvidenceBundle,
     ActionOperationResult,
@@ -27,7 +28,13 @@ from threvo_actions.models import ExperimentalModel
 from threvo_actions.recovery import ActionRecoveryView  # noqa: TC001
 
 from .agent import AgentDependencies, build_agent
-from .models import AppError, Identity, RefundCommand
+from .models import (
+    AppError,
+    ApprovalCallback,
+    ApprovalRequestCommand,
+    Identity,
+    RefundCommand,
+)
 from .service import RefundService
 
 logger = logging.getLogger(__name__)
@@ -81,6 +88,7 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
     @app.exception_handler(AuthorizationDeniedError)
     @app.exception_handler(ProposalNotFoundError)
     @app.exception_handler(StripeBoundaryError)
+    @app.exception_handler(ApprovalRequestError)
     async def refusal(request: Request, error: Exception) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": "Operation unavailable or refused"})
 
@@ -130,6 +138,36 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
         proposal: str, decision: Decision, who: Annotated[Identity, Depends(identity)]
     ) -> ActionOperationResult:
         return await service.decide(who, proposal, decision.approve)
+
+    @app.post("/api/approval-requests")
+    async def create_approval_request(
+        command: ApprovalRequestCommand,
+        who: Annotated[Identity, Depends(identity)],
+    ) -> ApprovalRequestView:
+        return await service.create_approval_request(
+            who,
+            command.proposal_reference,
+            command.intended_authority,
+        )
+
+    @app.get("/api/approval-requests/{request_reference}")
+    async def approval_request(
+        request_reference: str,
+        who: Annotated[Identity, Depends(identity)],
+    ) -> ApprovalRequestView:
+        return await service.read_approval_request(who, request_reference)
+
+    @app.post("/api/approval-requests/{request_reference}/decision")
+    async def approval_callback(
+        request_reference: str,
+        callback: ApprovalCallback,
+        who: Annotated[Identity, Depends(identity)],
+    ) -> ActionOperationResult:
+        return await service.decide_approval_request(
+            who,
+            request_reference,
+            callback.decision,
+        )
 
     @app.get("/api/proposals/{proposal}/recovery")
     async def recovery(

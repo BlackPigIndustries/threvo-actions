@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS stripe_refund_app.webhooks (
     event_reference text PRIMARY KEY,
     received_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS stripe_refund_app.approval_requests (
+    request_reference text PRIMARY KEY,
+    tenant_reference text NOT NULL,
+    proposal_reference text NOT NULL,
+    binding_data jsonb NOT NULL CHECK (jsonb_typeof(binding_data) = 'object'),
+    decision_data jsonb CHECK (decision_data IS NULL OR jsonb_typeof(decision_data) = 'object'),
+    UNIQUE (tenant_reference, proposal_reference)
+);
 CREATE INDEX IF NOT EXISTS stripe_intent_order ON stripe_refund_app.intents
     (tenant_reference, order_reference);
 CREATE INDEX IF NOT EXISTS stripe_intent_monitoring ON stripe_refund_app.intents

@@ -93,6 +93,7 @@ nav:
   - Integrations:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
+      - Approval channels: integrations/approval-channels.md
       - Stripe refunds: integrations/stripe.md
       - Stripe Actions: integrations/stripe-actions.md
       - Stripe billing actions: integrations/stripe-billing-actions.md

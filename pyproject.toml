@@ -146,6 +146,7 @@ runtime-evaluated-base-classes = ["threvo_actions.models.ExperimentalModel"]
 "src/threvo_actions/integrations/stripe/postgres_migrations.py" = ["S608"]
 "examples/stripe_host/repositories.py" = ["S608"]
 "examples/stripe_host/protection.py" = ["S608"]
+"examples/stripe_host/approvals.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.11"

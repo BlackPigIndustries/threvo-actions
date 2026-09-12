@@ -113,6 +113,9 @@ Authenticated endpoints use `Authorization: Bearer <configured token>`.
 | `GET /api/proposals` | Tenant-scoped minimized proposals and receipts |
 | `POST /api/proposals` | Prepare a strict JSON `RefundCommand`; amounts are decimal strings |
 | `POST /api/proposals/{reference}/decision` | Independent approver submits `{"approve": true}` or rejection |
+| `POST /api/approval-requests` | Requester creates a server-bound request for one eligible approver |
+| `GET /api/approval-requests/{reference}` | Intended authenticated approver reads the minimized request |
+| `POST /api/approval-requests/{reference}/decision` | Intended approver records `{"decision":"approve"}` or `reject`; retries reuse persisted evidence |
 | `GET /api/proposals/{reference}/recovery` | Authorized recovery condition, schedule, and safe next step |
 | `GET /api/proposals/{reference}/evidence` | Versioned, minimized JSON evidence export |
 | `GET /api/proposals/{reference}/evidence.html` | Escaped human-readable evidence export |
@@ -132,6 +135,8 @@ Authenticated endpoints use `Authorization: Bearer <configured token>`.
   wrapped by a host-owned master key. This is a reference implementation, not AWS KMS.
 - `service.py`: `StripeActions` composition, authenticated decisions and the
   public recovery worker recipe.
+- `../stripe_host/approvals.py`: immutable approval request and decision
+  persistence used by the authenticated callback recipe.
 - `agent.py`: typed Pydantic AI integration at the edge.
 - `web.py`, `index.html`: local browser and HTTP application.
 

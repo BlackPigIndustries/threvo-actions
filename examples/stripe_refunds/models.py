@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, model_validator
 
-from threvo_actions import Money
+from threvo_actions import AuthorityDecision, Money
 from threvo_actions.integrations.stripe import RefundSnapshot, StripeAccount, StripeChargeId
 from threvo_actions.models import CurrencyCode, ExperimentalModel, SafeReference
 
@@ -64,6 +64,15 @@ class RefundCommand(ExperimentalModel):
     intent_reference: SafeReference
     order_reference: SafeReference
     amount: Money
+
+
+class ApprovalRequestCommand(ExperimentalModel):
+    proposal_reference: SafeReference
+    intended_authority: SafeReference
+
+
+class ApprovalCallback(ExperimentalModel):
+    decision: AuthorityDecision
 
 
 class IntentRecord(ExperimentalModel):

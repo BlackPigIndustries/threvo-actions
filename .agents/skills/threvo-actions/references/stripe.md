@@ -127,3 +127,11 @@ Billing groups expose authorized `observe_effect(...)` reads for late cases;
 these reads never settle runtime state or release claims. Provider sandbox
 qualification requires disposable subscription and invoice fixtures and remains
 separate from PostgreSQL conformance evidence.
+
+For human approval surfaces, follow `docs/integrations/approval-channels.md`.
+Persist the exact server-owned request binding and first decision before calling
+`record_authority`. A callback supplies only the opaque request reference and
+decision. Authenticate the intended authority, reload tenant, effect,
+commitment, audience, and assurance, then let the authorization port recheck
+current rights. A delivery transport never becomes business authority and never
+invokes Stripe.

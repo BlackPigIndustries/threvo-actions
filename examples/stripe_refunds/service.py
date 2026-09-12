@@ -4,6 +4,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from examples.stripe_host.approvals import (
+    ApprovalDecisionRecord,
+    ApprovalRequestBinding,
+    ApprovalRequestError,
+    ApprovalRequestView,
+    PostgresApprovalRequestStore,
+)
 from examples.stripe_host.worker import PostgresRecoveryLeaseSchedule, RecoveryWorker
 from threvo_actions import (
     ActionEvidenceBundle,
@@ -53,6 +60,7 @@ class RefundService:
         self.settings = settings
         self.repository = RefundRepository(pool)
         self.store = PostgresActionStore(pool)
+        self.approval_requests = PostgresApprovalRequestStore(pool)
         self.connector = connector
         protection = PostgresProtection(
             pool, bytes.fromhex(settings.master_key.get_secret_value())
@@ -165,6 +173,137 @@ class RefundService:
             evidence,
             authenticated_authority=authority,
         )
+
+    async def create_approval_request(
+        self,
+        identity: Identity,
+        proposal: str,
+        intended_authority: str,
+    ) -> ApprovalRequestView:
+        if identity.role != "requester":
+            raise AppError("a requester is required")
+        await self.read(identity, proposal)
+        record = await self.store.get(identity.tenant_reference, proposal)
+        if (
+            record is None
+            or record.commitment is None
+            or record.lifecycle_status is not LifecycleStatus.AWAITING_AUTHORITY
+        ):
+            raise AppError("proposal is not awaiting approval")
+        eligible = next(
+            (
+                item
+                for item in self.settings.identities
+                if item.tenant_reference == identity.tenant_reference
+                and item.role == "approver"
+                and item.reference == intended_authority
+            ),
+            None,
+        )
+        if eligible is None:
+            raise AppError("intended approver is unavailable")
+        now = datetime.now(UTC)
+        if now >= record.expires_at:
+            await self.actions.refunds.expire_due(
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal,
+            )
+            raise AppError("proposal expired")
+        request = await self.approval_requests.create(
+            ApprovalRequestBinding(
+                request_reference=self.approval_requests.new_reference(),
+                tenant_reference=identity.tenant_reference,
+                proposal_reference=proposal,
+                semantic_effect_reference=record.semantic_effect_reference,
+                action_type=record.action_type,
+                proposal_commitment=record.commitment.digest,
+                intended_authority=eligible.reference,
+                audience=self.definition.authority_audience,
+                channel_assurance=self.definition.authority_channel_assurance,
+                created_at=now,
+                expires_at=record.expires_at,
+            )
+        )
+        return request.view()
+
+    async def read_approval_request(
+        self, identity: Identity, request_reference: str
+    ) -> ApprovalRequestView:
+        request = await self.approval_requests.get(request_reference)
+        self._require_approval_request_identity(identity, request.binding)
+        await self.read(identity, request.binding.proposal_reference)
+        return request.view()
+
+    async def decide_approval_request(
+        self,
+        identity: Identity,
+        request_reference: str,
+        decision: AuthorityDecision,
+    ) -> ActionOperationResult:
+        request = await self.approval_requests.get(request_reference)
+        binding = request.binding
+        self._require_approval_request_identity(identity, binding)
+        await self.read(identity, binding.proposal_reference)
+        stored = await self.store.get(
+            binding.tenant_reference, binding.proposal_reference
+        )
+        if (
+            stored is None
+            or stored.commitment is None
+            or stored.action_type != binding.action_type
+            or stored.semantic_effect_reference != binding.semantic_effect_reference
+            or stored.commitment.digest != binding.proposal_commitment
+            or self.definition.authority_audience != binding.audience
+            or self.definition.authority_channel_assurance != binding.channel_assurance
+        ):
+            raise ApprovalRequestError("approval request binding changed")
+        authority = next(
+            authority
+            for authority in approvers(self.settings.identities)
+            if authority.reference == identity.reference
+        )
+        if request.decision is None:
+            now = datetime.now(UTC)
+            if now >= binding.expires_at:
+                raise ApprovalRequestError("approval request expired")
+            evidence = AuthorityEvidence(
+                tenant_reference=binding.tenant_reference,
+                action_type=binding.action_type,
+                proposal_instance_reference=binding.proposal_reference,
+                semantic_effect_reference=binding.semantic_effect_reference,
+                authority=authority,
+                audience=(binding.audience,),
+                decision=decision,
+                proposal_commitment=binding.proposal_commitment,
+                channel_assurance=binding.channel_assurance,
+                issued_at=now,
+                expires_at=min(binding.expires_at, now + timedelta(minutes=5)),
+            )
+            request = await self.approval_requests.record_decision(
+                request_reference,
+                ApprovalDecisionRecord(
+                    decision=decision,
+                    evidence=evidence,
+                    recorded_at=now,
+                ),
+            )
+        if request.decision is None or request.decision.decision is not decision:
+            raise ApprovalRequestError("approval request already has a different decision")
+        return await self.actions.refunds.record_authority(
+            request.decision.evidence,
+            authenticated_authority=authority,
+        )
+
+    @staticmethod
+    def _require_approval_request_identity(
+        identity: Identity, binding: ApprovalRequestBinding
+    ) -> None:
+        if (
+            identity.role != "approver"
+            or identity.tenant_reference != binding.tenant_reference
+            or identity.reference != binding.intended_authority
+        ):
+            raise ApprovalRequestError("approval request is unavailable")
 
     async def _proposal_for_effect(self, tenant: str, effect: str) -> str:
         owner = await self.store.get_effect_claim_owner(
