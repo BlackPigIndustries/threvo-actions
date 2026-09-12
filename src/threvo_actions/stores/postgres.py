@@ -279,7 +279,6 @@ class PostgresActionStore(ActionStore):
             raise StoredDataCorruptionError("stored effect claim is corrupt")
         return value
 
-
     async def _load(
         self,
         connection: _Connection,

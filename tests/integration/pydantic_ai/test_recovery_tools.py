@@ -30,16 +30,12 @@ def test_opt_in_recovery_tool_exposes_only_proposal_reference_and_safe_view() ->
             name="refund_recovery",
             description="Read safe recovery state for a refund proposal.",
         ).build_tool(stack.runtime)
-        assert set(tool.function_schema.json_schema["properties"]) == {
-            "proposal_reference"
-        }
+        assert set(tool.function_schema.json_schema["properties"]) == {"proposal_reference"}
         context = cast(
             "RunContext[AgentDeps]",
             SimpleNamespace(deps=AgentDeps("tenant:a")),
         )
-        result = await tool.function(
-            context, proposal_reference=prepared.proposal_reference
-        )
+        result = await tool.function(context, proposal_reference=prepared.proposal_reference)
         assert result.visible
         assert result.recovery is not None
         assert result.recovery.condition is ActionRecoveryCondition.WAITING_FOR_AUTHORITY
@@ -53,9 +49,7 @@ def test_opt_in_recovery_tool_exposes_only_proposal_reference_and_safe_view() ->
             "RunContext[AgentDeps]",
             SimpleNamespace(deps=AgentDeps("tenant:b")),
         )
-        hidden = await tool.function(
-            other_tenant, proposal_reference=prepared.proposal_reference
-        )
+        hidden = await tool.function(other_tenant, proposal_reference=prepared.proposal_reference)
         assert not hidden.visible
         assert hidden.recovery is None
 

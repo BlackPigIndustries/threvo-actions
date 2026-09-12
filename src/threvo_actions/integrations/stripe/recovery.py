@@ -20,9 +20,7 @@ class StripeObservedOutcome(ExperimentalModel):
 class StripeEffectObservation(ExperimentalModel):
     """One authoritative read that does not settle or reopen a proposal."""
 
-    schema_version: Literal["threvo.stripe.observation/v1"] = (
-        "threvo.stripe.observation/v1"
-    )
+    schema_version: Literal["threvo.stripe.observation/v1"] = "threvo.stripe.observation/v1"
     action_group: StripeHostActionGroup
     proposal_reference: SafeReference
     semantic_effect_reference: SafeReference

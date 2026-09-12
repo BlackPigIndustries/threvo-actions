@@ -28,9 +28,7 @@ from .receipts import (
 if TYPE_CHECKING:
     from .stores.base import StoredProposal
 
-_JSON_OBJECT_ADAPTER: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(
-    dict[str, JsonValue]
-)
+_JSON_OBJECT_ADAPTER: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 _JSON_VALUE_ADAPTER: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
@@ -102,9 +100,7 @@ class EvidenceAuthoritySummary(ExperimentalModel):
 class ActionEvidenceBundle(ExperimentalModel):
     """Unsigned export of one authorized stored proposal revision."""
 
-    schema_version: Literal["threvo.actions.evidence/v1"] = (
-        "threvo.actions.evidence/v1"
-    )
+    schema_version: Literal["threvo.actions.evidence/v1"] = "threvo.actions.evidence/v1"
     authenticity: Literal["unsigned_host_projection"] = "unsigned_host_projection"
     exported_at: datetime
     exporter_runtime_revision: SafeReference
@@ -217,9 +213,7 @@ def build_evidence_bundle(
         created_at=record.created_at,
         expires_at=record.expires_at,
         erased=erased,
-        display_preview=FrozenJsonObject.from_mapping(
-            {} if erased else record.display_preview
-        ),
+        display_preview=FrozenJsonObject.from_mapping({} if erased else record.display_preview),
         safe_result=(
             None
             if erased or record.safe_result is None
@@ -330,8 +324,7 @@ def _lifecycle_is_supported(bundle: ActionEvidenceBundle) -> bool:
             )
             or (
                 isinstance(receipt, VerificationReceipt)
-                and receipt.status
-                is VerificationReceiptStatus.VERIFIED_TERMINAL_FAILURE
+                and receipt.status is VerificationReceiptStatus.VERIFIED_TERMINAL_FAILURE
             )
             for receipt in bundle.receipts
         )
@@ -348,14 +341,17 @@ def render_evidence_html(bundle: ActionEvidenceBundle) -> str:
         if bundle.safe_result is None
         else json.dumps(bundle.safe_result.model_dump(mode="json"), indent=2)
     )
-    receipt_rows = "".join(
-        "<li>"
-        f"{html.escape(receipt.receipt_type)}: "
-        f"{html.escape(str(receipt.status))} at "
-        f"{html.escape(receipt.observed_at.isoformat())}"
-        "</li>"
-        for receipt in bundle.receipts
-    ) or "<li>No retained receipts</li>"
+    receipt_rows = (
+        "".join(
+            "<li>"
+            f"{html.escape(receipt.receipt_type)}: "
+            f"{html.escape(str(receipt.status))} at "
+            f"{html.escape(receipt.observed_at.isoformat())}"
+            "</li>"
+            for receipt in bundle.receipts
+        )
+        or "<li>No retained receipts</li>"
+    )
     return (
         "<article>"
         "<h1>Governed action evidence</h1>"

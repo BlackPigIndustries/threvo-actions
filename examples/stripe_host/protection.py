@@ -33,13 +33,9 @@ class PostgresProtection:
 
     @staticmethod
     def _aad(identity: ProposalIdentity, purpose: str) -> bytes:
-        return canonicalize_v1(
-            [identity.tenant_reference, identity.proposal_reference, purpose]
-        )
+        return canonicalize_v1([identity.tenant_reference, identity.proposal_reference, purpose])
 
-    async def _create_key(
-        self, identity: ProposalIdentity, purpose: str
-    ) -> tuple[str, bytes]:
+    async def _create_key(self, identity: ProposalIdentity, purpose: str) -> tuple[str, bytes]:
         handle = "key:" + secrets.token_hex(24)
         key, nonce = secrets.token_bytes(32), secrets.token_bytes(12)
         wrapped = nonce + self._master.encrypt(nonce, key, self._aad(identity, purpose))
@@ -65,15 +61,11 @@ class PostgresProtection:
         if not isinstance(wrapped, bytes):
             raise KeyError("proposal protection unavailable")
         try:
-            return self._master.decrypt(
-                wrapped[:12], wrapped[12:], self._aad(identity, purpose)
-            )
+            return self._master.decrypt(wrapped[:12], wrapped[12:], self._aad(identity, purpose))
         except InvalidTag:
             raise ValueError("proposal protection unavailable") from None
 
-    async def _destroy(
-        self, identity: ProposalIdentity, purpose: str, handle: str
-    ) -> None:
+    async def _destroy(self, identity: ProposalIdentity, purpose: str, handle: str) -> None:
         await self._pool.execute(
             f"""DELETE FROM {self._schema}.keys WHERE handle = $1 AND tenant_reference = $2
                 AND proposal_reference = $3 AND purpose = $4""",
@@ -104,9 +96,7 @@ class PostgresProtection:
         if commitment.algorithm != "hmac-sha256" or commitment.key_version != "1":
             return False
         try:
-            key = await self._key(
-                proposal_identity, "commitment", commitment.key_handle
-            )
+            key = await self._key(proposal_identity, "commitment", commitment.key_handle)
         except (KeyError, ValueError):
             return False
         return hmac.compare_digest(

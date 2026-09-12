@@ -12,9 +12,7 @@ from threvo_actions.integrations.stripe import StripeRecoveryCase, stripe_refund
 
 def test_refund_facade_exports_consistent_evidence_and_separate_late_observation() -> None:
     async def scenario() -> None:
-        example = stripe_refund_scenario(
-            runtime_revision=f"threvo-actions/commit:{'b' * 40}"
-        )
+        example = stripe_refund_scenario(runtime_revision=f"threvo-actions/commit:{'b' * 40}")
         prepared = await example.prepare()
         await example.approve(prepared.proposal_reference)
         await example.actions.refunds.execute(

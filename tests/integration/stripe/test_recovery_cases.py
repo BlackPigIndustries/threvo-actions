@@ -25,9 +25,7 @@ class Authorization:
     async def can_observe(self, *, tenant_reference: str, operator_reference: str) -> bool:
         return self.allowed and tenant_reference == "tenant:demo" and operator_reference == "ops:1"
 
-    async def can_acknowledge(
-        self, *, tenant_reference: str, operator_reference: str
-    ) -> bool:
+    async def can_acknowledge(self, *, tenant_reference: str, operator_reference: str) -> bool:
         return await self.can_observe(
             tenant_reference=tenant_reference, operator_reference=operator_reference
         )

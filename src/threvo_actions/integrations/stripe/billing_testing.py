@@ -491,7 +491,6 @@ def build_demo(
     )
 
 
-
 def stripe_billing_scenario(
     kind: str = "schedule",
     *,

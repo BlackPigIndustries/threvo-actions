@@ -214,9 +214,7 @@ class RecoveryWorker:
             )
         try:
             if item.operation is ActionWorkOperation.EXECUTE:
-                view = await group.read_recovery(
-                    item.proposal_reference, context=self.read_context
-                )
+                view = await group.read_recovery(item.proposal_reference, context=self.read_context)
                 if not any(
                     step.operation is ActionRecoveryOperation.EXECUTE
                     for step in view.recommended_steps

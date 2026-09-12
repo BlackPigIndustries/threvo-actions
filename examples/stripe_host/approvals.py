@@ -20,9 +20,7 @@ class ApprovalRequestError(RuntimeError):
 
 
 class ApprovalRequestBinding(ExperimentalModel):
-    schema_version: Literal["threvo.approval-request/v1"] = (
-        "threvo.approval-request/v1"
-    )
+    schema_version: Literal["threvo.approval-request/v1"] = "threvo.approval-request/v1"
     request_reference: SafeReference
     tenant_reference: SafeReference
     proposal_reference: SafeReference
@@ -102,13 +100,9 @@ class PostgresApprovalRequestStore:
             binding.proposal_reference,
             binding.model_dump_json(),
         )
-        existing = await self.for_proposal(
-            binding.tenant_reference, binding.proposal_reference
-        )
+        existing = await self.for_proposal(binding.tenant_reference, binding.proposal_reference)
         excluded = {"request_reference", "created_at"}
-        if existing.binding.model_dump(exclude=excluded) != binding.model_dump(
-            exclude=excluded
-        ):
+        if existing.binding.model_dump(exclude=excluded) != binding.model_dump(exclude=excluded):
             raise ApprovalRequestError("approval request is already bound differently")
         return existing
 
@@ -177,8 +171,6 @@ class PostgresApprovalRequestStore:
         return ApprovalRequestRecord(
             binding=ApprovalRequestBinding.model_validate_json(row["binding_data"]),
             decision=(
-                None
-                if decision is None
-                else ApprovalDecisionRecord.model_validate_json(decision)
+                None if decision is None else ApprovalDecisionRecord.model_validate_json(decision)
             ),
         )

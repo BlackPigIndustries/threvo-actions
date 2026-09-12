@@ -86,8 +86,7 @@ class StripeHostConformanceReport(ExperimentalModel):
     @property
     def passed(self) -> bool:
         return all(
-            result.disposition is StripeHostScenarioDisposition.PASSED
-            for result in self.results
+            result.disposition is StripeHostScenarioDisposition.PASSED for result in self.results
         )
 
 
@@ -105,9 +104,7 @@ class StripeHostConformanceDriver(Protocol):
     @property
     def descriptor(self) -> StripeHostConformanceDescriptor: ...
 
-    async def run_scenario(
-        self, scenario: StripeHostScenario
-    ) -> StripeHostScenarioResult: ...
+    async def run_scenario(self, scenario: StripeHostScenario) -> StripeHostScenarioResult: ...
 
 
 _REQUIRED_SCENARIOS = tuple(StripeHostScenario)
@@ -140,13 +137,9 @@ async def assert_stripe_host_conforms(
         try:
             result = await driver.run_scenario(scenario)
         except Exception:
-            raise StripeHostConformanceError(
-                f"stripe_host:{scenario.value}:driver_error"
-            ) from None
+            raise StripeHostConformanceError(f"stripe_host:{scenario.value}:driver_error") from None
         if result.scenario is not scenario:
-            raise StripeHostConformanceError(
-                f"stripe_host:{scenario.value}:mismatched_result"
-            )
+            raise StripeHostConformanceError(f"stripe_host:{scenario.value}:mismatched_result")
         if result.disposition is not StripeHostScenarioDisposition.PASSED:
             raise StripeHostConformanceError(
                 f"stripe_host:{scenario.value}:{result.disposition.value}"

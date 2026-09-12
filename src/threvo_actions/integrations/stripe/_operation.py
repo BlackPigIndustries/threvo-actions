@@ -345,6 +345,7 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
         return await self.runtime.read_recovery(
             self.definition, proposal_reference=proposal_reference, context=context
         )
+
     async def export_evidence(
         self, proposal_reference: str, *, context: ReadContext
     ) -> ActionEvidenceBundle:

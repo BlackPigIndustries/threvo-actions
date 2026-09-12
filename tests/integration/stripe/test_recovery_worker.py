@@ -142,9 +142,7 @@ def test_worker_expires_old_work_and_defers_sibling_owner() -> None:
         schedule = MemorySchedule()
         result = await worker_for(
             demo,
-            StaticSource(
-                (work_item(demo, loser.proposal_reference, ActionWorkOperation.EXECUTE),)
-            ),
+            StaticSource((work_item(demo, loser.proposal_reference, ActionWorkOperation.EXECUTE),)),
             schedule,
         ).scan(cutoff=NOW)
         assert result[0].disposition is RecoveryWorkerDisposition.DEFERRED
@@ -197,9 +195,7 @@ def test_unknown_action_version_is_deferred_for_attention() -> None:
         item = item.model_copy(
             update={"action_type": item.action_type.model_copy(update={"version": 999})}
         )
-        result = await worker_for(
-            demo, StaticSource((item,)), MemorySchedule()
-        ).scan(cutoff=NOW)
+        result = await worker_for(demo, StaticSource((item,)), MemorySchedule()).scan(cutoff=NOW)
         assert result[0].disposition is RecoveryWorkerDisposition.ATTENTION
         assert result[0].reason_code == "recovery_action_unconfigured"
 

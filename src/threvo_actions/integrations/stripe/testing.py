@@ -120,9 +120,7 @@ class StripeScenarioRepository:
             self.pending.add(key)
             return RefundReservationStatus.ACQUIRED
 
-    async def record_no_submission(
-        self, tenant_reference: str, effect_reference: str
-    ) -> None:
+    async def record_no_submission(self, tenant_reference: str, effect_reference: str) -> None:
         await self.load(tenant_reference, effect_reference)
         self.pending.discard(effect_reference)
 
@@ -289,9 +287,7 @@ def stripe_refund_scenario(
 ) -> StripeRefundScenario:
     """Build a safe local scenario using the same facade as production hosts."""
 
-    selected_policy = policy or RefundPolicy(
-        limits=(Money(amount=Decimal("100"), currency="USD"),)
-    )
+    selected_policy = policy or RefundPolicy(limits=(Money(amount=Decimal("100"), currency="USD"),))
     if selected_policy.allow_live:
         raise ValueError("Stripe test scenarios refuse live mode")
     selected_clock = clock if clock is not None else SystemClock()
@@ -302,12 +298,8 @@ def stripe_refund_scenario(
     ephemeral = EphemeralProtection(acknowledge_data_loss=True)
     services = StripeServices(
         store=store,
-        authority_evaluator=SingleApproval(
-            ConfirmingAuthority(reference="user:approver")
-        ),
-        commitment_provider=(
-            commitment_provider if commitment_provider is not None else ephemeral
-        ),
+        authority_evaluator=SingleApproval(ConfirmingAuthority(reference="user:approver")),
+        commitment_provider=(commitment_provider if commitment_provider is not None else ephemeral),
         protection_codec=protection_codec if protection_codec is not None else ephemeral,
         clock=selected_clock,
         identifiers=identifiers,

@@ -131,9 +131,7 @@ class PostgresRefundRepository:
             )
         return RefundReservationStatus(result.value)
 
-    async def record_no_submission(
-        self, tenant_reference: str, effect_reference: str
-    ) -> None:
+    async def record_no_submission(self, tenant_reference: str, effect_reference: str) -> None:
         async with self._pool.acquire() as connection, connection.transaction():
             await self._lock_payment_for_close(
                 connection,
@@ -227,6 +225,8 @@ class PostgresRefundRepository:
             and payment.currency == snapshot.intent.amount.currency
             and payment.currency_exponent == snapshot.intent.currency_exponent
         )
+
+
 class PostgresSubscriptionCancellationRepository:
     """Reference subscription repository sharing customer-level reservations."""
 
@@ -263,16 +263,12 @@ class PostgresSubscriptionCancellationRepository:
     async def subscription(
         self, tenant_reference: str, subscription_reference: str
     ) -> SubscriptionBinding:
-        reference = await self._reference_subscription(
-            tenant_reference, subscription_reference
-        )
+        reference = await self._reference_subscription(tenant_reference, subscription_reference)
         return SubscriptionBinding.model_validate(
             reference.model_dump(exclude={"customer_reference"})
         )
 
-    async def remember(
-        self, snapshot: SubscriptionCancellationSnapshot, requester: str
-    ) -> None:
+    async def remember(self, snapshot: SubscriptionCancellationSnapshot, requester: str) -> None:
         reference = await self._reference_subscription(
             snapshot.tenant_reference, snapshot.binding.subscription_reference
         )
@@ -332,9 +328,7 @@ class PostgresSubscriptionCancellationRepository:
             )
         return StripeReservationStatus(result.value)
 
-    async def record_no_submission(
-        self, tenant_reference: str, effect_reference: str
-    ) -> None:
+    async def record_no_submission(self, tenant_reference: str, effect_reference: str) -> None:
         await self._close(tenant_reference, effect_reference, outcome=None)
 
     async def record_outcome(
@@ -359,9 +353,7 @@ class PostgresSubscriptionCancellationRepository:
                 action_group=StripeHostActionGroup.SUBSCRIPTIONS,
                 effect_reference=effect_reference,
             )
-            snapshot = SubscriptionCancellationSnapshot.model_validate(
-                entry.snapshot_data
-            )
+            snapshot = SubscriptionCancellationSnapshot.model_validate(entry.snapshot_data)
             locked = await connection.fetchval(
                 f"""SELECT true FROM {self._app_schema}.subscriptions
                     WHERE tenant_reference = $1 AND subscription_reference = $2
@@ -462,9 +454,7 @@ class PostgresCreditNoteRepository:
                 invoice.model_dump_json(),
             )
 
-    async def invoice(
-        self, tenant_reference: str, invoice_reference: str
-    ) -> CreditNoteInvoice:
+    async def invoice(self, tenant_reference: str, invoice_reference: str) -> CreditNoteInvoice:
         reference = await self._reference_invoice(tenant_reference, invoice_reference)
         return CreditNoteInvoice.model_validate(
             reference.model_dump(exclude={"customer_reference"})
@@ -483,9 +473,7 @@ class PostgresCreditNoteRepository:
             snapshot_data=model_json_object(snapshot),
         )
 
-    async def load(
-        self, tenant_reference: str, effect_reference: str
-    ) -> CreditNoteSnapshot:
+    async def load(self, tenant_reference: str, effect_reference: str) -> CreditNoteSnapshot:
         entry = await self._ledger.load(
             tenant_reference=tenant_reference,
             action_group=StripeHostActionGroup.CREDIT_NOTES,
@@ -529,9 +517,7 @@ class PostgresCreditNoteRepository:
             )
         return StripeReservationStatus(result.value)
 
-    async def record_no_submission(
-        self, tenant_reference: str, effect_reference: str
-    ) -> None:
+    async def record_no_submission(self, tenant_reference: str, effect_reference: str) -> None:
         await self._close(tenant_reference, effect_reference, outcome=None)
 
     async def record_outcome(

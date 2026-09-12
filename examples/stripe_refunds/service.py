@@ -62,9 +62,7 @@ class RefundService:
         self.store = PostgresActionStore(pool)
         self.approval_requests = PostgresApprovalRequestStore(pool)
         self.connector = connector
-        protection = PostgresProtection(
-            pool, bytes.fromhex(settings.master_key.get_secret_value())
-        )
+        protection = PostgresProtection(pool, bytes.fromhex(settings.master_key.get_secret_value()))
         authorization = RefundAuthorization(
             repository=self.repository,
             identities=settings.identities,
@@ -77,9 +75,7 @@ class RefundService:
             ),
             policy=RefundPolicy(limits=settings.refund_limits),
             settings=StripeRefundSettings(
-                action_type=ActionType(
-                    namespace="example.stripe", name="refund", version=1
-                ),
+                action_type=ActionType(namespace="example.stripe", name="refund", version=1),
                 executor_identity=GovernedExecutor(reference="service:stripe-refunds"),
                 authority_audience="service:stripe-refunds",
                 verification_delay=timedelta(seconds=10),
@@ -119,17 +115,13 @@ class RefundService:
             context=self._read_context(identity),
         )
 
-    async def read_recovery(
-        self, identity: Identity, proposal: str
-    ) -> ActionRecoveryView:
+    async def read_recovery(self, identity: Identity, proposal: str) -> ActionRecoveryView:
         return await self.actions.refunds.read_recovery(
             proposal,
             context=self._read_context(identity),
         )
 
-    async def export_evidence(
-        self, identity: Identity, proposal: str
-    ) -> ActionEvidenceBundle:
+    async def export_evidence(self, identity: Identity, proposal: str) -> ActionEvidenceBundle:
         return await self.actions.refunds.export_evidence(
             proposal,
             context=self._read_context(identity),
@@ -153,7 +145,8 @@ class RefundService:
                 proposal_reference=proposal,
             )
         authority = next(
-            authority for authority in approvers(self.settings.identities)
+            authority
+            for authority in approvers(self.settings.identities)
             if authority.reference == identity.reference
         )
         evidence = AuthorityEvidence(
@@ -244,9 +237,7 @@ class RefundService:
         binding = request.binding
         self._require_approval_request_identity(identity, binding)
         await self.read(identity, binding.proposal_reference)
-        stored = await self.store.get(
-            binding.tenant_reference, binding.proposal_reference
-        )
+        stored = await self.store.get(binding.tenant_reference, binding.proposal_reference)
         if (
             stored is None
             or stored.commitment is None
@@ -315,9 +306,7 @@ class RefundService:
             return owner
         return await self.repository.proposal_for_effect(tenant, effect)
 
-    async def refresh_case(
-        self, identity: Identity, effect: str
-    ) -> StripeEffectObservation:
+    async def refresh_case(self, identity: Identity, effect: str) -> StripeEffectObservation:
         if identity.role != "approver":
             raise AppError("an approver is required")
         proposal = await self._proposal_for_effect(identity.tenant_reference, effect)
@@ -361,12 +350,9 @@ class RefundService:
                 record = await self.store.get(tenant, result.proposal_reference)
                 if (
                     record is not None
-                    and record.lifecycle_status
-                    is LifecycleStatus.VERIFICATION_UNRESOLVED
+                    and record.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED
                 ):
-                    await self.repository.open_case(
-                        tenant, record.semantic_effect_reference
-                    )
+                    await self.repository.open_case(tenant, record.semantic_effect_reference)
             for effect in await self.repository.monitoring_due(tenant):
                 try:
                     proposal = await self._proposal_for_effect(tenant, effect)
@@ -374,9 +360,7 @@ class RefundService:
                         proposal,
                         context=self._read_context(operator),
                     )
-                    await self.repository.record_case_observation(
-                        tenant, effect, observation
-                    )
+                    await self.repository.record_case_observation(tenant, effect, observation)
                 except Exception:
                     logger.exception(
                         "refund case observation failed",

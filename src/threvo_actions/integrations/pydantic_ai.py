@@ -480,9 +480,7 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
 
 
 @dataclass(frozen=True)
-class ActionRecoveryToolBinding(
-    Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]
-):
+class ActionRecoveryToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     """Opt-in read-only recovery tool for one fixed action definition."""
 
     definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT]

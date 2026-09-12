@@ -69,8 +69,7 @@ def test_old_constructor_and_progressive_composition_are_equivalent() -> None:
         == example.actions.refunds.definition.authority_audience
     )
     assert (
-        direct.refunds.definition.command_model
-        is example.actions.refunds.definition.command_model
+        direct.refunds.definition.command_model is example.actions.refunds.definition.command_model
     )
 
 
@@ -87,9 +86,7 @@ def test_clock_event_sink_and_policy_are_independently_replaceable() -> None:
     async def scenario() -> None:
         clock = FixedClock(datetime(2026, 9, 12, 12, 0, tzinfo=UTC))
         events = RecordingEventSink()
-        policy = RefundPolicy(
-            limits=(Money(amount=Decimal("50"), currency="USD"),)
-        )
+        policy = RefundPolicy(limits=(Money(amount=Decimal("50"), currency="USD"),))
         example = stripe_refund_scenario(
             clock=clock,
             event_sink=events,

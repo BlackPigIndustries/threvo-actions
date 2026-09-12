@@ -138,9 +138,7 @@ def test_driver_exception_is_sanitized() -> None:
 
 def test_driver_cancellation_is_not_converted_to_a_conformance_failure() -> None:
     class CancelledDriver(Driver):
-        async def run_scenario(
-            self, scenario: StripeHostScenario
-        ) -> StripeHostScenarioResult:
+        async def run_scenario(self, scenario: StripeHostScenario) -> StripeHostScenarioResult:
             del scenario
             raise asyncio.CancelledError
 

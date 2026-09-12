@@ -60,9 +60,7 @@ def test_due_work_is_tenant_scoped_classified_and_keyset_paginated() -> None:
                         next_check,
                     )
             source = PostgresActionWorkSource(pool, schema=schema)
-            first = await source.discover_due(
-                tenant_reference="tenant:a", cutoff=NOW, limit=2
-            )
+            first = await source.discover_due(tenant_reference="tenant:a", cutoff=NOW, limit=2)
             assert first.next_cursor is not None
             second = await source.discover_due(
                 tenant_reference="tenant:a",
@@ -92,9 +90,7 @@ def test_work_discovery_rejects_unbounded_pages() -> None:
             source = PostgresActionWorkSource(pool, schema=schema)
             for limit in (0, 501):
                 try:
-                    await source.discover_due(
-                        tenant_reference="tenant:a", cutoff=NOW, limit=limit
-                    )
+                    await source.discover_due(tenant_reference="tenant:a", cutoff=NOW, limit=limit)
                 except ValueError as error:
                     assert "between 1 and 500" in str(error)
                 else:

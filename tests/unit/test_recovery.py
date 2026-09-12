@@ -52,34 +52,46 @@ def test_recovery_condition_maps_every_lifecycle(
 
 
 def test_recovery_condition_uses_exact_deadline_and_observation_semantics() -> None:
-    assert recovery_condition(
-        lifecycle_status=LifecycleStatus.AUTHORIZED,
-        observed_at=NOW,
-        expires_at=NOW,
-        next_verification_at=None,
-        last_verification_status=None,
-    ) is ActionRecoveryCondition.EXPIRY_DUE
-    assert recovery_condition(
-        lifecycle_status=LifecycleStatus.EXECUTING,
-        observed_at=NOW,
-        expires_at=NOW + timedelta(minutes=5),
-        next_verification_at=NOW + timedelta(seconds=1),
-        last_verification_status=None,
-    ) is ActionRecoveryCondition.ACTIVE_EXECUTION_LEASE
-    assert recovery_condition(
-        lifecycle_status=LifecycleStatus.VERIFICATION_PENDING,
-        observed_at=NOW,
-        expires_at=NOW + timedelta(minutes=5),
-        next_verification_at=NOW,
-        last_verification_status=VerificationReceiptStatus.TARGET_UNAVAILABLE,
-    ) is ActionRecoveryCondition.OBSERVATION_UNAVAILABLE
-    assert recovery_condition(
-        lifecycle_status=LifecycleStatus.VERIFICATION_PENDING,
-        observed_at=NOW,
-        expires_at=NOW + timedelta(minutes=5),
-        next_verification_at=NOW,
-        last_verification_status=VerificationReceiptStatus.PROVISIONAL_ABSENCE,
-    ) is ActionRecoveryCondition.WAITING_FOR_PROVIDER
+    assert (
+        recovery_condition(
+            lifecycle_status=LifecycleStatus.AUTHORIZED,
+            observed_at=NOW,
+            expires_at=NOW,
+            next_verification_at=None,
+            last_verification_status=None,
+        )
+        is ActionRecoveryCondition.EXPIRY_DUE
+    )
+    assert (
+        recovery_condition(
+            lifecycle_status=LifecycleStatus.EXECUTING,
+            observed_at=NOW,
+            expires_at=NOW + timedelta(minutes=5),
+            next_verification_at=NOW + timedelta(seconds=1),
+            last_verification_status=None,
+        )
+        is ActionRecoveryCondition.ACTIVE_EXECUTION_LEASE
+    )
+    assert (
+        recovery_condition(
+            lifecycle_status=LifecycleStatus.VERIFICATION_PENDING,
+            observed_at=NOW,
+            expires_at=NOW + timedelta(minutes=5),
+            next_verification_at=NOW,
+            last_verification_status=VerificationReceiptStatus.TARGET_UNAVAILABLE,
+        )
+        is ActionRecoveryCondition.OBSERVATION_UNAVAILABLE
+    )
+    assert (
+        recovery_condition(
+            lifecycle_status=LifecycleStatus.VERIFICATION_PENDING,
+            observed_at=NOW,
+            expires_at=NOW + timedelta(minutes=5),
+            next_verification_at=NOW,
+            last_verification_status=VerificationReceiptStatus.PROVISIONAL_ABSENCE,
+        )
+        is ActionRecoveryCondition.WAITING_FOR_PROVIDER
+    )
 
 
 def test_recovery_steps_are_advisory_and_strict() -> None:

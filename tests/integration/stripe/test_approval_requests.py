@@ -40,14 +40,10 @@ def test_authenticated_request_and_callback_bind_server_owned_fields() -> None:
                     "proposal_reference": proposal,
                     "intended_authority": "user:approver",
                 }
-                created = await client.post(
-                    "/api/approval-requests", headers=requester, json=body
-                )
+                created = await client.post("/api/approval-requests", headers=requester, json=body)
                 assert created.status_code == 200
                 approval = created.json()
-                repeated = await client.post(
-                    "/api/approval-requests", headers=requester, json=body
-                )
+                repeated = await client.post("/api/approval-requests", headers=requester, json=body)
                 assert repeated.json()["request_reference"] == approval["request_reference"]
                 forged = {
                     **body,
@@ -55,9 +51,7 @@ def test_authenticated_request_and_callback_bind_server_owned_fields() -> None:
                     "proposal_commitment": "forged",
                 }
                 assert (
-                    await client.post(
-                        "/api/approval-requests", headers=requester, json=forged
-                    )
+                    await client.post("/api/approval-requests", headers=requester, json=forged)
                 ).status_code == 422
                 path = f"/api/approval-requests/{approval['request_reference']}"
                 assert (await client.get(path, headers=approver)).status_code == 200

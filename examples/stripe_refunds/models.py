@@ -25,9 +25,7 @@ class Settings(ExperimentalModel):
     webhook_secret: SecretStr
     master_key: SecretStr
     identities: tuple[Identity, ...]
-    refund_limits: tuple[Money, ...] = (
-        Money(amount=Decimal("10000.00"), currency="USD"),
-    )
+    refund_limits: tuple[Money, ...] = (Money(amount=Decimal("10000.00"), currency="USD"),)
     model: str | None = None
     agent_recovery_enabled: bool = False
 

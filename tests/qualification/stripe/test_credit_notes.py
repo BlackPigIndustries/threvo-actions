@@ -68,11 +68,7 @@ async def _qualify(config: StripeSandboxConfig, disposition: CreditDisposition) 
     request = CreditNoteRequest(
         intent_reference=f"qualification:{disposition.value}:{datetime.now(UTC).timestamp()}",
         invoice_reference=binding.invoice_reference,
-        lines=(
-            CreditNoteLineRequest(
-                line_reference="line:qualification", amount=line_amount
-            ),
-        ),
+        lines=(CreditNoteLineRequest(line_reference="line:qualification", amount=line_amount),),
         expected_total=expected_total,
         disposition=disposition,
         reason="order_change",
@@ -114,9 +110,7 @@ async def _qualify(config: StripeSandboxConfig, disposition: CreditDisposition) 
     assert observed.status == "issued"
     if disposition is CreditDisposition.CUSTOMER_BALANCE:
         assert observed.balance_transaction_id is not None
-        credit = await gateway.customer_credit(
-            binding, observed.balance_transaction_id
-        )
+        credit = await gateway.customer_credit(binding, observed.balance_transaction_id)
         assert credit.customer_id == binding.customer_id
         assert credit.amount_minor == -snapshot.draft.credit_minor
         assert credit.currency == binding.currency.lower()

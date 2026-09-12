@@ -70,9 +70,7 @@ async def _service(
     config: StripeSandboxConfig, *, lose_response: bool = False
 ) -> AsyncIterator[tuple[RefundService, stripe.StripeClient, _LoseAcceptedResponse | None]]:
     dsn = config.database_url.get_secret_value()
-    pool: asyncpg.Pool[asyncpg.Record] = await asyncpg.create_pool(
-        dsn, min_size=2, max_size=5
-    )
+    pool: asyncpg.Pool[asyncpg.Record] = await asyncpg.create_pool(dsn, min_size=2, max_size=5)
     name = await pool.fetchval("SELECT current_database()")
     if not isinstance(name, str) or not name.startswith("ta_stripe_test_"):
         await pool.close()
@@ -154,9 +152,7 @@ async def _payment(
     return reference
 
 
-async def _qualify(
-    config: StripeSandboxConfig, *, amount: Decimal, lose_response: bool
-) -> None:
+async def _qualify(config: StripeSandboxConfig, *, amount: Decimal, lose_response: bool) -> None:
     scenario_name = "refund:accepted_response_lost" if lose_response else f"refund:{amount}"
     os.environ["THREVO_ACTIONS_STRIPE_SCENARIO"] = scenario_name
     async with _service(config, lose_response=lose_response) as (

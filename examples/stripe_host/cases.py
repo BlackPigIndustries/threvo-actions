@@ -23,9 +23,7 @@ if TYPE_CHECKING:
 class StripeCaseAuthorization(Protocol):
     async def can_observe(self, *, tenant_reference: str, operator_reference: str) -> bool: ...
 
-    async def can_acknowledge(
-        self, *, tenant_reference: str, operator_reference: str
-    ) -> bool: ...
+    async def can_acknowledge(self, *, tenant_reference: str, operator_reference: str) -> bool: ...
 
 
 class StripeEffectObserver(Protocol):
@@ -96,16 +94,14 @@ class StripeRecoveryCaseService:
         )
         if (
             observation.proposal_reference != recovery_case.proposal_reference
-            or observation.semantic_effect_reference
-            != recovery_case.semantic_effect_reference
+            or observation.semantic_effect_reference != recovery_case.semantic_effect_reference
         ):
             raise RuntimeError("recovery observation binding is inconsistent")
         await self._repository.append(
             tenant_reference=tenant_reference,
             case_reference=case_reference,
             observation_reference=(
-                "observation:"
-                + hashlib.sha256(observation.model_dump_json().encode()).hexdigest()
+                "observation:" + hashlib.sha256(observation.model_dump_json().encode()).hexdigest()
             ),
             observation=observation,
         )
@@ -224,15 +220,11 @@ class PostgresStripeCaseRepository:
         existing_query = f"""SELECT operator_reference, acknowledged_at
             FROM {self._schema}.recovery_case_acknowledgements
             WHERE tenant_reference = $1 AND case_reference = $2"""  # noqa: S608 -- schema is strictly validated
-        existing = await self._pool.fetchrow(
-            existing_query, tenant_reference, case_reference
-        )
+        existing = await self._pool.fetchrow(existing_query, tenant_reference, case_reference)
         return (
             existing is not None
-            and str(existing["operator_reference"])
-            == acknowledgement.operator_reference
-            and _datetime(existing["acknowledged_at"])
-            == acknowledgement.acknowledged_at
+            and str(existing["operator_reference"]) == acknowledgement.operator_reference
+            and _datetime(existing["acknowledged_at"]) == acknowledgement.acknowledged_at
         )
 
     async def load(self, tenant_reference: str, case_reference: str) -> StripeRecoveryCase | None:

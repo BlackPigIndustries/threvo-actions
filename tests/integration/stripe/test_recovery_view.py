@@ -116,8 +116,7 @@ def test_owner_change_between_reads_is_uncertain_and_suppresses_execution() -> N
         assert view.owner is None
         assert view.condition is ActionRecoveryCondition.EFFECT_OWNED_ELSEWHERE
         assert all(
-            step.operation is not ActionRecoveryOperation.EXECUTE
-            for step in view.recommended_steps
+            step.operation is not ActionRecoveryOperation.EXECUTE for step in view.recommended_steps
         )
 
     asyncio.run(scenario())
@@ -164,9 +163,7 @@ def test_recovery_read_masks_tenant_denial_and_erases_details() -> None:
             )
         wrong_definition = replace(
             demo.actions.refunds.definition,
-            action_type=ActionType(
-                namespace="threvo.stripe", name="different_action", version=1
-            ),
+            action_type=ActionType(namespace="threvo.stripe", name="different_action", version=1),
         )
         with pytest.raises(ProposalNotFoundError):
             await demo.actions.refunds.runtime.read_recovery(

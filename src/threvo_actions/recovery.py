@@ -150,8 +150,7 @@ def recovery_condition(
     """Derive the proposal condition without performing or authorizing an action."""
 
     if (
-        lifecycle_status
-        in {LifecycleStatus.AWAITING_AUTHORITY, LifecycleStatus.AUTHORIZED}
+        lifecycle_status in {LifecycleStatus.AWAITING_AUTHORITY, LifecycleStatus.AUTHORIZED}
         and expires_at <= observed_at
     ):
         return ActionRecoveryCondition.EXPIRY_DUE
@@ -203,9 +202,7 @@ def recovery_steps(
         ActionRecoveryCondition.OUTCOME_UNPROVEN: ActionRecoveryOperation.RECONCILE,
         ActionRecoveryCondition.OPERATOR_ATTENTION: ActionRecoveryOperation.OPERATOR_REVIEW,
         ActionRecoveryCondition.RESOLVED: ActionRecoveryOperation.VIEW_RECORDED_OUTCOME,
-        ActionRecoveryCondition.REPLACEMENT_REQUIRED: (
-            ActionRecoveryOperation.PREPARE_REPLACEMENT
-        ),
+        ActionRecoveryCondition.REPLACEMENT_REQUIRED: (ActionRecoveryOperation.PREPARE_REPLACEMENT),
         ActionRecoveryCondition.REFUSED: ActionRecoveryOperation.NO_ACTION,
         ActionRecoveryCondition.EXPIRY_DUE: ActionRecoveryOperation.EXPIRE,
         ActionRecoveryCondition.ERASED: ActionRecoveryOperation.NO_ACTION,

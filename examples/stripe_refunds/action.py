@@ -76,9 +76,7 @@ class RefundAuthorization:
                 )
                 and bool(context.authorities)
                 and all(
-                    self._permitted(
-                        context.tenant_reference, authority.reference, "approver"
-                    )
+                    self._permitted(context.tenant_reference, authority.reference, "approver")
                     and authority.reference != context.requesting_principal.reference
                     for authority in context.authorities
                 )

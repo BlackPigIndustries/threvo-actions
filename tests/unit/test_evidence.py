@@ -65,9 +65,7 @@ def test_authorized_export_round_trips_as_immutable_minimized_json() -> None:
 
         assert restored == bundle
         assert bundle.lifecycle_status is LifecycleStatus.VERIFIED
-        assert bundle.display_preview.model_dump(mode="json") == {
-            "summary": "Refund ORD-42"
-        }
+        assert bundle.display_preview.model_dump(mode="json") == {"summary": "Refund ORD-42"}
         assert len(bundle.authority_summaries) == 1
         assert validate_evidence_bundle(bundle).status is EvidenceValidationStatus.CONSISTENT
         serialized = bundle.model_dump_json()
@@ -145,23 +143,20 @@ def test_validation_rejects_digest_identity_links_and_lifecycle_rewrites() -> No
         receipt = bundle.receipts[0]
 
         bad_digest = bundle.model_copy(update={"content_digest": "f" * 64})
-        assert EvidenceValidationReason.DIGEST_MISMATCH in validate_evidence_bundle(
-            bad_digest
-        ).reasons
-
-        duplicate = _redigest(
-            bundle.model_copy(update={"receipts": (receipt, receipt)})
+        assert (
+            EvidenceValidationReason.DIGEST_MISMATCH in validate_evidence_bundle(bad_digest).reasons
         )
-        assert EvidenceValidationReason.DUPLICATE_RECEIPT in validate_evidence_bundle(
-            duplicate
-        ).reasons
+
+        duplicate = _redigest(bundle.model_copy(update={"receipts": (receipt, receipt)}))
+        assert (
+            EvidenceValidationReason.DUPLICATE_RECEIPT
+            in validate_evidence_bundle(duplicate).reasons
+        )
 
         dangling_receipt = receipt.model_copy(
             update={"corrects_receipt_reference": "receipt:missing"}
         )
-        dangling = _redigest(
-            bundle.model_copy(update={"receipts": (dangling_receipt,)})
-        )
+        dangling = _redigest(bundle.model_copy(update={"receipts": (dangling_receipt,)}))
         assert EvidenceValidationReason.DANGLING_RECEIPT_LINK in (
             validate_evidence_bundle(dangling).reasons
         )

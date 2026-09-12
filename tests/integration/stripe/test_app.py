@@ -171,9 +171,7 @@ def test_restart_recovery_timeout_and_duplicate_admission():
             await service.decide(approver, second.proposal_reference, True)
             gateway.timeout = True
             # Recompose every runtime/protection object as after a process restart.
-            recovered = RefundService(
-                service.repository.pool, service.settings, service.connector
-            )
+            recovered = RefundService(service.repository.pool, service.settings, service.connector)
             await recovered.sweep()
             assert gateway.calls == 1
             await recovered.sweep()
@@ -203,14 +201,10 @@ def test_http_authentication_tenant_scope_and_independent_decision():
                 )
                 assert made.status_code == 200, made.text
                 ref = made.json()["proposal_reference"]
-                recovery = await client.get(
-                    f"/api/proposals/{ref}/recovery", headers=requester
-                )
+                recovery = await client.get(f"/api/proposals/{ref}/recovery", headers=requester)
                 assert recovery.status_code == 200
                 assert recovery.json()["condition"] == "waiting_for_authority"
-                evidence = await client.get(
-                    f"/api/proposals/{ref}/evidence", headers=requester
-                )
+                evidence = await client.get(f"/api/proposals/{ref}/evidence", headers=requester)
                 assert evidence.status_code == 200
                 assert evidence.json()["authenticity"] == "unsigned_host_projection"
                 rendered = await client.get(
@@ -259,11 +253,7 @@ def test_agent_prepares_and_pauses_without_authority():
                 request = command().model_dump(mode="json")
                 request["payment_reference"] = request.pop("order_reference")
                 return ModelResponse(
-                    parts=[
-                        ToolCallPart(
-                            "refund", request, tool_call_id="call:one"
-                        )
-                    ]
+                    parts=[ToolCallPart("refund", request, tool_call_id="call:one")]
                 )
 
             agent = build_agent(service, FunctionModel(respond))
@@ -337,9 +327,7 @@ def test_crash_after_reservation_is_never_retried_after_idempotency_window():
             await service.sweep()
             assert gateway.calls == 0
             assert (
-                await service.repository.reserve(
-                    record.snapshot, not_after=datetime.now(UTC)
-                )
+                await service.repository.reserve(record.snapshot, not_after=datetime.now(UTC))
                 is RefundReservationStatus.ALREADY_SUBMITTED
             )
 
@@ -514,9 +502,7 @@ def test_recovery_sweeps_do_not_starve_work_behind_duplicate_proposals():
             )
             await service.decide(approver, legitimate.proposal_reference, True)
             await service.sweep()
-            restarted = RefundService(
-                service.repository.pool, service.settings, service.connector
-            )
+            restarted = RefundService(service.repository.pool, service.settings, service.connector)
             await restarted.sweep()
             await restarted.sweep()
             record = await restarted.store.get("tenant:one", legitimate.proposal_reference)
@@ -576,9 +562,7 @@ def test_concurrent_public_workers_dispatch_once():
             proposal = await service.prepare(requester, command())
             await service.decide(approver, proposal.proposal_reference, True)
             gateway.timeout = True
-            restarted = RefundService(
-                service.repository.pool, service.settings, service.connector
-            )
+            restarted = RefundService(service.repository.pool, service.settings, service.connector)
             await asyncio.gather(service.sweep(), restarted.sweep())
             assert gateway.calls == 1
 

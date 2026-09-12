@@ -32,9 +32,7 @@ def _run_mypy(case: str, *, cache_dir: Path) -> tuple[str, str, int]:
 
 
 def test_valid_stripe_composition_preserves_facade_type(tmp_path: Path) -> None:
-    stdout, stderr, status = _run_mypy(
-        "valid_stripe_composition.py", cache_dir=tmp_path / "valid"
-    )
+    stdout, stderr, status = _run_mypy("valid_stripe_composition.py", cache_dir=tmp_path / "valid")
     assert status == 0, stdout + stderr
 
 

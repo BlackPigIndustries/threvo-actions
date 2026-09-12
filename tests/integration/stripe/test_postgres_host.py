@@ -125,12 +125,8 @@ def test_postgres_refund_repository_preserves_binding_and_reservation() -> None:
                 amount=snapshot.intent.amount,
                 status="succeeded",
             )
-            await repository.record_outcome(
-                "tenant:test", snapshot.effect_reference, outcome
-            )
-            await repository.record_outcome(
-                "tenant:test", snapshot.effect_reference, outcome
-            )
+            await repository.record_outcome("tenant:test", snapshot.effect_reference, outcome)
+            await repository.record_outcome("tenant:test", snapshot.effect_reference, outcome)
             with pytest.raises(StripePostgresHostError, match="different terminal"):
                 await repository.record_outcome(
                     "tenant:test",
@@ -153,9 +149,7 @@ def test_postgres_billing_repositories_share_customer_reservations() -> None:
         pool = await asyncpg.create_pool(_dsn(), min_size=2, max_size=6)
         try:
             await migrate_stripe_postgres(pool, schema=ledger_schema)
-            schema_sql = Path("examples/stripe_host/schema.sql").read_text(
-                encoding="utf-8"
-            )
+            schema_sql = Path("examples/stripe_host/schema.sql").read_text(encoding="utf-8")
             await pool.execute(
                 schema_sql.replace("stripe_host_app", app_schema).replace(
                     "threvo_stripe", ledger_schema
@@ -187,12 +181,8 @@ def test_postgres_billing_repositories_share_customer_reservations() -> None:
             subscription_demo = stripe_billing_scenario("schedule")
             assert isinstance(subscription_demo.repository, SubscriptionRepository)
             await subscription_demo.prepare()
-            subscription_snapshot = next(
-                iter(subscription_demo.repository.snapshots.values())
-            )
-            assert isinstance(
-                subscription_snapshot, SubscriptionCancellationSnapshot
-            )
+            subscription_snapshot = next(iter(subscription_demo.repository.snapshots.values()))
+            assert isinstance(subscription_snapshot, SubscriptionCancellationSnapshot)
             subscription = ReferenceSubscription.model_validate(
                 {
                     **subscription_snapshot.binding.model_dump(),
