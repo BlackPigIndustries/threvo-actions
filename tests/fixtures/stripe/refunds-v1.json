@@ -1,0 +1,13 @@
+{
+  "schema_version": "threvo.actions.stripe-fixture-description/v1",
+  "action_group": "refunds",
+  "account_scope": "direct_merchant_test_mode",
+  "currency": "USD",
+  "scenarios": [
+    "partial_refund",
+    "full_refund",
+    "accepted_response_lost_then_authoritative_lookup"
+  ],
+  "contains_provider_identifiers": false,
+  "contains_credentials": false
+}

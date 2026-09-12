@@ -19,7 +19,7 @@ Copy the file below into an empty directory and run it with the exact package
 version. It imports only `threvo_actions` and the Python standard library:
 
 ```bash
-uv run --no-project --with "threvo-actions==0.3.2" python installed_quickstart.py
+uv run --no-project --with "threvo-actions==0.4.0" python installed_quickstart.py
 ```
 
 ??? example "Copy the file below as `installed_quickstart.py`"

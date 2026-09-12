@@ -1226,6 +1226,42 @@ def test_concurrent_decision_and_execution_claims_have_one_winner() -> None:
     asyncio.run(scenario())
 
 
+def test_distinct_proposals_for_one_effect_report_the_loser_as_replayed() -> None:
+    async def scenario() -> None:
+        runtime, store, _, _ = runtime_parts()
+        host = HostPorts()
+        host.pause_execution = True
+        action = definition(host, DeterministicSecrets())
+        first_proposal = await prepare(runtime, action)
+        second_proposal = await prepare(runtime, action)
+        await authorize(runtime, store, action, first_proposal.proposal_reference)
+        await authorize(runtime, store, action, second_proposal.proposal_reference)
+
+        first_task = asyncio.create_task(
+            runtime.execute(
+                action,
+                tenant_reference="tenant:a",
+                proposal_reference=first_proposal.proposal_reference,
+            )
+        )
+        await host.execution_entered.wait()
+        second = await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=second_proposal.proposal_reference,
+        )
+
+        assert second.outcome is OperationOutcome.REPLAYED
+        assert second.lifecycle_status is LifecycleStatus.AUTHORIZED
+        assert host.executor_calls == 1
+
+        host.execution_release.set()
+        first = await first_task
+        assert first.outcome is OperationOutcome.VERIFICATION_PENDING
+
+    asyncio.run(scenario())
+
+
 def test_early_reconcile_does_not_steal_an_active_execution() -> None:
     async def scenario() -> None:
         runtime, store, _, _ = runtime_parts()

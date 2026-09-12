@@ -4,13 +4,15 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.3.2"
+  version: "0.4.0"
 ---
 
 # Threvo Actions
 
-Use `threvo-actions` to coordinate a high-consequence mutation while the host
-application retains business truth, authorization, execution, key custody, and
+Use `threvo-actions` to build a governed action: a consequential application
+change that needs bound approval, controlled execution and authoritative
+verification. The host application retains business truth, authorization,
+execution, key custody, and
 authoritative verification. The library is a control runtime, not a payment
 rail, policy engine, or source of financial state.
 
@@ -133,7 +135,7 @@ For SDK-backed Stripe refunds, install the optional `stripe` extra through uv an
 durable intent reservation and reconciliation scheduling in the host. Never
 resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
 
-In 0.3.0, prefer `StripeActions.refunds` for a new direct-charge
+At the current supported 0.3.x surface, prefer `StripeActions.refunds` for a new direct-charge
 refund integration. Bind
 `RefundHost` to the existing authorization port and a durable `RefundRepository`,
 declare `RefundPolicy` currency ceilings and `StripeRefundSettings` authority
@@ -146,11 +148,17 @@ services, pass the host clock, identifiers, event sink, retention store and exac
 revision through `StripeActions`; one runtime and clock are shared by all groups.
 Map an observed pending refund to provisional absence, not target unavailability.
 
-Version 0.3.0 also includes independent `StripeActions.subscriptions` and
+The 0.3.x surface also includes independent `StripeActions.subscriptions` and
 `StripeActions.credit_notes` groups. Read the billing section in
 [references/stripe.md](references/stripe.md). Cancellation scheduling is not
 termination; invoice reduction and customer balance credit are not cash refunds.
 Do not expose raw SDK calls, invent an allocation or automatically email customers.
+Start evaluation with `stripe_refund_scenario()` or
+`stripe_billing_scenario()`, then replace policy, gateway, host services, and
+runtime services one layer at a time. Use `read_recovery` for actionable
+operator state, `observe_effect` for separately attributed late reads, and
+`export_evidence` for an authorized unsigned projection. None grants authority
+or makes a provider mutation safe to resend.
 
 ## Add an agent framework only at the edge
 

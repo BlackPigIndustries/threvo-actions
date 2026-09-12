@@ -10,6 +10,13 @@ from pydantic import JsonValue, TypeAdapter
 
 from ..migrations import quote_schema_name
 from ..models import ActionType, LifecycleStatus
+from ..recovery import (
+    ActionWorkCursor,
+    ActionWorkItem,
+    ActionWorkOperation,
+    ActionWorkPage,
+    ActionWorkSource,
+)
 from .base import (
     ActionStore,
     EffectClaimResult,
@@ -538,6 +545,118 @@ class PostgresActionStore(ActionStore):
         if not isinstance(value, str):
             raise StoredDataCorruptionError("stored effect claim is corrupt")
         return value
+
+
+class PostgresActionWorkSource(ActionWorkSource):
+    """Bounded, tenant-scoped due-work discovery over runtime proposal columns."""
+
+    def __init__(self, pool: ConnectionSource, *, schema: str = "threvo_actions") -> None:
+        self._pool = pool
+        self._schema = quote_schema_name(schema)
+
+    async def discover_due(
+        self,
+        *,
+        tenant_reference: str,
+        cutoff: datetime,
+        limit: int,
+        cursor: ActionWorkCursor | None = None,
+    ) -> ActionWorkPage:
+        if not 1 <= limit <= 500:
+            raise ValueError("work discovery limit must be between 1 and 500")
+        async with self._pool.acquire() as connection:
+            rows = await connection.fetch(
+                self._query(),
+                tenant_reference,
+                cutoff,
+                None if cursor is None else cursor.due_at,
+                None if cursor is None else cursor.proposal_reference,
+                limit + 1,
+            )
+        items = tuple(self._item(row) for row in rows[:limit])
+        next_cursor = None
+        if len(rows) > limit and items:
+            last = items[-1]
+            next_cursor = ActionWorkCursor(
+                due_at=last.due_at,
+                proposal_reference=last.proposal_reference,
+            )
+        return ActionWorkPage(
+            tenant_reference=tenant_reference,
+            cutoff=cutoff,
+            items=items,
+            next_cursor=next_cursor,
+        )
+
+    def _query(self) -> str:
+        return f"""
+            WITH due AS (
+                SELECT action_namespace, action_name, action_version,
+                       proposal_reference,
+                       CASE
+                           WHEN lifecycle_status IN ('awaiting_authority', 'authorized')
+                                AND expires_at <= $2 THEN expires_at
+                           WHEN lifecycle_status = 'authorized' THEN status_changed_at
+                           ELSE COALESCE(next_verification_at, status_changed_at)
+                       END AS due_at,
+                       CASE
+                           WHEN lifecycle_status IN ('awaiting_authority', 'authorized')
+                                AND expires_at <= $2 THEN 'expire'
+                           WHEN lifecycle_status = 'authorized' THEN 'execute'
+                           WHEN lifecycle_status IN (
+                               'executing', 'failed_unknown', 'verification_pending'
+                           ) AND next_verification_at IS NULL THEN 'attention'
+                           ELSE 'reconcile'
+                       END AS operation,
+                       CASE
+                           WHEN lifecycle_status IN (
+                               'executing', 'failed_unknown', 'verification_pending'
+                           ) AND next_verification_at IS NULL
+                           THEN 'recovery_schedule_missing'
+                           ELSE NULL
+                       END AS reason_code
+                FROM {self._schema}.proposals
+                WHERE tenant_reference = $1
+                  AND COALESCE(proposal_data ->> 'erasure_pending_at', '') = ''
+                  AND COALESCE(proposal_data ->> 'erased_at', '') = ''
+                  AND (
+                      (lifecycle_status = 'awaiting_authority' AND expires_at <= $2)
+                      OR (lifecycle_status = 'authorized' AND status_changed_at <= $2)
+                      OR (
+                          lifecycle_status IN (
+                              'executing', 'failed_unknown', 'verification_pending'
+                          )
+                          AND (next_verification_at IS NULL OR next_verification_at <= $2)
+                      )
+                  )
+            )
+            SELECT action_namespace, action_name, action_version,
+                   proposal_reference, due_at, operation, reason_code
+            FROM due
+            WHERE ($3::timestamptz IS NULL OR (due_at, proposal_reference) > ($3, $4))
+            ORDER BY due_at, proposal_reference
+            LIMIT $5
+        """
+
+    @staticmethod
+    def _item(row: _Row) -> ActionWorkItem:
+        due_at = row["due_at"]
+        reason_code = row["reason_code"]
+        if not isinstance(due_at, datetime) or (
+            reason_code is not None and not isinstance(reason_code, str)
+        ):
+            raise StoredDataCorruptionError("stored work metadata is corrupt")
+        return ActionWorkItem(
+            action_type=ActionType(
+                namespace=_stored_string(row["action_namespace"]),
+                name=_stored_string(row["action_name"]),
+                version=_stored_integer(row["action_version"]),
+            ),
+            proposal_reference=_stored_string(row["proposal_reference"]),
+            operation=ActionWorkOperation(_stored_string(row["operation"])),
+            due_at=due_at,
+            reason_code=reason_code,
+        )
 
 
 class PostgresRetentionStore(RetentionStore):

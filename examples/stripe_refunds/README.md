@@ -10,7 +10,7 @@ Requires uv, Python 3.11–3.13, PostgreSQL 15+ and Stripe **test** credentials.
 Install uv using [the official instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-git clone --branch v0.2.0 https://github.com/BlackPigIndustries/threvo-actions.git
+git clone --branch develop https://github.com/BlackPigIndustries/threvo-actions.git
 cd threvo-actions
 uv sync --extra stripe-app --locked
 createdb threvo_refunds_sandbox
@@ -43,11 +43,11 @@ refund, records approval through the service, and checks the provider result.
 Every invocation creates a new test payment. It rejects live keys and live
 orders. It does not exercise a real human login or charge real money.
 
-The worker runs in the web process every five seconds. Durable database
-discovery recovers work after restart. Each attempt is claimed immediately
-before processing and bounded to 30 seconds. Failed attempts and unchanged
-proposals receive a durable 60-second backoff after processing, so an unhealthy
-or duplicate first page cannot starve later work.
+The worker runs in the web process every five seconds. Public, tenant-scoped
+database discovery recovers work after restart. A host-owned lease is acquired
+immediately before each operation. Failed attempts retain a sanitized reason
+and receive a durable 30-second backoff, so duplicate workers cannot dispatch
+the same admitted operation together.
 A separate scheduler can also run:
 
 ```bash
@@ -98,6 +98,11 @@ client endpoint that accepts model-generated authority, a tenant override,
 provider credentials, or replayed agent history. The regular form works
 without a model or model-provider credentials.
 
+Set `agent_recovery_enabled` to `true` only when the assistant should also get
+the read-only `refund_recovery` tool. Its only input is a safe proposal
+reference. It returns the same authorized recovery view as the HTTP endpoint;
+it cannot execute, retry, approve, refresh a case, or close one.
+
 ## HTTP operations
 
 Authenticated endpoints use `Authorization: Bearer <configured token>`.
@@ -108,6 +113,12 @@ Authenticated endpoints use `Authorization: Bearer <configured token>`.
 | `GET /api/proposals` | Tenant-scoped minimized proposals and receipts |
 | `POST /api/proposals` | Prepare a strict JSON `RefundCommand`; amounts are decimal strings |
 | `POST /api/proposals/{reference}/decision` | Independent approver submits `{"approve": true}` or rejection |
+| `POST /api/approval-requests` | Requester creates a server-bound request for one eligible approver |
+| `GET /api/approval-requests/{reference}` | Intended authenticated approver reads the minimized request |
+| `POST /api/approval-requests/{reference}/decision` | Intended approver records `{"decision":"approve"}` or `reject`; retries reuse persisted evidence |
+| `GET /api/proposals/{reference}/recovery` | Authorized recovery condition, schedule, and safe next step |
+| `GET /api/proposals/{reference}/evidence` | Versioned, minimized JSON evidence export |
+| `GET /api/proposals/{reference}/evidence.html` | Escaped human-readable evidence export |
 | `POST /api/chat` | Prepare through the assistant; no execution authority |
 | `GET /api/cases` | Approver's unresolved/late-failure cases |
 | `POST /api/cases/{effect}/refresh` | Read fresh provider evidence; never resend |
@@ -116,12 +127,16 @@ Authenticated endpoints use `Authorization: Bearer <configured token>`.
 ## Architecture and operational boundary
 
 - `models.py`: strict, frozen Pydantic domain/configuration models.
-- `action.py`: `Action` implementation compiled into the existing runtime.
+- `action.py`: authenticated host authorization for the maintained refund facade.
 - `storage.py`, `schema.sql`: host intent binding, per-order reservation,
-  authoritative discovery, case handling and monitoring.
+  case handling and monitoring. Runtime work discovery uses the public
+  `PostgresActionWorkSource`.
 - `protection.py`: per-proposal envelope keys persisted in PostgreSQL and
   wrapped by a host-owned master key. This is a reference implementation, not AWS KMS.
-- `service.py`: composition, authenticated decisions and crash recovery.
+- `service.py`: `StripeActions` composition, authenticated decisions and the
+  public recovery worker recipe.
+- `../stripe_host/approvals.py`: immutable approval request and decision
+  persistence used by the authenticated callback recipe.
 - `agent.py`: typed Pydantic AI integration at the edge.
 - `web.py`, `index.html`: local browser and HTTP application.
 

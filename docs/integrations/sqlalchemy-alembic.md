@@ -7,7 +7,7 @@ make Alembic's `env.py` dynamically execute whichever library migrations happen
 to be installed.
 
 ```bash
-uv add "threvo-actions[sqlalchemy]==0.3.2"
+uv add "threvo-actions[sqlalchemy]==0.4.0"
 alembic init -t async migrations
 ```
 
@@ -121,6 +121,13 @@ Construct `ActionRuntime` with `databases.action_store` and
 `databases.retention_store`. Use `databases.business_sessions` in your host
 ports to resolve canonical state, authorize, execute the governed mutation,
 and verify the authoritative result.
+
+For Stripe actions, keep `PostgresStripeLedger` in its library-owned schema and
+put the customer-resource mapping, normal-writer guards, approval requests, and
+recovery cases in the Alembic-owned business schema. The concrete
+`examples/stripe_host` repositories show the transaction seam. Apply the Stripe
+ledger migration before the Alembic revision that starts writing ledger-backed
+intents; constructors never apply either migration.
 
 The readiness checks fail startup when migrations are pending, either account
 owns the action tables, required privileges are missing, or dangerous

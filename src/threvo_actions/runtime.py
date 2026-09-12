@@ -29,6 +29,7 @@ from .canonical import (
     commitment_payload_v1,
     model_json_object,
 )
+from .evidence import ActionEvidenceBundle, build_evidence_bundle
 from .models import (
     ConfirmingAuthority,
     ExperimentalModel,
@@ -52,6 +53,14 @@ from .receipts import (
     RuntimeEventType,
     VerificationReceipt,
     VerificationReceiptStatus,
+)
+from .recovery import (
+    ActionEffectOwnership,
+    ActionRecoveryCondition,
+    ActionRecoveryOwnerView,
+    ActionRecoveryView,
+    recovery_condition,
+    recovery_steps,
 )
 from .registry import (
     ActionDefinition,
@@ -871,6 +880,209 @@ class ActionRuntime:
             receipts=() if erased else record.receipts,
             safe_result=None if erased else record.safe_result,
             erased=erased,
+        )
+
+    async def read_recovery(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionRecoveryView:
+        """Describe safe recovery options without granting authority or mutating state."""
+
+        record = await self._required(context.tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if not await definition.authorization.can_read(proposal_reference, context=context):
+            raise ProposalNotFoundError
+        observed_at = self._clock.now()
+        erased = record.erasure_pending_at is not None or record.erased_at is not None
+        if erased:
+            condition = ActionRecoveryCondition.ERASED
+            return ActionRecoveryView(
+                proposal_reference=record.proposal_reference,
+                lifecycle_status=record.lifecycle_status,
+                revision=record.revision,
+                erased=True,
+                observed_at=observed_at,
+                condition=condition,
+                effect_ownership=ActionEffectOwnership.OBSERVATION_UNCERTAIN,
+                recommended_steps=recovery_steps(
+                    condition=condition,
+                    next_verification_at=None,
+                    reason_code=None,
+                ),
+            )
+
+        last_verification = next(
+            (
+                receipt
+                for receipt in reversed(record.receipts)
+                if isinstance(receipt, VerificationReceipt)
+            ),
+            None,
+        )
+        reason_code = next(
+            (
+                receipt.reason_code
+                for receipt in reversed(record.receipts)
+                if receipt.reason_code is not None
+            ),
+            None,
+        )
+        condition = recovery_condition(
+            lifecycle_status=record.lifecycle_status,
+            observed_at=observed_at,
+            expires_at=record.expires_at,
+            next_verification_at=record.next_verification_at,
+            last_verification_status=(
+                None if last_verification is None else last_verification.status
+            ),
+        )
+        if condition is ActionRecoveryCondition.EXPIRY_DUE and reason_code is None:
+            reason_code = RuntimeReasonCode.PROPOSAL_EXPIRED.value
+
+        ownership, owner = await self._read_effect_owner(
+            definition=definition,
+            record=record,
+            context=context,
+            observed_at=observed_at,
+        )
+        if record.lifecycle_status is LifecycleStatus.AUTHORIZED and ownership in {
+            ActionEffectOwnership.OWNED_ELSEWHERE,
+            ActionEffectOwnership.OBSERVATION_UNCERTAIN,
+        }:
+            condition = ActionRecoveryCondition.EFFECT_OWNED_ELSEWHERE
+
+        return ActionRecoveryView(
+            proposal_reference=record.proposal_reference,
+            lifecycle_status=record.lifecycle_status,
+            revision=record.revision,
+            erased=False,
+            observed_at=observed_at,
+            expires_at=record.expires_at,
+            next_verification_at=record.next_verification_at,
+            verification_attempts=record.verification_attempts,
+            max_verification_attempts=record.max_verification_attempts,
+            last_verification_status=(
+                None if last_verification is None else last_verification.status
+            ),
+            reason_code=reason_code,
+            condition=condition,
+            effect_ownership=ownership,
+            owner=owner,
+            recommended_steps=recovery_steps(
+                condition=condition,
+                next_verification_at=record.next_verification_at,
+                reason_code=reason_code,
+            ),
+        )
+
+    async def export_evidence(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionEvidenceBundle:
+        """Export one authorized, minimized proposal revision."""
+
+        record = await self._required(context.tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if not await definition.authorization.can_read(proposal_reference, context=context):
+            raise ProposalNotFoundError
+        return build_evidence_bundle(
+            record,
+            exported_at=self._clock.now(),
+            exporter_runtime_revision=self._runtime_revision,
+        )
+
+    async def observation_context(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ExecutionContext:
+        """Authorize a read-only target observation and bind it to stored identity."""
+
+        record = await self._required(context.tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if not await definition.authorization.can_read(proposal_reference, context=context):
+            raise ProposalNotFoundError
+        if record.erasure_pending_at is not None or record.erased_at is not None:
+            raise ProposalNotFoundError
+        return self._execution_context(record, observed_at=self._clock.now())
+
+    async def _read_effect_owner(
+        self,
+        *,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        record: StoredProposal,
+        context: ReadContext,
+        observed_at: datetime,
+    ) -> tuple[ActionEffectOwnership, ActionRecoveryOwnerView | None]:
+        try:
+            owner_reference = await self._store.get_effect_claim_owner(
+                tenant_reference=record.tenant_reference,
+                action_type=record.action_type,
+                semantic_effect_reference=record.semantic_effect_reference,
+            )
+        except Exception:
+            return ActionEffectOwnership.OBSERVATION_UNCERTAIN, None
+        if owner_reference is None:
+            return ActionEffectOwnership.UNCLAIMED, None
+        if owner_reference == record.proposal_reference:
+            return ActionEffectOwnership.OWNED_BY_THIS_PROPOSAL, None
+
+        owner_record = await self._store.get(record.tenant_reference, owner_reference)
+        may_show_owner = (
+            owner_record is not None
+            and owner_record.action_type == record.action_type
+            and owner_record.semantic_effect_reference == record.semantic_effect_reference
+            and owner_record.erasure_pending_at is None
+            and owner_record.erased_at is None
+            and await definition.authorization.can_read(owner_reference, context=context)
+        )
+        try:
+            confirmed_reference = await self._store.get_effect_claim_owner(
+                tenant_reference=record.tenant_reference,
+                action_type=record.action_type,
+                semantic_effect_reference=record.semantic_effect_reference,
+            )
+        except Exception:
+            return ActionEffectOwnership.OBSERVATION_UNCERTAIN, None
+        if confirmed_reference != owner_reference:
+            return ActionEffectOwnership.OBSERVATION_UNCERTAIN, None
+        if not may_show_owner or owner_record is None:
+            return ActionEffectOwnership.OWNED_ELSEWHERE, None
+
+        owner_condition = recovery_condition(
+            lifecycle_status=owner_record.lifecycle_status,
+            observed_at=observed_at,
+            expires_at=owner_record.expires_at,
+            next_verification_at=owner_record.next_verification_at,
+            last_verification_status=next(
+                (
+                    receipt.status
+                    for receipt in reversed(owner_record.receipts)
+                    if isinstance(receipt, VerificationReceipt)
+                ),
+                None,
+            ),
+        )
+        return (
+            ActionEffectOwnership.OWNED_ELSEWHERE,
+            ActionRecoveryOwnerView(
+                proposal_reference=owner_record.proposal_reference,
+                revision=owner_record.revision,
+                lifecycle_status=owner_record.lifecycle_status,
+                condition=owner_condition,
+                next_check_at=owner_record.next_verification_at,
+            ),
         )
 
     async def erase(

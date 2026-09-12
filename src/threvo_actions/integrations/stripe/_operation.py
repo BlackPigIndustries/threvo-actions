@@ -27,7 +27,9 @@ if TYPE_CHECKING:
 
     from ...authority import AuthorityEvidence
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
+    from ...evidence import ActionEvidenceBundle
     from ...models import ActionType, ConfirmingAuthority, ProposingAgent, RequestingPrincipal
+    from ...recovery import ActionRecoveryView
     from ...registry import (
         AuthorityEvaluatorPort,
         AuthorizationPort,
@@ -248,6 +250,22 @@ class _Workflow(ABC, Generic[CommandT, SnapshotT, PreviewT, ResultT]):
             )
         return result
 
+    async def observe(self, *, context: ExecutionContext) -> VerificationResult[ResultT]:
+        """Read the provider without settling runtime state or releasing a claim."""
+
+        snapshot = await self.repository.load(
+            context.tenant_reference, context.semantic_effect_reference
+        )
+        if (
+            snapshot.tenant_reference != context.tenant_reference
+            or snapshot.effect_reference != context.semantic_effect_reference
+        ):
+            return VerificationResult(
+                status=VerificationStatus.TARGET_UNAVAILABLE,
+                reason_code="stripe_intent_mismatch",
+            )
+        return await self._verify(snapshot)
+
     async def authorize_erasure(self, proposal_reference: str, *, context: ReadContext) -> bool:
         return False
 
@@ -260,9 +278,11 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
         *,
         definition: ActionDefinition[CommandT, SnapshotT, PreviewT, ResultT],
         runtime: ActionRuntime,
+        workflow: _Workflow[CommandT, SnapshotT, PreviewT, ResultT],
     ) -> None:
         self.definition = definition
         self.runtime = runtime
+        self._workflow = workflow
 
     async def prepare(
         self,
@@ -305,8 +325,31 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
             proposal_reference=proposal_reference,
         )
 
+    async def expire_due(
+        self, *, tenant_reference: str, proposal_reference: str
+    ) -> ActionOperationResult:
+        return await self.runtime.expire_due(
+            self.definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
     async def read(self, proposal_reference: str, *, context: ReadContext) -> ProposalView:
         return await self.runtime.read(
+            self.definition, proposal_reference=proposal_reference, context=context
+        )
+
+    async def read_recovery(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionRecoveryView:
+        return await self.runtime.read_recovery(
+            self.definition, proposal_reference=proposal_reference, context=context
+        )
+
+    async def export_evidence(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionEvidenceBundle:
+        return await self.runtime.export_evidence(
             self.definition, proposal_reference=proposal_reference, context=context
         )
 

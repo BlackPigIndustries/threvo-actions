@@ -40,6 +40,28 @@ Before adopting this path, implement the same action through the expert runtime
 in tests and prove both paths produce equivalent lifecycle outcomes and stored
 evidence.
 
+## Explain recovery without granting authority
+
+Expose `runtime.read_recovery(definition, proposal_reference=..., context=...)`
+beside the ordinary `read` operation when a host needs workers or operator
+surfaces. The versioned view reports derived conditions, timing, verification
+attempts, safe reason codes, and effect ownership. Its steps are advice over the
+existing runtime methods; they are never permission or a retry command.
+
+Keep effect-owner details behind a separate `can_read` check for that exact
+sibling. Never infer authority from tenant equality or copy the owner's preview,
+result, receipts, or private snapshot into the losing proposal. An uncertain
+owner observation suppresses execution advice. Pending target state and an
+unavailable target query remain distinct.
+
+Use `runtime.export_evidence(definition, proposal_reference=..., context=...)`
+when an authorized operator needs a portable record. Preserve the exported
+omissions and `unsigned_host_projection` label. A consistent content digest
+detects changes only when it is compared with a digest obtained through a
+separately trusted route. Never describe the export as signed, complete,
+independently audited, or compliant. Keep late provider observations in a
+separately attributed host case attachment rather than fabricating receipts.
+
 ## Model roles
 
 Use one shared strict base so every runtime boundary has the required Pydantic

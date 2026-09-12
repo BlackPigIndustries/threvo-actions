@@ -15,6 +15,7 @@ from threvo_actions.integrations.stripe import (  # noqa: E402
     StripePreparationError,
     StripeReservationStatus,
 )
+from threvo_actions.receipts import VerificationReceipt, VerificationReceiptStatus  # noqa: E402
 
 
 @pytest.mark.parametrize("kind", ["schedule", "invoice_reduction"])
@@ -198,7 +199,13 @@ def test_desired_subscription_state_without_correlation_is_not_proof():
         result = await demo.operation.reconcile(
             tenant_reference="tenant:demo", proposal_reference=prepared.proposal_reference
         )
-        assert result.outcome is not OperationOutcome.VERIFIED
+        record = await demo.store.get("tenant:demo", prepared.proposal_reference)
+        assert result.outcome is OperationOutcome.VERIFICATION_PENDING
+        assert record is not None
+        receipt = record.receipts[-1]
+        assert isinstance(receipt, VerificationReceipt)
+        assert receipt.status is VerificationReceiptStatus.PROVISIONAL_ABSENCE
+        assert receipt.reason_code == "stripe_cancellation_not_proven"
         assert not demo.repository.outcomes
         assert demo.gateway.submissions == 1
 

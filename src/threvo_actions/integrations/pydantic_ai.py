@@ -46,6 +46,7 @@ from ..models import (
     RequestingPrincipal,
     SafeReference,
 )
+from ..recovery import ActionRecoveryView
 from ..registry import ActionDefinition, ReadContext
 from ..runtime import (
     ActionOperationResult,
@@ -96,6 +97,15 @@ class ActionToolResult(ExperimentalModel):
     display_preview: JsonObject = Field(default_factory=dict)
     safe_result: JsonObject | None = None
     fresh_proposal_reference: SafeReference | None = None
+
+
+class ActionRecoveryToolRequest(ExperimentalModel):
+    proposal_reference: SafeReference
+
+
+class ActionRecoveryToolResult(ExperimentalModel):
+    visible: bool
+    recovery: ActionRecoveryView | None = None
 
 
 class DeferredActionRequest(ExperimentalModel):
@@ -470,6 +480,55 @@ class ActionToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, Res
 
 
 @dataclass(frozen=True)
+class ActionRecoveryToolBinding(Generic[DepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]):
+    """Opt-in read-only recovery tool for one fixed action definition."""
+
+    definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT]
+    context_resolver: ActionContextResolver[DepsT]
+    name: str
+    description: str
+
+    def __post_init__(self) -> None:
+        if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
+            raise ValueError("tool name must be a lowercase Python-style identifier")
+        if not self.description.strip():
+            raise ValueError("tool description must not be empty")
+
+    def build_tool(self, runtime: ActionRuntime | None) -> Tool[DepsT]:
+        if runtime is None:
+            raise ValueError("recovery tool bindings require an action runtime")
+        definition = self.definition
+        context_resolver = self.context_resolver
+
+        async def recovery_tool(
+            ctx: RunContext[DepsT], **arguments: object
+        ) -> ActionRecoveryToolResult:
+            try:
+                request = ActionRecoveryToolRequest.model_validate(arguments)
+                trusted = context_resolver(ctx.deps)
+                view = await runtime.read_recovery(
+                    definition,
+                    proposal_reference=request.proposal_reference,
+                    context=ReadContext(
+                        tenant_reference=trusted.tenant_reference,
+                        consumer=trusted.evidence_consumer,
+                    ),
+                )
+            except (ValidationError, ProposalNotFoundError):
+                return ActionRecoveryToolResult(visible=False)
+            return ActionRecoveryToolResult(visible=True, recovery=view)
+
+        return Tool[DepsT].from_schema(
+            function=recovery_tool,
+            name=self.name,
+            description=self.description,
+            json_schema=ActionRecoveryToolRequest.model_json_schema(),
+            takes_ctx=True,
+            sequential=True,
+        )
+
+
+@dataclass(frozen=True)
 class ScopedActionToolBinding(
     Generic[DepsT, ScopedDepsT, CommandT, PrivateSnapshotT, PreviewT, ResultT]
 ):
@@ -684,6 +743,9 @@ __all__ = [
     "ActionAgentContext",
     "ActionCapability",
     "ActionContextResolver",
+    "ActionRecoveryToolBinding",
+    "ActionRecoveryToolRequest",
+    "ActionRecoveryToolResult",
     "ActionToolBinding",
     "ActionToolFailureHandler",
     "ActionToolResult",

@@ -9,6 +9,28 @@ from ._operation import (
     StripeReservationStatus,
 )
 from .actions import RefundPreparationError, StripeActions, StripeRefunds
+from .billing_testing import (
+    BillingAuthorization,
+    CreditGateway,
+    InvoiceRepository,
+    StripeBillingScenario,
+    SubscriptionGateway,
+    SubscriptionRepository,
+    stripe_billing_scenario,
+)
+from .composition import RefundConfig, StripeServices, from_services
+from .conformance import (
+    StripeHostActionGroup,
+    StripeHostCapabilities,
+    StripeHostConformanceDescriptor,
+    StripeHostConformanceDriver,
+    StripeHostConformanceError,
+    StripeHostConformanceReport,
+    StripeHostScenario,
+    StripeHostScenarioDisposition,
+    StripeHostScenarioResult,
+    assert_stripe_host_conforms,
+)
 from .credit_notes import (
     CreditDisposition,
     CreditNoteCalculatedLine,
@@ -63,6 +85,27 @@ from .models import (
     StripeRefundSettings,
 )
 from .ports import RefundHost, RefundRepository
+from .postgres import (
+    PostgresStripeLedger,
+    StripeLedgerEntry,
+    StripeLedgerPhase,
+    StripeLedgerReservationStatus,
+    StripePostgresConnection,
+    StripePostgresConnectionSource,
+    StripePostgresHostError,
+)
+from .postgres_migrations import (
+    StripePostgresMigration,
+    migrate_stripe_postgres,
+    render_stripe_postgres_migration,
+    stripe_postgres_migration,
+)
+from .recovery import (
+    StripeCaseAcknowledgement,
+    StripeEffectObservation,
+    StripeObservedOutcome,
+    StripeRecoveryCase,
+)
 from .subscriptions import (
     StripeSubscriptionGateway,
     StripeSubscriptions,
@@ -78,6 +121,13 @@ from .subscriptions import (
     SubscriptionObservation,
     SubscriptionOperation,
 )
+from .testing import (
+    StripeRefundScenario,
+    StripeScenarioAuthorization,
+    StripeScenarioGateway,
+    StripeScenarioRepository,
+    stripe_refund_scenario,
+)
 
 if TYPE_CHECKING:
     from .billing_gateway import StripeCreditNoteSDKGateway as StripeCreditNoteSDKGateway
@@ -90,6 +140,7 @@ __all__ = [
     "CORRELATION_KEY",
     "ChargeObservation",
     "RefundHost",
+    "RefundConfig",
     "RefundIntent",
     "RefundObservation",
     "RefundOutcome",
@@ -104,15 +155,38 @@ __all__ = [
     "RefundSnapshot",
     "RefundStatus",
     "RefundWebhook",
+    "PostgresStripeLedger",
     "StripeAccount",
     "StripeAccountId",
     "StripeActions",
+    "StripeServices",
+    "StripeScenarioAuthorization",
+    "StripeScenarioGateway",
+    "StripeScenarioRepository",
+    "StripeLedgerEntry",
+    "StripeLedgerPhase",
+    "StripeLedgerReservationStatus",
+    "StripePostgresConnection",
+    "StripePostgresConnectionSource",
+    "StripePostgresHostError",
+    "StripePostgresMigration",
+    "StripeHostActionGroup",
+    "StripeHostCapabilities",
+    "StripeHostConformanceDescriptor",
+    "StripeHostConformanceDriver",
+    "StripeHostConformanceError",
+    "StripeHostConformanceReport",
+    "StripeHostScenario",
+    "StripeHostScenarioDisposition",
+    "StripeHostScenarioResult",
     "StripeBoundaryError",
+    "StripeCaseAcknowledgement",
     "StripeChargeId",
     "StripeRefundConnector",
     "StripeRefundGateway",
     "StripeRefundId",
     "StripeRefundSettings",
+    "StripeRefundScenario",
     "StripeRefunds",
     "StripeSDKGateway",
     "verify_refund_webhook",
@@ -159,6 +233,22 @@ __all__ = [
     "InvoiceObservation",
     "StripeCreditNoteGateway",
     "StripeCreditNotes",
+    "StripeEffectObservation",
+    "StripeObservedOutcome",
+    "StripeRecoveryCase",
+    "BillingAuthorization",
+    "CreditGateway",
+    "InvoiceRepository",
+    "StripeBillingScenario",
+    "SubscriptionGateway",
+    "SubscriptionRepository",
+    "assert_stripe_host_conforms",
+    "from_services",
+    "migrate_stripe_postgres",
+    "render_stripe_postgres_migration",
+    "stripe_postgres_migration",
+    "stripe_billing_scenario",
+    "stripe_refund_scenario",
 ]
 
 

@@ -1,0 +1,70 @@
+name: Stripe sandbox qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stripe-sandbox-qualification
+  cancel-in-progress: false
+
+jobs:
+  refunds:
+    environment: stripe-sandbox-qualification
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ta_stripe_test_qualification
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ta_stripe_test_qualification"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      THREVO_ACTIONS_STRIPE_SANDBOX_API_KEY: ${{ secrets.THREVO_ACTIONS_STRIPE_SANDBOX_API_KEY }}
+      THREVO_ACTIONS_STRIPE_TEST_DSN: postgresql://postgres:postgres@localhost:5432/ta_stripe_test_qualification
+      THREVO_ACTIONS_STRIPE_SUBSCRIPTION_ID: ${{ vars.THREVO_ACTIONS_STRIPE_SUBSCRIPTION_ID }}
+      THREVO_ACTIONS_STRIPE_SUBSCRIPTION_CUSTOMER_ID: ${{ vars.THREVO_ACTIONS_STRIPE_SUBSCRIPTION_CUSTOMER_ID }}
+      THREVO_ACTIONS_STRIPE_OPEN_INVOICE_ID: ${{ vars.THREVO_ACTIONS_STRIPE_OPEN_INVOICE_ID }}
+      THREVO_ACTIONS_STRIPE_OPEN_INVOICE_CUSTOMER_ID: ${{ vars.THREVO_ACTIONS_STRIPE_OPEN_INVOICE_CUSTOMER_ID }}
+      THREVO_ACTIONS_STRIPE_OPEN_INVOICE_LINE_ID: ${{ vars.THREVO_ACTIONS_STRIPE_OPEN_INVOICE_LINE_ID }}
+      THREVO_ACTIONS_STRIPE_OPEN_INVOICE_LINE_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_OPEN_INVOICE_LINE_MINOR }}
+      THREVO_ACTIONS_STRIPE_OPEN_INVOICE_EXPECTED_TOTAL_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_OPEN_INVOICE_EXPECTED_TOTAL_MINOR }}
+      THREVO_ACTIONS_STRIPE_PAID_INVOICE_ID: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_ID }}
+      THREVO_ACTIONS_STRIPE_PAID_INVOICE_CUSTOMER_ID: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_CUSTOMER_ID }}
+      THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_ID: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_ID }}
+      THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_MINOR }}
+      THREVO_ACTIONS_STRIPE_PAID_INVOICE_EXPECTED_TOTAL_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_EXPECTED_TOTAL_MINOR }}
+      THREVO_ACTIONS_QUALIFICATION_REPORT_DIR: qualification-reports
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a maintained branch revision
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/develop|refs/heads/main) ;;
+            *) echo "Run qualification only from develop or main." >&2; exit 1 ;;
+          esac
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --extra dev --extra stripe-app --locked
+      - name: Run credentialed Stripe qualification
+        run: uv run pytest -q -m stripe_sandbox tests/qualification/stripe
+      - name: Upload minimized reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stripe-qualification-${{ github.sha }}
+          path: qualification-reports/
+          if-no-files-found: warn
+          retention-days: 30

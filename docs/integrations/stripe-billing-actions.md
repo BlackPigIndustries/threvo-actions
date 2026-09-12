@@ -1,6 +1,6 @@
 # Governed Stripe billing actions
 
-Included in 0.3.2 through the optional `stripe` extra. They use the
+Included in 0.4.0 through the optional `stripe` extra. They use the
 same `ActionDefinition`, `ActionRuntime`, authority evidence and store contracts
 as `StripeActions.refunds`. Existing refund callers remain compatible.
 
@@ -49,7 +49,8 @@ uv sync --extra dev --extra stripe --extra pydantic-ai --locked
 uv run python -m examples.stripe_billing.demo
 ```
 
-It runs all four variants with simulated lost submission responses. Each reaches
+It calls the installed `stripe_billing_scenario()` factory for all four variants
+with simulated lost submission responses. Each reaches
 verified completion through an independent read with one submission. No API key
 or network request is needed. The in-memory repositories, fixed identities and
 `EphemeralProtection` are evaluation adapters, not production hosting.
@@ -200,6 +201,13 @@ catch and sanitize them at the application/agent boundary. Do not clear claims
 or replay mutations because a transport response or reservation acknowledgement
 was lost.
 
+`examples/stripe_host` supplies concrete PostgreSQL repositories for all three
+groups. Each host row maps to an application customer reference. Reservations,
+normal-writer triggers, and cross-group conflict checks lock that shared customer
+resource, so a refund, cancellation change, and invoice credit for one customer
+cannot all become unresolved concurrently. This mapping is application policy;
+adopters must choose a resource boundary that covers every ordinary writer.
+
 ## Verification and limits
 
 Every SDK request carries the bound connected-account scope. Mutations disable
@@ -218,7 +226,9 @@ serializability or exactly-once execution.
 Cancellation verification requires the operation's correlation plus the exact
 bound subscription/item/customer and desired cancellation state. Another writer
 clearing the marker, reversing the change or changing the period makes the
-outcome unresolved. A subscription already ended before reconciliation also
+outcome `provisional_absence`, because the read succeeded but did not prove this
+action. `target_unavailable` is reserved for a failed or inconsistent provider
+read. A subscription already ended before reconciliation also
 needs host investigation; this adapter does not infer historical scheduling
 from a later canceled state.
 
@@ -230,6 +240,12 @@ requires a matching credit-note balance transaction with the correct negative
 amount and currency. A matching void note produces terminal failure, not a claim
 that the action never happened or that all historical effects were reversed.
 Empty lookup is provisional absence and never authorizes resubmission.
+
+Both billing groups expose `observe_effect(proposal_reference, context=...)`.
+This authorized read applies the same exact verifier predicates and returns a
+minimized `StripeEffectObservation`. It does not settle runtime state, rewrite
+receipts, or release a reservation. Attach late observations to a separately
+retained host case and require an authenticated operator acknowledgement.
 
 ## Agent integration
 
@@ -243,3 +259,5 @@ Stripe SDK passthrough.
 
 The [reviewed design and pipeline](../plans/2026-09-11-stripe-billing-actions.md)
 tracks durable-host and real-provider qualification separately from fixture tests.
+The current deterministic evidence and its limits are recorded in the
+[Stripe qualification matrix](../testing/stripe-qualification.md).

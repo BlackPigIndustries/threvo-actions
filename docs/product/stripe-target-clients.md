@@ -1,5 +1,19 @@
 # Target Stripe customers
 
+The first adoption target is a direct merchant with a real PostgreSQL-backed
+refund or billing-adjustment workflow, an identifiable finance or operations
+owner, and ordinary application writers that can be included in concurrency
+tests. The team must be able to run an isolated Stripe sandbox and implement
+the library's repository protocols against its own schema. A wrapper around the
+bundled example does not qualify as outside adoption.
+
+Use the [outside-host protocol](../testing/stripe-adoption-protocol.md) to collect evidence. Recruit or contact a host only through an explicitly authorized business process; this document does not grant that authority.
+
+AP2 is a possible future purchase-authorization input, not authority for the
+current refund and billing actions. See the
+[AP2 compatibility decision](../design/ap2-compatibility.md) for the required
+trust, host-policy and implementation gates.
+
 ## Initial customer
 
 A Python-based SaaS business or commerce platform that uses Stripe and wants
@@ -15,9 +29,9 @@ staff proposing refunds and finance or operations staff approving them.
 
 | Segment | Concrete trigger | Value to prove | Integration requirements |
 | --- | --- | --- | --- |
-| SaaS vendors using Stripe directly | A support assistant needs to refund a customer without unrestricted payment access | Exact proposal approval; no duplicate refund after a timeout or restart | Authenticated payment lookup, company refund policy, durable intent store |
+| SaaS vendors using Stripe directly | A support assistant needs to refund a customer or schedule cancellation without unrestricted Stripe access | Exact proposal approval; no duplicate mutation after a timeout or restart | Authenticated payment/subscription lookup, company policy, durable intent store |
 | Commerce/support platforms serving multiple merchants | The same assistant workflow acts for several Stripe accounts | Tenant and account separation; consistent recovery across merchants | Host-owned connected-account mapping and direct-charge qualification |
-| Internal finance copilots | Staff need controlled tools across payments and accounting | Common authority and evidence semantics, with provider-specific verification | Existing finance roles, business references and operations ownership |
+| Internal finance copilots | Staff need controlled refunds and invoice credits across payments and accounting | Common authority, recovery, and evidence semantics with provider-specific verification | Existing finance roles, business references and operations ownership |
 | Agencies/platform integrators building financial agents | Each customer otherwise requires bespoke approval and retry code | Lower engineering effort through a tested adapter and runnable application | Ability to supply host identity, policy, keys and deployment |
 
 Start with direct Stripe merchants. Evaluate direct-charge Connect platforms
@@ -31,7 +45,7 @@ the first connector's qualification.
    a finance question?
 2. Is there an authoritative mapping from the signed-in organization and a
    business order to its Stripe account/payment?
-3. Who can request, approve and investigate a refund? Must these be different
+3. Who can request, approve and investigate the action? Must these be different
    people? What policy and limits apply?
 4. What happens today after a timeout, duplicate tool call, revoked permission
    or late provider failure?
@@ -50,17 +64,20 @@ the first connector's qualification.
 
 ## Adoption offer and evidence
 
-The proposed `StripeActions.refunds` interface packages expert refund behavior
-behind explicit typed host contracts. Evaluate whether developers and agents can
+The implemented `StripeActions` facade packages refund, period-end cancellation,
+and credit-note behavior behind explicit typed host contracts. Evaluate whether
+developers and agents can
 understand affected data, handle changed state and revoked authority, and
 distinguish submission from completion through the ordinary interface. Ease of
 applying strong practices is the primary value; elapsed integration time is
-secondary. See the [detailed proposition and pipeline](../plans/2026-09-10-stripe-actions.md).
+secondary. See the
+[consolidated implementation and evidence plan](../plans/2026-09-12-0935-feat-stripe-adoption-recovery-plan.md).
 
 Offer one assisted integration of the customer's own refund operation, using
-their existing policy and systems. Evaluate failure recovery, correct use of
-authority and data boundaries, developer confusion and repeat use on a second action. Record
-assistance and failed attempts honestly. The included sandbox app and internal
+their existing policy and systems, then repeat one billing action through the
+same services. Evaluate failure recovery, correct use of authority and data
+boundaries, developer confusion and repeat use. Record assistance and failed
+attempts honestly. The included sandbox app and internal
 use are engineering evidence, not evidence of independent customer adoption.
 
 The library is Apache-2.0; any paid implementation support or hosted operations
@@ -69,7 +86,7 @@ or Stripe partnership implied by this connector.
 
 ## Relationship to Visa and Mastercard
 
-For these customers, the initial connection is Stripe's refund API, not a
+For these customers, the current connection is Stripe's merchant APIs, not a
 direct card-network integration. A later corporate-purchasing action could
 verify a delegated credential, apply company policy and use a Visa- or
 Mastercard-backed payment provider. Mastercard Verifiable Intent/AP2 authority

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import hashlib
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, model_validator
 
 from threvo_actions import Money
-from threvo_actions.canonical import canonicalize_v1
-from threvo_actions.integrations.stripe import RefundIntent, StripeAccount, StripeChargeId
+from threvo_actions.integrations.stripe import RefundSnapshot, StripeAccount, StripeChargeId
 from threvo_actions.models import CurrencyCode, ExperimentalModel, SafeReference
 
 
@@ -26,7 +25,9 @@ class Settings(ExperimentalModel):
     webhook_secret: SecretStr
     master_key: SecretStr
     identities: tuple[Identity, ...]
+    refund_limits: tuple[Money, ...] = (Money(amount=Decimal("10000.00"), currency="USD"),)
     model: str | None = None
+    agent_recovery_enabled: bool = False
 
     @model_validator(mode="after")
     def sandbox_and_distinct_principals(self) -> Settings:
@@ -63,27 +64,13 @@ class RefundCommand(ExperimentalModel):
     amount: Money
 
 
-class RefundPreview(ExperimentalModel):
-    order_reference: SafeReference
-    amount: Money
+class ApprovalRequestCommand(ExperimentalModel):
+    proposal_reference: SafeReference
+    intended_authority: SafeReference
 
 
-class RefundSnapshot(ExperimentalModel):
-    intent: RefundIntent
-    order_reference: SafeReference
-    order_version: int
-    refunded_minor: int
-
-    @property
-    def effect_reference(self) -> str:
-        # Claim identity excludes version and mutable parameters. The host also
-        # rejects rebinding the same business intent to different parameters.
-        return (
-            "refund:"
-            + hashlib.sha256(
-                canonicalize_v1([self.intent.tenant_reference, self.intent.intent_reference])
-            ).hexdigest()
-        )
+class ApprovalCallback(ExperimentalModel):
+    decision: Literal["approve", "reject"]
 
 
 class IntentRecord(ExperimentalModel):

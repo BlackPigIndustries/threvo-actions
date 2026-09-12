@@ -27,12 +27,14 @@ from ._operation import (
     _StripeOperation,
     _Workflow,
 )
+from .conformance import StripeHostActionGroup
 from .gateway import StripeAccount, StripeBoundaryError, StripeCustomerId
+from .recovery import StripeEffectObservation, StripeObservedOutcome
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from ...registry import AuthorizationPort, PreparationContext
+    from ...registry import AuthorizationPort, PreparationContext, ReadContext
     from ...runtime import Clock
     from ...stores import ActionStore
 
@@ -217,6 +219,30 @@ class StripeSubscriptions(
 ):
     """Prepare schedule/withdrawal proposals; host authority and verification remain required."""
 
+    async def observe_effect(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> StripeEffectObservation:
+        observation_context = await self.runtime.observation_context(
+            self.definition,
+            proposal_reference=proposal_reference,
+            context=context,
+        )
+        result = await self._workflow.observe(context=observation_context)
+        return StripeEffectObservation(
+            action_group=StripeHostActionGroup.SUBSCRIPTIONS,
+            proposal_reference=proposal_reference,
+            semantic_effect_reference=observation_context.semantic_effect_reference,
+            observed_at=observation_context.observed_at,
+            verification_status=result.status,
+            outcome=(
+                None
+                if result.result is None
+                else StripeObservedOutcome(status=result.result.status)
+            ),
+            external_reference=result.external_reference,
+            reason_code=result.reason_code,
+        )
+
 
 class _SubscriptionWorkflow(
     _Workflow[
@@ -348,7 +374,7 @@ class _SubscriptionWorkflow(
             )
         if not snapshot.matches_result(observed):
             return VerificationResult(
-                status=VerificationStatus.TARGET_UNAVAILABLE,
+                status=VerificationStatus.PROVISIONAL_ABSENCE,
                 reason_code="stripe_cancellation_not_proven",
             )
         return VerificationResult(

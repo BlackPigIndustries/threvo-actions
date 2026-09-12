@@ -2,6 +2,14 @@
 
 ## Governed facade (0.3.x)
 
+Start with the credential-free `stripe_refund_scenario()` and then replace its
+boundaries through `StripeActions.from_services(StripeServices(...),
+refunds=RefundConfig(...))`. Both paths create the same facade and runtime. The
+supplied scenario is process-local and refuses live policy; its `approve()`
+helper is evaluation-only. Production code supplies authenticated evidence,
+durable storage and managed protection. The original `StripeActions(...)`
+constructor remains supported.
+
 Use `StripeActions.refunds` with a host-resolved `RefundPayment`, model-visible
 `RefundRequest`, private `RefundSnapshot`, minimized `RefundPreview`, explicit
 `RefundPolicy` and `StripeRefundSettings`. The host is a `RefundHost` containing
@@ -27,7 +35,7 @@ and the compatible connector below.
 ## Existing connector
 
 ```bash
-uv add "threvo-actions[stripe]==0.3.2"
+uv add "threvo-actions[stripe]==0.4.0"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
@@ -57,6 +65,9 @@ could not complete or its binding was inconsistent.
 Treat authenticated webhooks as lookup hints and deduplicate them. Keep a
 durable sweep so lost jobs or events do not strand proposals. Late failures
 belong to a separate host case; do not rewrite old receipts or replay a refund.
+Use the authorized `actions.refunds.observe_effect(...)` read for those cases.
+It reuses normal correlation checks without consuming a verification attempt,
+settling the runtime, recording an outcome, or releasing the host claim.
 Back off failed or unchanged recovery attempts from the end of processing;
 claim each bounded attempt immediately before running it. Keep
 order writers coordinated with unresolved refund reservations. Protection
@@ -98,9 +109,29 @@ same subscription/invoice, including other actions. Unknown acknowledgements
 retain claims; never resend after empty lookup or expired provider idempotency.
 Stripe lacks atomic compare-and-set: final preflight reduces but cannot eliminate
 external-writer races. A changed/missing subscription correlation remains
-unresolved, even if the current state happens to match the requested state.
+`PROVISIONAL_ABSENCE`, even if the current state happens to match the requested
+state. Reserve `TARGET_UNAVAILABLE` for a provider lookup that failed or returned
+an inconsistent binding.
 
 Use `examples/stripe_billing/demo.py` for complete deterministic host wiring and
 `examples/stripe_billing/agent.py` for existing Pydantic AI bindings. The guide is
 `docs/integrations/stripe-billing-actions.md`; the reviewed design and follow-on
 qualification pipeline is `docs/plans/2026-09-11-stripe-billing-actions.md`.
+The checked fixture matrix is `docs/testing/stripe-qualification.md`.
+
+The installed `stripe_billing_scenario()` factory is the evaluation entry point;
+replace its policy, gateway, host repository/authorization, and runtime services
+progressively. `examples/stripe_host` implements all three repository protocols
+over one PostgreSQL ledger and a shared application customer-resource lock.
+Billing groups expose authorized `observe_effect(...)` reads for late cases;
+these reads never settle runtime state or release claims. Provider sandbox
+qualification requires disposable subscription and invoice fixtures and remains
+separate from PostgreSQL conformance evidence.
+
+For human approval surfaces, follow `docs/integrations/approval-channels.md`.
+Persist the exact server-owned request binding and first decision before calling
+`record_authority`. A callback supplies only the opaque request reference and
+decision. Authenticate the intended authority, reload tenant, effect,
+commitment, audience, and assurance, then let the authorization port recheck
+current rights. A delivery transport never becomes business authority and never
+invokes Stripe.

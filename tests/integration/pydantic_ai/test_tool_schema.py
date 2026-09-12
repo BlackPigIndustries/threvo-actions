@@ -34,6 +34,7 @@ from tests.integration.pydantic_ai.support import (
 
 from threvo_actions.integrations.pydantic_ai import (
     ActionCapability,
+    ActionRecoveryToolBinding,
     ActionToolBinding,
     ScopedActionToolBinding,
     _contains_json_float_for_decimal,
@@ -47,7 +48,9 @@ def test_capability_requires_at_least_one_explicit_action_binding() -> None:
         ActionCapability(runtime=stack.runtime, bindings=[])
 
 
-@pytest.mark.parametrize("binding", [ActionToolBinding, ScopedActionToolBinding])
+@pytest.mark.parametrize(
+    "binding", [ActionToolBinding, ActionRecoveryToolBinding, ScopedActionToolBinding]
+)
 def test_public_binding_annotations_are_runtime_resolvable(binding: type[object]) -> None:
     assert get_type_hints(binding)
 

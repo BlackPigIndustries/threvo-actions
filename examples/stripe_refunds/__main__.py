@@ -52,6 +52,7 @@ def configure(path: Path) -> None:
                 token=SecretStr(secrets.token_urlsafe(32)),
             ),
         ),
+        refund_limits=(Money(amount=Decimal("10000.00"), currency="USD"),),
         model=os.environ.get("STRIPE_APP_MODEL"),
     )
     document = settings.model_dump(mode="json")

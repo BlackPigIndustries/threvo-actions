@@ -8,7 +8,7 @@ requires host-protected private state and separate runtime and retention roles;
 it does not claim storage encryption or deletion from external copies.
 
 ```bash
-uv add "threvo-actions[postgres]==0.3.2"
+uv add "threvo-actions[postgres]==0.4.0"
 ```
 
 The action schema can live beside the application's tables or in a dedicated
@@ -150,6 +150,12 @@ runtime = ActionRuntime(
     identifiers=identifiers,
 )
 ```
+
+Create a separate `PostgresActionWorkSource(runtime_pool)` when a worker needs
+bounded, tenant-scoped discovery of expired, executable, or due verification
+work. The discovery source reads existing lifecycle columns and does not become
+the queue or acquire execution authority. Pair it with a host-owned lease
+schedule as shown in the [recovery worker recipe](recovery-worker.md).
 
 Here, `clock` implements `Clock`, `identifiers` implements
 `IdentifierProvider`, and the two DSNs come from your application's secret

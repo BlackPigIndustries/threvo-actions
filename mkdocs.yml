@@ -93,9 +93,13 @@ nav:
   - Integrations:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
+      - Approval channels: integrations/approval-channels.md
       - Stripe refunds: integrations/stripe.md
       - Stripe Actions: integrations/stripe-actions.md
       - Stripe billing actions: integrations/stripe-billing-actions.md
+      - Stripe PostgreSQL host: integrations/stripe-postgres-host.md
+      - Recovery worker: integrations/recovery-worker.md
+      - Stripe recovery cases: integrations/stripe-recovery.md
       - AWS KMS protection: integrations/aws-kms.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
@@ -106,6 +110,11 @@ nav:
   - Testing:
       - Testing helpers: testing/helpers.md
       - Conformance testing: testing/conformance.md
+      - Stripe host conformance: testing/stripe-host-conformance.md
+      - Stripe qualification matrix: testing/stripe-qualification.md
+      - Stripe sandbox qualification: testing/stripe-sandbox-qualification.md
+      - Stripe adoption protocol: testing/stripe-adoption-protocol.md
+      - Stripe outside-host status: testing/stripe-outside-adoption-status.md
       - Clean-room adoption result: testing/clean-room-adoption-2026-08-30.md
       - Gradual-reveal adoption record: testing/gradual-reveal-adoption.md
       - Security model: threat-model.md
@@ -120,6 +129,8 @@ nav:
       - Public API: reference/index.md
       - Action authoring and approvals: reference/action.md
       - Runtime: reference/runtime.md
+      - Recovery: reference/recovery.md
+      - Evidence exports: reference/evidence.md
       - Action definitions and ports: reference/registry.md
       - Boundary models: reference/models.md
       - Authority evidence: reference/authority.md
@@ -140,6 +151,7 @@ nav:
       - CLI: reference/cli.md
   - Project:
       - Versioning: versioning.md
+      - Release record 0.4.0: releases/0.4.0.md
       - Stripe target customers: product/stripe-target-clients.md
       - Stripe implementation plan: plans/2026-09-08-stripe-connector.md
       - Stripe Actions proposition and pipeline: plans/2026-09-10-stripe-actions.md

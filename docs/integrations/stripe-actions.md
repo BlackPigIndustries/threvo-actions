@@ -4,7 +4,7 @@ This guide covers refunds. The independently configurable subscription
 cancellation and credit-note groups are documented in the
 [billing action guide](stripe-billing-actions.md).
 
-Included in 0.3.2 through the optional `stripe` extra. For checkout
+Included in 0.4.0 through the optional `stripe` extra. For checkout
 development, run `uv sync --extra dev --extra stripe --extra pydantic-ai`.
 
 `StripeActions.refunds` packages the reviewed refund lifecycle around the Stripe
@@ -16,13 +16,34 @@ used by other actions; there is no alternate approval or retry path.
 ## Run the complete example
 
 ```bash
+uv run python examples/docs/stripe_quickstart.py
 uv run --extra stripe python -m examples.stripe_actions.demo
 ```
 
-This uses an in-memory host and a deterministic provider. It needs no credentials
-and moves no money. The output includes `failed_unknown`, then `verified`, and
-exactly one provider submission. The example deliberately acknowledges loss of
-all state on restart. It is an adoption exercise, not a production host.
+Both commands use the installed `stripe_refund_scenario()` factory, an in-memory
+host, and a deterministic provider. They need no Stripe SDK or credentials and
+move no money. The longer example simulates a lost submission response and shows
+`failed_unknown`, then `verified`, with exactly one provider submission. The
+scenario deliberately acknowledges loss of all state on restart. It is an
+adoption exercise, not a production host.
+
+## Customize one layer at a time
+
+The shortest path and a production composition call the same public facade and
+runtime. Replace one boundary at a time:
+
+1. Run `stripe_refund_scenario()` to learn the proposal, approval, execution,
+   and reconciliation lifecycle without provider access.
+2. Replace `RefundConfig.gateway` with your typed fake or Stripe SDK client while
+   retaining the scenario host.
+3. Replace `RefundConfig.host` with your authenticated repository and
+   authorization ports, then run the host conformance exercise.
+4. Replace `StripeServices` with durable storage, managed protection,
+   observability, identifiers, and a pinned runtime revision.
+
+The scenario's `approve()` method creates evaluation-only bound evidence. A real
+application authenticates its approver and records its own `AuthorityEvidence`.
+Neither the factory nor `from_services()` owns or closes supplied services.
 
 ## Compose the SDK integration
 
@@ -38,19 +59,32 @@ from threvo_actions.integrations.stripe import (
     StripeRefundSettings,
 )
 
-# These services come from your authenticated host composition root.
-actions = StripeActions(
-    client=stripe_client,
-    host=RefundHost(repository=refund_repository, authorization=refund_authorization),
-    policy=RefundPolicy(limits=(Money(amount=Decimal("100"), currency="USD"),)),
-    settings=StripeRefundSettings(
-        executor_identity=GovernedExecutor(reference="service:refunds"),
-        authority_audience="service:refunds",
-    ),
+from threvo_actions.integrations.stripe import RefundConfig, StripeServices
+
+# These borrowed services come from your application composition root.
+services = StripeServices(
     store=action_store,
     authority_evaluator=approval_requirement,
     commitment_provider=commitments,
     protection_codec=protection,
+    event_sink=runtime_events,
+    client=stripe_client,
+)
+actions = StripeActions.from_services(
+    services,
+    refunds=RefundConfig(
+        host=RefundHost(
+            repository=refund_repository,
+            authorization=refund_authorization,
+        ),
+        policy=RefundPolicy(
+            limits=(Money(amount=Decimal("100"), currency="USD"),)
+        ),
+        settings=StripeRefundSettings(
+            executor_identity=GovernedExecutor(reference="service:refunds"),
+            authority_audience="service:refunds",
+        ),
+    ),
 )
 
 proposal = await actions.refunds.prepare(
@@ -64,9 +98,10 @@ proposal = await actions.refunds.prepare(
 )
 ```
 
-This composition excerpt assumes real host services; the complete runnable
-implementations for an evaluation are in `examples/stripe_actions/demo.py`.
-Supply exactly one `client` or typed `gateway`. The caller owns SDK client
+This composition excerpt assumes real host services. The original keyword-rich
+`StripeActions(...)` constructor remains supported and creates the same facade.
+Supply exactly one shared `StripeServices.client` or group-specific typed
+gateway. The caller owns SDK client
 lifetime, HTTP timeouts and credentials. Configure a bounded async client; the
 SDK gateway disables automatic mutation retries per request.
 
@@ -151,6 +186,15 @@ monitoring and key custody stay with the host. See the existing PostgreSQL
 contract; this facade does not migrate its pending proposals or database rows.
 Its SQL is a reference for reservation and recovery behavior, not a drop-in
 `RefundRepository` implementation for these new snapshot shapes.
+
+For new hosts, use the maintained facade repository in `examples/stripe_host`
+and the shared [PostgreSQL Stripe host ledger](stripe-postgres-host.md). Its
+transaction-scoped methods compose with the application's canonical resource
+lock and do not apply migrations from constructors.
+
+Use the optional [recovery worker recipe](recovery-worker.md) to discover lost
+authorized and due reconciliation work through public models instead of
+querying runtime tables in application code.
 
 ## Use with Pydantic AI
 
