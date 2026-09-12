@@ -74,7 +74,8 @@ allocation, exact balance-transaction matching, cash suppression and
 - Credit-note verification proves the selected Stripe allocation. It does not
   decide accounting, tax or customer-communication policy.
 
-Use the [outside-host protocol](stripe-adoption-protocol.md) and the forthcoming
-PostgreSQL conformance exercise for the next evidence layers. Sandbox evidence
-must record the Stripe account mode, SDK/API version, application revision and
-scenario result instead of extending this fixture claim.
+Use the [sandbox qualification runner](stripe-sandbox-qualification.md) and
+[outside-host protocol](stripe-adoption-protocol.md) for the next evidence
+layers. Sandbox evidence records the Stripe account mode, SDK/API version,
+application revision and scenario result instead of extending this fixture
+claim.

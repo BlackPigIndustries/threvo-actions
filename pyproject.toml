@@ -115,6 +115,10 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests", "examples"]
 pythonpath = ["src", "."]
+addopts = "-m 'not stripe_sandbox'"
+markers = [
+    "stripe_sandbox: opt-in tests that mutate isolated Stripe test resources",
+]
 
 [tool.ruff]
 target-version = "py311"
