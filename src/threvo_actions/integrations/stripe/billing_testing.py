@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -20,6 +20,7 @@ from threvo_actions import (
     SingleApproval,
 )
 from threvo_actions.models import ExperimentalModel
+from threvo_actions.runtime import SystemClock
 from threvo_actions.stores import MemoryActionStore
 from threvo_actions.testing import EphemeralProtection
 
@@ -79,7 +80,8 @@ ResultT = TypeVar("ResultT", bound=ExperimentalModel)
 class _Intents(ABC, Generic[SnapshotT, ResultT]):
     """Process-local demonstration, not a production resource reservation store."""
 
-    def __init__(self) -> None:
+    def __init__(self, clock: Clock) -> None:
+        self.clock = clock
         self.snapshots: dict[str, SnapshotT] = {}
         self.requesters: dict[str, str] = {}
         self.claimed: set[str] = set()
@@ -112,7 +114,7 @@ class _Intents(ABC, Generic[SnapshotT, ResultT]):
             if key in self.claimed:
                 return StripeReservationStatus.ALREADY_SUBMITTED
             if (
-                datetime.now(UTC) >= not_after
+                self.clock.now() >= not_after
                 or self.snapshots.get(key) != snapshot
                 or not self._binding_current(snapshot)
             ):
@@ -139,8 +141,8 @@ class _Intents(ABC, Generic[SnapshotT, ResultT]):
 class SubscriptionRepository(
     _Intents[SubscriptionCancellationSnapshot, SubscriptionCancellationOutcome]
 ):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, clock: Clock) -> None:
+        super().__init__(clock)
         self.current = SubscriptionBinding(
             tenant_reference="tenant:demo",
             subscription_reference="subscription:demo",
@@ -165,8 +167,8 @@ class SubscriptionRepository(
 
 
 class InvoiceRepository(_Intents[CreditNoteSnapshot, CreditNoteOutcome]):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, clock: Clock) -> None:
+        super().__init__(clock)
         self.current = CreditNoteInvoice(
             tenant_reference="tenant:demo",
             invoice_reference="invoice:demo",
@@ -232,8 +234,8 @@ class BillingAuthorization:
 
 
 class SubscriptionGateway:
-    def __init__(self, *, scheduled: bool) -> None:
-        now = datetime.now(UTC)
+    def __init__(self, *, scheduled: bool, clock: Clock) -> None:
+        now = clock.now()
         self.current = SubscriptionObservation(
             subscription_id="sub_demo",
             customer_id="cus_demo",
@@ -376,6 +378,7 @@ class StripeBillingScenario:
     store: MemoryActionStore
     protection: EphemeralProtection
     request: SubscriptionCancellationRequest | CreditNoteRequest
+    clock: Clock
 
     @property
     def operation(self) -> StripeSubscriptions | StripeCreditNotes:
@@ -414,7 +417,7 @@ class StripeBillingScenario:
             decision=AuthorityDecision.APPROVE,
             proposal_commitment=record.commitment.digest,
             channel_assurance=definition.authority_channel_assurance,
-            issued_at=datetime.now(UTC),
+            issued_at=self.clock.now(),
             expires_at=record.expires_at,
         )
         return await self.operation.record_authority(evidence, authenticated_authority=authority)
@@ -428,6 +431,7 @@ def build_demo(
     event_sink: EventSink | None = None,
     runtime_revision: str | None = None,
 ) -> StripeBillingScenario:
+    resolved_clock = clock if clock is not None else SystemClock()
     store = MemoryActionStore()
     protection = EphemeralProtection(acknowledge_data_loss=True)
     authorization = BillingAuthorization()
@@ -442,8 +446,8 @@ def build_demo(
     gateway: SubscriptionGateway | CreditGateway
     request: SubscriptionCancellationRequest | CreditNoteRequest
     if kind in {"schedule", "withdraw"}:
-        repository = SubscriptionRepository()
-        gateway = SubscriptionGateway(scheduled=kind == "withdraw")
+        repository = SubscriptionRepository(resolved_clock)
+        gateway = SubscriptionGateway(scheduled=kind == "withdraw", clock=resolved_clock)
         request = SubscriptionCancellationRequest(
             intent_reference="cancellation:demo",
             subscription_reference="subscription:demo",
@@ -457,7 +461,7 @@ def build_demo(
         )
     else:
         disposition = CreditDisposition(kind)
-        repository = InvoiceRepository()
+        repository = InvoiceRepository(resolved_clock)
         gateway = CreditGateway(paid=disposition is CreditDisposition.CUSTOMER_BALANCE)
         amount = Money(amount=Decimal("10"), currency="USD")
         request = CreditNoteRequest(
@@ -481,13 +485,20 @@ def build_demo(
         authority_evaluator=SingleApproval(ConfirmingAuthority(reference="user:approver")),
         commitment_provider=protection,
         protection_codec=protection,
-        clock=clock,
+        clock=resolved_clock,
         identifiers=identifiers,
         event_sink=event_sink,
         runtime_revision=runtime_revision,
     )
     return StripeBillingScenario(
-        actions, repository, gateway, authorization, store, protection, request
+        actions,
+        repository,
+        gateway,
+        authorization,
+        store,
+        protection,
+        request,
+        resolved_clock,
     )
 
 

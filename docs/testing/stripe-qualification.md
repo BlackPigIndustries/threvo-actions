@@ -77,5 +77,5 @@ allocation, exact balance-transaction matching, cash suppression and
 Use the [sandbox qualification runner](stripe-sandbox-qualification.md) and
 [outside-host protocol](stripe-adoption-protocol.md) for the next evidence
 layers. Sandbox evidence records the Stripe account mode, SDK/API version,
-application revision and scenario result instead of extending this fixture
+source commit and scenario result instead of extending this fixture
 claim.

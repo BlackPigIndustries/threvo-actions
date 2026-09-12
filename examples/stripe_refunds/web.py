@@ -16,13 +16,12 @@ from pydantic_ai.usage import UsageLimits
 
 from examples.stripe_host.approvals import ApprovalRequestError, ApprovalRequestView
 from threvo_actions import (
-    ActionEvidenceBundle,
     ActionOperationResult,
     AuthorizationDeniedError,
     ProposalNotFoundError,
     ProposalView,
-    render_evidence_html,
 )
+from threvo_actions.evidence import ActionEvidenceBundle, render_evidence_html
 from threvo_actions.integrations.stripe import StripeBoundaryError, verify_refund_webhook
 from threvo_actions.models import ExperimentalModel
 from threvo_actions.recovery import ActionRecoveryView  # noqa: TC001

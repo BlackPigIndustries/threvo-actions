@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from threvo_actions import ActionEvidenceBundle
+from threvo_actions.evidence import ActionEvidenceBundle
 from threvo_actions.integrations.stripe import (
     StripeCaseAcknowledgement,
     StripeEffectObservation,

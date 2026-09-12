@@ -17,6 +17,7 @@ ALLOWED_OPTIONAL_IMPORTS = {
     Path("integrations/stripe/gateway.py"): {"stripe"},
     Path("integrations/stripe/actions.py"): {"stripe"},
     Path("integrations/stripe/billing_gateway.py"): {"stripe"},
+    Path("integrations/stripe/composition.py"): {"stripe"},
     Path("integrations/stripe/sdk_gateway.py"): {"stripe"},
 }
 HISTORICAL_CLEAN_ROOM_REPORT = Path("docs/testing/clean-room-adoption-2026-08-30.md")

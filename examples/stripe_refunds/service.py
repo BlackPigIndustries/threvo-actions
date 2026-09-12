@@ -13,7 +13,6 @@ from examples.stripe_host.approvals import (
 )
 from examples.stripe_host.worker import PostgresRecoveryLeaseSchedule, RecoveryWorker
 from threvo_actions import (
-    ActionEvidenceBundle,
     ActionOperationResult,
     ActionType,
     AnyApproval,
@@ -46,6 +45,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import asyncpg
 
+    from threvo_actions.evidence import ActionEvidenceBundle
     from threvo_actions.integrations.stripe import StripeRefundConnector
     from threvo_actions.recovery import ActionRecoveryView
 

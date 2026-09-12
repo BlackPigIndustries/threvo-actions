@@ -5,6 +5,8 @@ of one stored proposal revision. Stripe action groups expose the same operation
 through their `export_evidence(...)` methods.
 
 ```python
+from threvo_actions.evidence import validate_evidence_bundle
+
 bundle = await actions.refunds.export_evidence(
     proposal_reference,
     context=read_context,

@@ -22,8 +22,8 @@ from tests.qualification.stripe.qualification import (
     record_report,
 )
 
-from threvo_actions import EvidenceValidationStatus, LifecycleStatus, Money
-from threvo_actions.evidence import validate_evidence_bundle
+from threvo_actions import LifecycleStatus, Money
+from threvo_actions.evidence import EvidenceValidationStatus, validate_evidence_bundle
 from threvo_actions.integrations.stripe import (
     StripeAccount,
     StripeBoundaryError,
