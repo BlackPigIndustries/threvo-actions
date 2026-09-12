@@ -289,6 +289,15 @@ class StripeRefunds:
             proposal_reference=proposal_reference,
         )
 
+    async def expire_due(
+        self, *, tenant_reference: str, proposal_reference: str
+    ) -> ActionOperationResult:
+        return await self.runtime.expire_due(
+            self.definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+        )
+
     async def read(self, proposal_reference: str, *, context: ReadContext) -> ProposalView:
         return await self.runtime.read(
             self.definition, proposal_reference=proposal_reference, context=context

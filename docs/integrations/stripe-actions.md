@@ -192,6 +192,10 @@ and the shared [PostgreSQL Stripe host ledger](stripe-postgres-host.md). Its
 transaction-scoped methods compose with the application's canonical resource
 lock and do not apply migrations from constructors.
 
+Use the optional [recovery worker recipe](recovery-worker.md) to discover lost
+authorized and due reconciliation work through public models instead of
+querying runtime tables in application code.
+
 ## Use with Pydantic AI
 
 Use `ActionToolBinding` with `actions.refunds.definition` and `ActionCapability`

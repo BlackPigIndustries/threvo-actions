@@ -15,6 +15,16 @@ CREATE TABLE stripe_host_app.keys (
     wrapped bytea NOT NULL
 );
 
+CREATE TABLE stripe_host_app.recovery_schedule (
+    tenant_reference text NOT NULL,
+    proposal_reference text NOT NULL,
+    lease_token text NOT NULL,
+    leased_until timestamptz NOT NULL,
+    next_attempt_at timestamptz NOT NULL,
+    attention_reason text,
+    PRIMARY KEY (tenant_reference, proposal_reference)
+);
+
 CREATE OR REPLACE FUNCTION stripe_host_app.guard_reserved_payment()
 RETURNS trigger
 LANGUAGE plpgsql

@@ -2,11 +2,11 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import AwareDatetime
 
-from .models import ExperimentalModel, LifecycleStatus, SafeReference
+from .models import ActionType, ExperimentalModel, LifecycleStatus, SafeReference
 from .receipts import VerificationReceiptStatus
 
 
@@ -41,6 +41,15 @@ class ActionRecoveryOperation(StrEnum):
     VIEW_RECORDED_OUTCOME = "view_recorded_outcome"
     PREPARE_REPLACEMENT = "prepare_replacement"
     NO_ACTION = "no_action"
+
+
+class ActionWorkOperation(StrEnum):
+    """Runtime operation suggested by authoritative due-work discovery."""
+
+    EXECUTE = "execute"
+    EXPIRE = "expire"
+    RECONCILE = "reconcile"
+    ATTENTION = "attention"
 
 
 class ActionEffectOwnership(StrEnum):
@@ -89,6 +98,45 @@ class ActionRecoveryView(ExperimentalModel):
     effect_ownership: ActionEffectOwnership
     owner: ActionRecoveryOwnerView | None = None
     recommended_steps: tuple[ActionRecoveryStep, ...] = ()
+
+
+class ActionWorkCursor(ExperimentalModel):
+    """Stable keyset position within one caller-pinned discovery cutoff."""
+
+    due_at: AwareDatetime
+    proposal_reference: SafeReference
+
+
+class ActionWorkItem(ExperimentalModel):
+    """Minimal due-work reference; it contains no preview or private state."""
+
+    action_type: ActionType
+    proposal_reference: SafeReference
+    operation: ActionWorkOperation
+    due_at: AwareDatetime
+    reason_code: SafeReference | None = None
+
+
+class ActionWorkPage(ExperimentalModel):
+    """One bounded tenant-scoped page at an explicit scan cutoff."""
+
+    tenant_reference: SafeReference
+    cutoff: AwareDatetime
+    items: tuple[ActionWorkItem, ...]
+    next_cursor: ActionWorkCursor | None = None
+
+
+class ActionWorkSource(Protocol):
+    """Optional discovery boundary for stores that can query authoritative work."""
+
+    async def discover_due(
+        self,
+        *,
+        tenant_reference: str,
+        cutoff: datetime,
+        limit: int,
+        cursor: ActionWorkCursor | None = None,
+    ) -> ActionWorkPage: ...
 
 
 def recovery_condition(
