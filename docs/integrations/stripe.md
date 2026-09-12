@@ -1,7 +1,7 @@
 # Stripe refunds
 
 For the runtime-backed `StripeActions.refunds` interface, introduced in 0.3.0
-and included in 0.3.2, start with [Stripe Actions](stripe-actions.md). It
+and included in 0.4.0, start with [Stripe Actions](stripe-actions.md). It
 composes the connector described here and adds policy, preparation and host
 reservation contracts. Existing 0.2.0 connector imports remain compatible.
 
@@ -16,13 +16,13 @@ the Stripe SDK. The `stripe` extra is required only for `StripeSDKGateway`, the
 billing SDK gateways and authenticated Stripe webhook parsing.
 
 ```bash
-uv add "threvo-actions[stripe]==0.3.2"
+uv add "threvo-actions[stripe]==0.4.0"
 ```
 
 For a custom gateway that implements the typed protocols without Stripe's SDK:
 
 ```bash
-uv add "threvo-actions==0.3.2"
+uv add "threvo-actions==0.4.0"
 ```
 
 Use [the runnable refund application](../examples/stripe-refunds.md) for a

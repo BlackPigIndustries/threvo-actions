@@ -18,7 +18,7 @@ fixed demonstration identities and ephemeral encryption are evaluation-only.
 Production hosts implement durable resource reservations and real authentication.
 `agent.py` supplies optional Pydantic AI capability recipes with business-only
 arguments. Install the published package with
-`uv add "threvo-actions[stripe,pydantic-ai]==0.3.2"` once release promotion completes.
+`uv add "threvo-actions[stripe,pydantic-ai]==0.4.0"` once release promotion completes.
 
 Cancellation scheduling does not end service immediately. Credit notes do not
 refund cash or send email. For supported scope, composition and production host

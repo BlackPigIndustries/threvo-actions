@@ -72,6 +72,13 @@ exception preserves candidate qualification, signed tags, artifact and index
 verification, and the protected publication environments. See the
 [`0.2.0` release record](docs/releases/0.2.0.md).
 
+The repository owner's 2026-09-12 release direction permits the exact `v0.4.0`
+tag with `skip_adoption_gate=true`. Independent outside-host adoption and live
+Stripe sandbox evidence remain pending and are not implied by publication.
+Candidate qualification, signed tags, artifact identity, TestPyPI/PyPI
+verification, and protected release environments remain mandatory. See the
+[`0.4.0` release record](docs/releases/0.4.0.md).
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as

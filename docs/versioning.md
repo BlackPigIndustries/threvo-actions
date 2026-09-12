@@ -19,9 +19,9 @@ or every experimental serialization is frozen. Those are separate evidence
 gates. Release count is not a compatibility metric; migration records and
 contract tests identify actual changes.
 
-## Supported at `0.3.2`
+## Supported at `0.4.0`
 
-The following surfaces are supported at the exact `0.3.2` release:
+The following surfaces are supported at the exact `0.4.0` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -34,6 +34,8 @@ The following surfaces are supported at the exact `0.3.2` release:
   `threvo_actions.migration_compatibility`, readiness results in
   `threvo_actions.readiness`, and official profiles in
   `threvo_actions.store_security`;
+- documented evidence exports in `threvo_actions.evidence`, recovery models in
+  `threvo_actions.recovery`, and PostgreSQL due-work discovery;
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`;
 - names listed in `threvo_actions.integrations.aws_kms.__all__`;
@@ -44,8 +46,16 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.3.2` without another explicitly
+safety check is not permitted after `0.4.0` without another explicitly
 documented exception.
+
+`0.4.0` adds progressive Stripe composition, concrete PostgreSQL host
+repositories and conformance exercises, actionable recovery and late
+observations, minimized evidence export, installed billing scenarios, sandbox
+qualification runners, and a server-bound approval-channel reference recipe.
+It preserves the supported root exports, existing action identities, receipt
+JSON, and core database migration history. Follow the
+[`0.4.0` migration record](releases/0.4.0.md).
 
 `0.3.0` adds governed Stripe refund, subscription cancellation and credit-note
 operation groups while preserving existing connector imports and persisted
@@ -152,8 +162,8 @@ does not let an older library silently accept a newer migration history.
 
 ## Version changes
 
-- Later `0.3.z` releases: backward-compatible fixes and additions to the
-  supported `0.3.2` surface unless an explicit corrective exception is
+- Later `0.4.z` releases: backward-compatible fixes and additions to the
+  supported `0.4.0` surface unless an explicit corrective exception is
   documented before publication.
 - `0.y.0`: may change an experimental surface or the supported Python API, with
   a changelog entry and migration guidance.

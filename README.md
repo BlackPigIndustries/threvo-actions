@@ -12,7 +12,7 @@ examples, Pydantic AI, PostgreSQL, MySQL, SQLite, and SQLAlchemy/Alembic
 integrations, the optional Stripe action groups, and the full API reference.
 
 > [!IMPORTANT]
-> Version `0.3.2` is the current supported exact release. Its correctness and
+> Version `0.4.0` is the current supported exact release. Its correctness and
 > security changes require the documented migration review before upgrading. The
 > namespaced gradual-reveal API, receipt serialization,
 > canonicalization, database schemas, and the example cross-service envelope
@@ -23,7 +23,7 @@ integrations, the optional Stripe action groups, and the full API reference.
 
 The `StripeActions.refunds` interface combines validated policy,
 host payment resolution and reservation with the existing runtime. This facade is
-included in 0.3.2. Read the
+included in 0.4.0. Read the
 [Stripe Actions guide](docs/integrations/stripe-actions.md), run
 `uv run --extra stripe python -m examples.stripe_actions.demo` from this checkout,
 and follow the [progressive integration guide](docs/integrations/stripe-actions.md).
@@ -54,10 +54,10 @@ facade. Production integration guidance includes the
 Python 3.11 through 3.13 is supported.
 
 ```bash
-uv add "threvo-actions==0.3.2"
+uv add "threvo-actions==0.4.0"
 ```
 
-Install only after the signed `v0.3.2` tag completes the TestPyPI and PyPI
+Install only after the signed `v0.4.0` tag completes the TestPyPI and PyPI
 release workflow. Do not install a moving branch for a financial-action
 runtime.
 
@@ -66,11 +66,11 @@ optional. SQLite uses the Python standard library and is included in the base
 installation:
 
 ```bash
-uv add "threvo-actions[postgres]==0.3.2"
-uv add "threvo-actions[mysql]==0.3.2"
-uv add "threvo-actions[sqlalchemy]==0.3.2"
-uv add "threvo-actions[pydantic-ai]==0.3.2"
-uv add "threvo-actions[stripe]==0.3.2"
+uv add "threvo-actions[postgres]==0.4.0"
+uv add "threvo-actions[mysql]==0.4.0"
+uv add "threvo-actions[sqlalchemy]==0.4.0"
+uv add "threvo-actions[pydantic-ai]==0.4.0"
+uv add "threvo-actions[stripe]==0.4.0"
 ```
 
 The base installation includes the governed Stripe facade, strict boundary
@@ -249,11 +249,11 @@ completion milestone. No blind resend or unlimited idempotency is claimed.
 
 ## Migration
 
-The documented Python imports and CLI are supported at `0.3.2`. Pin the exact
-patch release, review the [`0.3.2` migration](docs/releases/0.3.2.md), and keep
+The documented Python imports and CLI are supported at `0.4.0`. Pin the exact
+release, review the [`0.4.0` migration](docs/releases/0.4.0.md), and keep
 host adapters at the application boundary.
 The current `develop` additions have an
-[unreleased migration and evidence handoff](docs/releases/unreleased-stripe-adoption-recovery.md);
+[0.4.0 migration and evidence record](docs/releases/0.4.0.md);
 it does not select or authorize a release version.
 Experimental interoperability surfaces may change in a minor `0.x` release;
 the [versioning policy](docs/versioning.md) defines the exact boundary.

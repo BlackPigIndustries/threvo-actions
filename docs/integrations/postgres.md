@@ -8,7 +8,7 @@ requires host-protected private state and separate runtime and retention roles;
 it does not claim storage encryption or deletion from external copies.
 
 ```bash
-uv add "threvo-actions[postgres]==0.3.2"
+uv add "threvo-actions[postgres]==0.4.0"
 ```
 
 The action schema can live beside the application's tables or in a dedicated
