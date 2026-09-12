@@ -29,6 +29,7 @@ from .canonical import (
     commitment_payload_v1,
     model_json_object,
 )
+from .evidence import ActionEvidenceBundle, build_evidence_bundle
 from .models import (
     ConfirmingAuthority,
     ExperimentalModel,
@@ -976,6 +977,26 @@ class ActionRuntime:
                 next_verification_at=record.next_verification_at,
                 reason_code=reason_code,
             ),
+        )
+
+    async def export_evidence(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        proposal_reference: str,
+        context: ReadContext,
+    ) -> ActionEvidenceBundle:
+        """Export one authorized, minimized proposal revision."""
+
+        record = await self._required(context.tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if not await definition.authorization.can_read(proposal_reference, context=context):
+            raise ProposalNotFoundError
+        return build_evidence_bundle(
+            record,
+            exported_at=self._clock.now(),
+            exporter_runtime_revision=self._runtime_revision,
         )
 
     async def observation_context(

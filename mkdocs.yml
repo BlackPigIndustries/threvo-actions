@@ -127,6 +127,7 @@ nav:
       - Action authoring and approvals: reference/action.md
       - Runtime: reference/runtime.md
       - Recovery: reference/recovery.md
+      - Evidence exports: reference/evidence.md
       - Action definitions and ports: reference/registry.md
       - Boundary models: reference/models.md
       - Authority evidence: reference/authority.md

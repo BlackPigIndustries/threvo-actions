@@ -114,6 +114,8 @@ Authenticated endpoints use `Authorization: Bearer <configured token>`.
 | `POST /api/proposals` | Prepare a strict JSON `RefundCommand`; amounts are decimal strings |
 | `POST /api/proposals/{reference}/decision` | Independent approver submits `{"approve": true}` or rejection |
 | `GET /api/proposals/{reference}/recovery` | Authorized recovery condition, schedule, and safe next step |
+| `GET /api/proposals/{reference}/evidence` | Versioned, minimized JSON evidence export |
+| `GET /api/proposals/{reference}/evidence.html` | Escaped human-readable evidence export |
 | `POST /api/chat` | Prepare through the assistant; no execution authority |
 | `GET /api/cases` | Approver's unresolved/late-failure cases |
 | `POST /api/cases/{effect}/refresh` | Read fresh provider evidence; never resend |

@@ -54,6 +54,14 @@ result, receipts, or private snapshot into the losing proposal. An uncertain
 owner observation suppresses execution advice. Pending target state and an
 unavailable target query remain distinct.
 
+Use `runtime.export_evidence(definition, proposal_reference=..., context=...)`
+when an authorized operator needs a portable record. Preserve the exported
+omissions and `unsigned_host_projection` label. A consistent content digest
+detects changes only when it is compared with a digest obtained through a
+separately trusted route. Never describe the export as signed, complete,
+independently audited, or compliant. Keep late provider observations in a
+separately attributed host case attachment rather than fabricating receipts.
+
 ## Model roles
 
 Use one shared strict base so every runtime boundary has the required Pydantic

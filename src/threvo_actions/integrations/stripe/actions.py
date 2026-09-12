@@ -51,6 +51,7 @@ if TYPE_CHECKING:
 
     from ...authority import AuthorityEvidence
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
+    from ...evidence import ActionEvidenceBundle
     from ...models import ConfirmingAuthority, ProposingAgent, RequestingPrincipal
     from ...receipts import EventSink
     from ...recovery import ActionRecoveryView
@@ -315,6 +316,13 @@ class StripeRefunds:
         self, proposal_reference: str, *, context: ReadContext
     ) -> ActionRecoveryView:
         return await self.runtime.read_recovery(
+            self.definition, proposal_reference=proposal_reference, context=context
+        )
+
+    async def export_evidence(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionEvidenceBundle:
+        return await self.runtime.export_evidence(
             self.definition, proposal_reference=proposal_reference, context=context
         )
 

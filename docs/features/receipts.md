@@ -92,6 +92,10 @@ triggering actors, policy decisions, external target history, privileged
 database activity, and event-delivery failures may belong in other evidence
 planes.
 
+For an authorized, portable projection with explicit omissions and consistency
+validation, see [Evidence exports](../reference/evidence.md). Export validation
+does not add a signature or turn these host assertions into independent proof.
+
 Run the complete receipt-producing lifecycle with:
 
 ```bash

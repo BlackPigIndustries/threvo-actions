@@ -15,10 +15,12 @@ from pydantic_ai.models import infer_model
 from pydantic_ai.usage import UsageLimits
 
 from threvo_actions import (
+    ActionEvidenceBundle,
     ActionOperationResult,
     AuthorizationDeniedError,
     ProposalNotFoundError,
     ProposalView,
+    render_evidence_html,
 )
 from threvo_actions.integrations.stripe import StripeBoundaryError, verify_refund_webhook
 from threvo_actions.models import ExperimentalModel
@@ -134,6 +136,26 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
         proposal: str, who: Annotated[Identity, Depends(identity)]
     ) -> ActionRecoveryView:
         return await service.read_recovery(who, proposal)
+
+    @app.get("/api/proposals/{proposal}/evidence")
+    async def evidence(
+        proposal: str, who: Annotated[Identity, Depends(identity)]
+    ) -> ActionEvidenceBundle:
+        return await service.export_evidence(who, proposal)
+
+    @app.get("/api/proposals/{proposal}/evidence.html", response_class=HTMLResponse)
+    async def evidence_html(
+        proposal: str, who: Annotated[Identity, Depends(identity)]
+    ) -> HTMLResponse:
+        bundle = await service.export_evidence(who, proposal)
+        return HTMLResponse(
+            render_evidence_html(bundle),
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.get("/api/cases")
     async def cases(who: Annotated[Identity, Depends(identity)]) -> list[dict[str, str]]:

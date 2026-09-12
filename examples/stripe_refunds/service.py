@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from examples.stripe_host.worker import PostgresRecoveryLeaseSchedule, RecoveryWorker
 from threvo_actions import (
+    ActionEvidenceBundle,
     ActionOperationResult,
     ActionType,
     AnyApproval,
@@ -114,6 +115,14 @@ class RefundService:
         self, identity: Identity, proposal: str
     ) -> ActionRecoveryView:
         return await self.actions.refunds.read_recovery(
+            proposal,
+            context=self._read_context(identity),
+        )
+
+    async def export_evidence(
+        self, identity: Identity, proposal: str
+    ) -> ActionEvidenceBundle:
+        return await self.actions.refunds.export_evidence(
             proposal,
             context=self._read_context(identity),
         )

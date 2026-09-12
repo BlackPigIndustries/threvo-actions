@@ -208,9 +208,23 @@ def test_http_authentication_tenant_scope_and_independent_decision():
                 )
                 assert recovery.status_code == 200
                 assert recovery.json()["condition"] == "waiting_for_authority"
+                evidence = await client.get(
+                    f"/api/proposals/{ref}/evidence", headers=requester
+                )
+                assert evidence.status_code == 200
+                assert evidence.json()["authenticity"] == "unsigned_host_projection"
+                rendered = await client.get(
+                    f"/api/proposals/{ref}/evidence.html", headers=requester
+                )
+                assert rendered.status_code == 200
+                assert "Unsigned host projection" not in rendered.text
+                assert "unsigned host projection" in rendered.text
                 assert (await client.get("/api/proposals", headers=other)).json() == []
                 assert (
                     await client.get(f"/api/proposals/{ref}/recovery", headers=other)
+                ).status_code == 409
+                assert (
+                    await client.get(f"/api/proposals/{ref}/evidence", headers=other)
                 ).status_code == 409
                 for headers in (requester, other):
                     assert (

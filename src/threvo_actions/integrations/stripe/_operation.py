@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from ...authority import AuthorityEvidence
     from ...canonical import CommitmentProviderPort, ProtectionCodecPort
+    from ...evidence import ActionEvidenceBundle
     from ...models import ActionType, ConfirmingAuthority, ProposingAgent, RequestingPrincipal
     from ...recovery import ActionRecoveryView
     from ...registry import (
@@ -324,6 +325,12 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
         self, proposal_reference: str, *, context: ReadContext
     ) -> ActionRecoveryView:
         return await self.runtime.read_recovery(
+            self.definition, proposal_reference=proposal_reference, context=context
+        )
+    async def export_evidence(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionEvidenceBundle:
+        return await self.runtime.export_evidence(
             self.definition, proposal_reference=proposal_reference, context=context
         )
 
