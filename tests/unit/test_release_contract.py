@@ -57,6 +57,7 @@ def test_experimental_authoring_surface_stays_namespaced() -> None:
         "ActionApplication",
         "ActionApplicationError",
         "ActionComponents",
+        "ActionEvidenceBundle",
         "ActionInspection",
         "ActionIssueCode",
         "ActionOwnershipInspection",
@@ -66,7 +67,10 @@ def test_experimental_authoring_surface_stays_namespaced() -> None:
         "BoundaryModelInspection",
         "BoundAction",
         "DependencyScopeFactory",
+        "EvidenceValidationReport",
         "RegisteredAction",
+        "render_evidence_html",
+        "validate_evidence_bundle",
     }
 
     assert set(experimental.__all__) == expected
@@ -410,7 +414,6 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "Action",
         "ActionConfigurationError",
         "ActionDefinition",
-        "ActionEvidenceBundle",
         "ActionNotRegisteredError",
         "ActionOperationResult",
         "ActionRegistry",
@@ -446,7 +449,6 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "EffectKind",
         "EventSink",
         "EvidenceConsumer",
-        "EvidenceValidationReport",
         "ExecutionContext",
         "ExecutionReceipt",
         "ExecutionReceiptStatus",
@@ -511,9 +513,7 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "canonicalize_v1",
         "commitment_payload_v1",
         "resolve_runtime_revision",
-        "render_evidence_html",
         "validate_authority_evidence",
-        "validate_evidence_bundle",
         "validate_proposal_create",
         "validate_proposal_update",
     }

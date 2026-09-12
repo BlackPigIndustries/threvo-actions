@@ -35,13 +35,14 @@ and uses Semantic Versioning for the supported surface described in
   decides every scenario result.
 - An installable approval-channel package with strict Pydantic request records,
   first-write-wins PostgreSQL persistence, and an immutable explicit migration.
-- Supported root imports for the principal recovery and evidence types and
-  helpers.
+- A supported root import for recovery views and discoverable experimental
+  imports for evidence types and helpers.
 
 ### Documentation
 
-- Freeze the threvo.actions.evidence/v1 document shape and move supported
-  evidence and recovery records to a neutral strict Pydantic model base.
+- Keep threvo.actions.evidence/v1 behind the existing outside-adoption gate;
+  its namespaced Pydantic models remain strict and frozen without claiming a
+  stable cross-release schema.
 - Rewrite the repository README around the problem the library solves, its host
   responsibilities, progressive entry points, and explicit non-goals.
 - Begin the 0.4 feature-release hold. Outside-host adoption remains pending and

@@ -61,7 +61,7 @@ document as release, deployment, or customer conformance evidence.
 | same_effect_race | Exactly one reservation wins; the other observes prior submission |
 | conflicting_resource_race | Different action groups cannot reserve one customer resource |
 | unrelated_resource_progress | Different resources can both progress |
-| normal_writer_exclusion | An ordinary application writer is refused while reserved |
+| normal_writer_exclusion | The ordinary writer is paused after checking reservations while a reservation races it; the shared lock orders the writer first and the reservation detects resulting drift. A second case reserves first and requires the writer to refuse its mutation |
 | lost_reservation_acknowledgement | A lost response leaves a durable reservation and retry does not reopen it |
 | expired_admission | An expired deadline cannot acquire and leaves the intent ready |
 | closed_intent_non_reopening | A terminal intent never becomes sendable again |

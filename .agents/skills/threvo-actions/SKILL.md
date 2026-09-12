@@ -160,11 +160,17 @@ runtime services one layer at a time. Stripe action groups expose
 and gradual-reveal `BoundAction` expose `read_recovery`, `export_evidence`, and
 `observation_context`; the last is the authorized input for a custom read-only
 observer. None grants authority or makes a provider mutation safe to resend.
+The `threvo.actions.evidence/v1` bundle and its validation/rendering helpers are
+available from `threvo_actions.experimental`. Pin the exact package version and
+review migration notes before persisting or exchanging that envelope; strict,
+frozen Pydantic values do not make its cross-release schema stable.
 
 Use `assert_stripe_host_exercise` for repository qualification. Its adapter
 provides primitive operations while the library schedules and evaluates every
-scenario. The deprecated `assert_stripe_host_conforms` only validates a legacy
-driver self-attestation and never establishes that repository tests ran.
+scenario, including the interleaving between an ordinary writer's reservation
+check and its mutation. The deprecated `assert_stripe_host_conforms` only
+validates a legacy driver self-attestation and never establishes that repository
+tests ran.
 
 ## Add an agent framework only at the edge
 

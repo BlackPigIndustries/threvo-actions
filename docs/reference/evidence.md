@@ -5,7 +5,7 @@ of one stored proposal revision. Stripe action groups expose the same operation
 through their `export_evidence(...)` methods.
 
 ```python
-from threvo_actions import ActionEvidenceBundle, validate_evidence_bundle
+from threvo_actions.experimental import ActionEvidenceBundle, validate_evidence_bundle
 
 bundle = await actions.refunds.export_evidence(
     proposal_reference,
@@ -23,22 +23,22 @@ only its tombstone identity and an explicit `erased_source_evidence` omission;
 destroyed evidence is never reconstructed.
 
 `ActionEvidenceBundle`, `EvidenceValidationReport`,
-`validate_evidence_bundle`, and `render_evidence_html` are available from the
-package root in 0.4.1. The complete supporting vocabulary remains in
-`threvo_actions.evidence`.
+`validate_evidence_bundle`, and `render_evidence_html` are available from
+`threvo_actions.experimental` in 0.4.1. The complete supporting vocabulary
+remains in `threvo_actions.evidence`.
 
 ## Version contract
 
-`threvo.actions.evidence/v1` is an immutable external document contract.
-Changing a required field, field meaning, discriminator, canonical digest
-input, or accepted value requires a new schema version and a separate model.
-Producers do not add fields to v1 because strict v1 consumers reject unknown
-fields. Readers that need to support more than one version must select the
-matching model from the schema version before validation.
+`threvo.actions.evidence/v1` is an experimental external document contract.
+Pin the exact package version when storing or exchanging it, and review release
+migration notes before upgrading. Producers do not add unknown fields locally
+because strict consumers reject them. A later pre-1.0 minor release may revise
+the shape or introduce a successor after publishing migration guidance.
 
-Evidence models use the neutral strict `ActionModel` Pydantic base. The base
-supplies `extra="forbid"`, strict validation and frozen values; stability comes
-from the version contract above rather than from a base-class name.
+Evidence models use `ExperimentalModel`, which supplies `extra="forbid"`,
+strict validation and frozen values. Those properties make each value safe to
+handle; they do not promise cross-release schema stability. Stable promotion
+requires the outside-adoption evidence in [Versioning](../versioning.md).
 
 ## Envelope contents
 

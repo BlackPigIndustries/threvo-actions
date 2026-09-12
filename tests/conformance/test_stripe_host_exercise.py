@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -16,6 +16,7 @@ from threvo_actions.integrations.stripe import (
     StripeHostExerciseIntent,
     StripeHostIntentObservation,
     StripeHostIntentPhase,
+    StripeHostNormalWriteCheckpoint,
     StripeHostNormalWriteStatus,
     StripeHostRememberStatus,
     StripeHostReserveStatus,
@@ -43,14 +44,23 @@ class ExercisedStore:
     def __init__(self) -> None:
         self.entries: dict[
             tuple[str, StripeHostActionGroup, str],
-            tuple[StripeHostExerciseIntent, StripeHostIntentPhase, str | None, str | None],
+            tuple[
+                StripeHostExerciseIntent,
+                StripeHostIntentPhase,
+                Literal["no_submission", "outcome"] | None,
+                str | None,
+            ],
         ] = {}
         self.resource_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self.resource_revisions: dict[tuple[str, str], int] = {}
+        self.remembered_revisions: dict[tuple[str, StripeHostActionGroup, str], int] = {}
         self.calls: list[str] = []
 
     async def reset(self, scenario: StripeHostScenario) -> None:
         self.entries.clear()
         self.resource_locks.clear()
+        self.resource_revisions.clear()
+        self.remembered_revisions.clear()
         self.calls.append(f"reset:{scenario.value}")
 
     async def remember(self, intent: StripeHostExerciseIntent) -> StripeHostRememberStatus:
@@ -59,6 +69,9 @@ class ExercisedStore:
         current = self.entries.get(key)
         if current is None:
             self.entries[key] = (intent, StripeHostIntentPhase.READY, None, None)
+            resource_key = (intent.tenant_reference, intent.resource_reference)
+            self.resource_revisions.setdefault(resource_key, 0)
+            self.remembered_revisions[key] = self.resource_revisions[resource_key]
             return StripeHostRememberStatus.CREATED
         if current[0] == intent:
             return StripeHostRememberStatus.MATCHED
@@ -103,6 +116,9 @@ class ExercisedStore:
             current = self.entries.get(key)
             if current is None or current[0] != intent:
                 return StripeHostReserveStatus.STALE
+            resource_key = (intent.tenant_reference, intent.resource_reference)
+            if self.resource_revisions[resource_key] != self.remembered_revisions[key]:
+                return StripeHostReserveStatus.STALE
             if current[1] is not StripeHostIntentPhase.READY:
                 return StripeHostReserveStatus.ALREADY_SUBMITTED
             if not_after <= FixedClock().now():
@@ -140,7 +156,7 @@ class ExercisedStore:
         self,
         intent: StripeHostExerciseIntent,
         *,
-        close_kind: str,
+        close_kind: Literal["no_submission", "outcome"],
         outcome_data: dict[str, JsonValue] | None,
     ) -> StripeHostCloseStatus:
         self.calls.append("close")
@@ -161,17 +177,26 @@ class ExercisedStore:
         return StripeHostCloseStatus.RECORDED
 
     async def normal_write(
-        self, *, tenant_reference: str, resource_reference: str
+        self,
+        *,
+        tenant_reference: str,
+        resource_reference: str,
+        checkpoint: StripeHostNormalWriteCheckpoint,
     ) -> StripeHostNormalWriteStatus:
         self.calls.append("normal_write")
-        if any(
-            intent.tenant_reference == tenant_reference
-            and intent.resource_reference == resource_reference
-            and phase is StripeHostIntentPhase.RESERVED
-            for intent, phase, _, _ in self.entries.values()
-        ):
-            return StripeHostNormalWriteStatus.REFUSED
-        return StripeHostNormalWriteStatus.APPLIED
+        resource_key = (tenant_reference, resource_reference)
+        lock = self.resource_locks.setdefault(resource_key, asyncio.Lock())
+        async with lock:
+            if any(
+                intent.tenant_reference == tenant_reference
+                and intent.resource_reference == resource_reference
+                and phase is StripeHostIntentPhase.RESERVED
+                for intent, phase, _, _ in self.entries.values()
+            ):
+                return StripeHostNormalWriteStatus.REFUSED
+            await checkpoint.after_reservation_check()
+            self.resource_revisions[resource_key] += 1
+            return StripeHostNormalWriteStatus.APPLIED
 
 
 def test_library_executes_and_decides_every_scenario() -> None:
@@ -183,7 +208,7 @@ def test_library_executes_and_decides_every_scenario() -> None:
     assert report.execution_basis == "library_orchestrated"
     assert report.schema_version == "stripe-host-exercise/v1"
     assert tuple(result.scenario for result in report.results) == tuple(StripeHostScenario)
-    assert adapter.calls.count("normal_write") == 1
+    assert adapter.calls.count("normal_write") == 2
     assert adapter.calls.count("reserve") >= 14
 
 
@@ -226,3 +251,32 @@ def test_library_rejects_a_broken_race_implementation() -> None:
         asyncio.run(assert_stripe_host_exercise(BrokenRaceStore(), clock=FixedClock()))
 
     assert captured.value.code == "stripe_host:same_effect_race:race_not_serialized"
+
+
+def test_library_rejects_a_non_atomic_normal_writer() -> None:
+    class NonAtomicWriterStore(ExercisedStore):
+        async def normal_write(
+            self,
+            *,
+            tenant_reference: str,
+            resource_reference: str,
+            checkpoint: StripeHostNormalWriteCheckpoint,
+        ) -> StripeHostNormalWriteStatus:
+            resource_key = (tenant_reference, resource_reference)
+            if any(
+                intent.tenant_reference == tenant_reference
+                and intent.resource_reference == resource_reference
+                and phase is StripeHostIntentPhase.RESERVED
+                for intent, phase, _, _ in self.entries.values()
+            ):
+                return StripeHostNormalWriteStatus.REFUSED
+            await checkpoint.after_reservation_check()
+            self.resource_revisions[resource_key] += 1
+            return StripeHostNormalWriteStatus.APPLIED
+
+    with pytest.raises(StripeHostConformanceError) as captured:
+        asyncio.run(assert_stripe_host_exercise(NonAtomicWriterStore(), clock=FixedClock()))
+
+    assert captured.value.code == (
+        "stripe_host:normal_writer_exclusion:reservation_bypassed_writer_lock"
+    )

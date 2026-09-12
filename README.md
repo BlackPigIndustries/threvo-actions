@@ -74,7 +74,8 @@ Every governed action follows the same sequence:
 6. **Recover** explains whether to wait, reconcile, expire, replace, or request
    operator attention without recommending an unsafe resend.
 7. **Export evidence** creates an authorized, minimized
-   *threvo.actions.evidence/v1* record with explicit omissions.
+   experimental *threvo.actions.evidence/v1* record with explicit omissions;
+   exact-version pins are required while adopters evaluate that document shape.
 
 The core has no database driver, web framework, agent framework, hosted-service
 SDK, or dependency on the Threvo application.

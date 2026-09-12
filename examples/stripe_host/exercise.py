@@ -14,6 +14,7 @@ from threvo_actions.integrations.stripe import (
     StripeHostExerciseIntent,
     StripeHostIntentObservation,
     StripeHostIntentPhase,
+    StripeHostNormalWriteCheckpoint,
     StripeHostNormalWriteStatus,
     StripeHostRememberStatus,
     StripeHostReserveStatus,
@@ -147,6 +148,22 @@ class PostgresStripeHostExerciseAdapter:
         simulate_lost_acknowledgement: bool = False,
     ) -> StripeHostReserveStatus:
         async with self._pool.acquire() as connection, connection.transaction():
+            lock_reference = stripe_resource_lock_reference(
+                intent.tenant_reference,
+                intent.resource_reference,
+            )
+            await connection.fetchval(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+                lock_reference,
+            )
+            resource_revision = await connection.fetchval(
+                f"""SELECT revision FROM {self._fixture_schema}.exercise_resources
+                    WHERE tenant_reference = $1 AND resource_reference = $2""",
+                intent.tenant_reference,
+                intent.resource_reference,
+            )
+            if resource_revision != 0:
+                return StripeHostReserveStatus.STALE
             result = await self._ledger.reserve_in(
                 connection,
                 tenant_reference=intent.tenant_reference,
@@ -214,6 +231,7 @@ class PostgresStripeHostExerciseAdapter:
         *,
         tenant_reference: str,
         resource_reference: str,
+        checkpoint: StripeHostNormalWriteCheckpoint,
     ) -> StripeHostNormalWriteStatus:
         async with self._pool.acquire() as connection, connection.transaction():
             lock_reference = stripe_resource_lock_reference(
@@ -235,6 +253,7 @@ class PostgresStripeHostExerciseAdapter:
             )
             if reserved is True:
                 return StripeHostNormalWriteStatus.REFUSED
+            await checkpoint.after_reservation_check()
             await connection.execute(
                 f"""UPDATE {self._fixture_schema}.exercise_resources
                     SET revision = revision + 1

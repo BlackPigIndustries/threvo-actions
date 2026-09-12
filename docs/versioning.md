@@ -11,7 +11,7 @@ exact patch release in applications that execute financial actions.
 | `threvo_actions.experimental.ActionApplication` and related authoring names | Conditional evaluation surface; exact-pin, equivalence-test and migration-review obligations apply |
 | Receipt JSON and canonicalization profile | `internal/v0`; readable by documented code but not a stable cross-system wire standard |
 | Database schema | Changed only through immutable, checksummed migrations; physical layout remains adapter-internal |
-| `threvo.actions.evidence/v1` | Immutable external document shape; incompatible changes require a new schema version |
+| `threvo.actions.evidence/v1` | Experimental external document shape; exact-pin and migration review required |
 | Provider and host effects | Never guaranteed by Python compatibility alone; require a library-orchestrated host exercise and authoritative verification |
 
 “Supported” describes compatibility for documented calls and meanings. It does
@@ -37,8 +37,8 @@ The following surfaces are supported at the exact `0.4.1` release:
   `threvo_actions.migration_compatibility`, readiness results in
   `threvo_actions.readiness`, and official profiles in
   `threvo_actions.store_security`;
-- documented evidence exports in `threvo_actions.evidence`, recovery models in
-  `threvo_actions.recovery`, and PostgreSQL due-work discovery;
+- documented recovery models in `threvo_actions.recovery` and PostgreSQL
+  due-work discovery;
 - documented approval request contracts and PostgreSQL persistence in
   `threvo_actions.integrations.approval_channels`;
 - documented Pydantic AI names in
@@ -56,8 +56,9 @@ documented exception.
 
 `0.4.1` corrects the meaning of Stripe host qualification, adds a
 library-orchestrated exercise, completes gradual-reveal forwarding for recovery
-and evidence, packages the approval request reference, and freezes the evidence
-v1 document shape. Follow the [`0.4.1` migration record](releases/0.4.1.md).
+and evidence, packages the approval request reference, and exposes the
+experimental evidence v1 document shape for evaluation. Follow the [`0.4.1`
+migration record](releases/0.4.1.md).
 
 `0.4.0` adds progressive Stripe composition, concrete PostgreSQL host
 repositories and a driver-attested scenario checklist, actionable recovery and late
@@ -109,6 +110,7 @@ minor `0.x` release with a migration note:
 
 - the namespaced gradual-reveal authoring API in
   `threvo_actions.experimental`;
+- `threvo.actions.evidence/v1` and its namespaced evidence helpers;
 - `internal/v0` receipt JSON and the canonicalization profile;
 - physical PostgreSQL, MySQL, and SQLite table or procedure layout;
 - migration file internals, except that an applied migration is immutable;

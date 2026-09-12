@@ -4,6 +4,12 @@ This namespace may change independently while it is evaluated. The expert
 root API remains the stable runtime contract.
 """
 
+from ..evidence import (
+    ActionEvidenceBundle,
+    EvidenceValidationReport,
+    render_evidence_html,
+    validate_evidence_bundle,
+)
 from .application import (
     ActionApplication,
     ActionApplicationError,
@@ -26,6 +32,7 @@ __all__ = [
     "ActionApplication",
     "ActionApplicationError",
     "ActionComponents",
+    "ActionEvidenceBundle",
     "ActionIssueCode",
     "ActionInspection",
     "ActionOwnershipInspection",
@@ -35,5 +42,8 @@ __all__ = [
     "BoundaryModelInspection",
     "BoundAction",
     "DependencyScopeFactory",
+    "EvidenceValidationReport",
     "RegisteredAction",
+    "render_evidence_html",
+    "validate_evidence_bundle",
 ]

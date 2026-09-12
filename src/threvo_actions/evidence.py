@@ -14,7 +14,7 @@ from pydantic import Field, JsonValue, TypeAdapter, model_serializer, model_vali
 
 from .authority import AuthorityDecision
 from .canonical import canonicalize_v1
-from .models import ActionModel, ActionType, EffectKind, LifecycleStatus, SafeReference
+from .models import ActionType, EffectKind, ExperimentalModel, LifecycleStatus, SafeReference
 from .receipts import (
     ExecutionReceipt,
     ExecutionReceiptStatus,
@@ -32,12 +32,12 @@ _JSON_OBJECT_ADAPTER: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, 
 _JSON_VALUE_ADAPTER: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 
-class _FrozenJsonEntry(ActionModel):
+class _FrozenJsonEntry(ExperimentalModel):
     name: Annotated[str, Field(max_length=255)]
     canonical_value: Annotated[str, Field(max_length=1_048_576)]
 
 
-class FrozenJsonObject(ActionModel):
+class FrozenJsonObject(ExperimentalModel):
     """Deeply immutable JSON object that serializes as an ordinary JSON object."""
 
     entries: tuple[_FrozenJsonEntry, ...] = ()
@@ -86,7 +86,7 @@ class EvidenceOmission(StrEnum):
     HISTORICAL_AUTHORITY_UNAVAILABLE = "historical_authority_unavailable"
 
 
-class EvidenceAuthoritySummary(ActionModel):
+class EvidenceAuthoritySummary(ExperimentalModel):
     """Non-replayable account of a recorded authority decision."""
 
     authority_reference: SafeReference
@@ -97,7 +97,7 @@ class EvidenceAuthoritySummary(ActionModel):
     expires_at: datetime
 
 
-class ActionEvidenceBundle(ActionModel):
+class ActionEvidenceBundle(ExperimentalModel):
     """Unsigned export of one authorized stored proposal revision."""
 
     schema_version: Literal["threvo.actions.evidence/v1"] = "threvo.actions.evidence/v1"
@@ -140,7 +140,7 @@ class EvidenceValidationReason(StrEnum):
     AUTHORITY_HISTORY_MISSING = "authority_history_missing"
 
 
-class EvidenceValidationReport(ActionModel):
+class EvidenceValidationReport(ExperimentalModel):
     """Pure consistency result; it does not authenticate the export."""
 
     status: EvidenceValidationStatus

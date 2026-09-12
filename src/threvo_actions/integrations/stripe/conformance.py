@@ -212,6 +212,12 @@ class StripeHostIntentPhase(StrEnum):
     CLOSED = "closed"
 
 
+class StripeHostNormalWriteCheckpoint(Protocol):
+    """Library-owned interlock reached after the writer checks reservations."""
+
+    async def after_reservation_check(self) -> None: ...
+
+
 class StripeHostExerciseDescriptor(ActionModel):
     """Identity of the concrete fixture exercised by the library."""
 
@@ -296,7 +302,11 @@ class StripeHostExerciseAdapter(Protocol):
     ) -> StripeHostCloseStatus: ...
 
     async def normal_write(
-        self, *, tenant_reference: str, resource_reference: str
+        self,
+        *,
+        tenant_reference: str,
+        resource_reference: str,
+        checkpoint: StripeHostNormalWriteCheckpoint,
     ) -> StripeHostNormalWriteStatus: ...
 
 
@@ -355,6 +365,22 @@ def _outcome_digest(value: dict[str, JsonValue]) -> str:
 def _require(scenario: StripeHostScenario, condition: bool, code: str) -> None:
     if not condition:
         raise StripeHostConformanceError(f"stripe_host:{scenario.value}:{code}")
+
+
+class _NormalWriteRaceCheckpoint:
+    def __init__(self) -> None:
+        self._checked = asyncio.Event()
+        self._continue = asyncio.Event()
+
+    async def after_reservation_check(self) -> None:
+        self._checked.set()
+        await self._continue.wait()
+
+    async def wait_until_checked(self) -> None:
+        await self._checked.wait()
+
+    def release(self) -> None:
+        self._continue.set()
 
 
 async def _exercise_scenario(
@@ -463,13 +489,43 @@ async def _exercise_scenario(
 
     if scenario is StripeHostScenario.NORMAL_WRITER_EXCLUSION:
         await adapter.remember(first)
-        reserved = await adapter.reserve(first, not_after=future)
-        normal = await adapter.normal_write(
-            tenant_reference=first.tenant_reference,
-            resource_reference=first.resource_reference,
+        checkpoint = _NormalWriteRaceCheckpoint()
+        writer_task = asyncio.create_task(
+            adapter.normal_write(
+                tenant_reference=first.tenant_reference,
+                resource_reference=first.resource_reference,
+                checkpoint=checkpoint,
+            )
         )
-        _require(scenario, reserved is StripeHostReserveStatus.ACQUIRED, "reserve_failed")
-        _require(scenario, normal is StripeHostNormalWriteStatus.REFUSED, "writer_not_excluded")
+        try:
+            await asyncio.wait_for(checkpoint.wait_until_checked(), timeout=1.0)
+            reserve_task = asyncio.create_task(adapter.reserve(first, not_after=future))
+            completed, _ = await asyncio.wait({reserve_task}, timeout=0.1)
+            if completed:
+                checkpoint.release()
+                await writer_task
+                _require(scenario, False, "reservation_bypassed_writer_lock")
+            checkpoint.release()
+            normal, reserved = await asyncio.gather(writer_task, reserve_task)
+        finally:
+            checkpoint.release()
+            if not writer_task.done():
+                writer_task.cancel()
+                await asyncio.gather(writer_task, return_exceptions=True)
+        _require(scenario, normal is StripeHostNormalWriteStatus.APPLIED, "writer_not_applied")
+        _require(scenario, reserved is StripeHostReserveStatus.STALE, "writer_drift_not_detected")
+        second = _intent(descriptor, scenario, suffix="two", resource_suffix="two")
+        await adapter.remember(second)
+        acquired = await adapter.reserve(second, not_after=future)
+        post_reservation_checkpoint = _NormalWriteRaceCheckpoint()
+        post_reservation_checkpoint.release()
+        refused = await adapter.normal_write(
+            tenant_reference=second.tenant_reference,
+            resource_reference=second.resource_reference,
+            checkpoint=post_reservation_checkpoint,
+        )
+        _require(scenario, acquired is StripeHostReserveStatus.ACQUIRED, "reserve_failed")
+        _require(scenario, refused is StripeHostNormalWriteStatus.REFUSED, "writer_not_excluded")
         return
 
     if scenario is StripeHostScenario.LOST_RESERVATION_ACKNOWLEDGEMENT:
