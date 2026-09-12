@@ -136,16 +136,25 @@ class PostgresStripeHostExerciseAdapter:
         *,
         not_after: datetime,
         simulate_lost_acknowledgement: bool = False,
+        fail_if_resource_busy: bool = False,
     ) -> StripeHostReserveStatus:
         async with self._pool.acquire() as connection, connection.transaction():
             lock_reference = stripe_resource_lock_reference(
                 intent.tenant_reference,
                 intent.resource_reference,
             )
-            await connection.fetchval(
-                "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
-                lock_reference,
-            )
+            if fail_if_resource_busy:
+                acquired = await connection.fetchval(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended($1::text, 0))",
+                    lock_reference,
+                )
+                if acquired is not True:
+                    return StripeHostReserveStatus.RESOURCE_BUSY
+            else:
+                await connection.fetchval(
+                    "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
+                    lock_reference,
+                )
             resource_revision = await connection.fetchval(
                 f"""SELECT revision FROM {self._fixture_schema}.exercise_resources
                     WHERE tenant_reference = $1 AND resource_reference = $2""",

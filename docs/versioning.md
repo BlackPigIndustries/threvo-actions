@@ -121,6 +121,25 @@ Persisted rows remain upgradeable through the adapter's explicit migration
 path. An experimental wire shape must not be exchanged between independently
 versioned systems without an application-owned compatibility agreement.
 
+### Evidence envelope promotion
+
+Promotion of `threvo.actions.evidence/v1` requires observed use by a consenting
+outside application, not a maintainer fixture. That application must export
+representative pending, terminal, and retained-or-erased action records from its
+real host implementation. An independently maintained consumer must validate
+and render those records, reject altered content, and confirm that the declared
+omissions are sufficient for its operator or audit workflow without requesting
+private snapshots or replayable authority evidence.
+
+The evaluation must record the exact producer and consumer versions, sample
+digests, retention behavior, security and privacy review, and a post-adoption
+observation period with no unresolved schema-safety anomaly. Record failures as
+well as successes in the append-only
+[adoption ledger](testing/gradual-reveal-adoption.md). A named maintainer then
+makes an explicit promote, revise, or retain-experimental decision in a release
+record. Elapsed time, maintainer CI, or a schema-version suffix cannot promote
+the envelope by itself.
+
 ### Gradual-reveal compatibility window
 
 The `threvo_actions.experimental` support and evaluation window lasts 120 days

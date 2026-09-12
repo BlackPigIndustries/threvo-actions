@@ -34,6 +34,10 @@ environment. It is not a signed certificate, production observation,
 compliance conclusion, or proof that ordinary writers omitted from the adapter
 are coordinated.
 
+`assert_stripe_host_exercise(..., scenario_timeout=...)` accepts a
+whole-scenario liveness bound for slower environments. Race outcomes come from
+the adapter's non-blocking shared-lock attempt rather than elapsed time.
+
 ## Legacy driver attestation
 
 Version 0.4.0 shipped **assert_stripe_host_conforms(driver)**. The driver
@@ -61,7 +65,7 @@ document as release, deployment, or customer conformance evidence.
 | same_effect_race | Exactly one reservation wins; the other observes prior submission |
 | conflicting_resource_race | Different action groups cannot reserve one customer resource |
 | unrelated_resource_progress | Different resources can both progress |
-| normal_writer_exclusion | The ordinary writer is paused after checking reservations while a reservation races it; the shared lock orders the writer first and the reservation detects resulting drift. A second case reserves first and requires the writer to refuse its mutation |
+| normal_writer_exclusion | The ordinary writer is paused after checking reservations while a fail-fast reservation proves the shared resource lock is busy. After the writer commits, reservation must detect resulting drift. A second case reserves first and requires the writer to refuse its mutation |
 | lost_reservation_acknowledgement | A lost response leaves a durable reservation and retry does not reopen it |
 | expired_admission | An expired deadline cannot acquire and leaves the intent ready |
 | closed_intent_non_reopening | A terminal intent never becomes sendable again |

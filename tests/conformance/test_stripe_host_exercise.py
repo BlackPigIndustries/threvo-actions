@@ -107,10 +107,13 @@ class ExercisedStore:
         *,
         not_after: datetime,
         simulate_lost_acknowledgement: bool = False,
+        fail_if_resource_busy: bool = False,
     ) -> StripeHostReserveStatus:
         self.calls.append("reserve")
         lock_key = (intent.tenant_reference, intent.resource_reference)
         lock = self.resource_locks.setdefault(lock_key, asyncio.Lock())
+        if fail_if_resource_busy and lock.locked():
+            return StripeHostReserveStatus.RESOURCE_BUSY
         async with lock:
             key = (intent.tenant_reference, intent.action_group, intent.effect_reference)
             current = self.entries.get(key)
@@ -243,6 +246,7 @@ def test_library_rejects_a_broken_race_implementation() -> None:
             *,
             not_after: datetime,
             simulate_lost_acknowledgement: bool = False,
+            fail_if_resource_busy: bool = False,
         ) -> StripeHostReserveStatus:
             if "same_effect_race" in intent.effect_reference:
                 return StripeHostReserveStatus.ACQUIRED
@@ -250,6 +254,7 @@ def test_library_rejects_a_broken_race_implementation() -> None:
                 intent,
                 not_after=not_after,
                 simulate_lost_acknowledgement=simulate_lost_acknowledgement,
+                fail_if_resource_busy=fail_if_resource_busy,
             )
 
     with pytest.raises(StripeHostConformanceError) as captured:
@@ -279,6 +284,7 @@ def test_library_refuses_to_close_without_acquiring_reservation(
             *,
             not_after: datetime,
             simulate_lost_acknowledgement: bool = False,
+            fail_if_resource_busy: bool = False,
         ) -> StripeHostReserveStatus:
             if scenario_name in intent.effect_reference:
                 return StripeHostReserveStatus.STALE
@@ -286,6 +292,7 @@ def test_library_refuses_to_close_without_acquiring_reservation(
                 intent,
                 not_after=not_after,
                 simulate_lost_acknowledgement=simulate_lost_acknowledgement,
+                fail_if_resource_busy=fail_if_resource_busy,
             )
 
     with pytest.raises(StripeHostConformanceError) as captured:

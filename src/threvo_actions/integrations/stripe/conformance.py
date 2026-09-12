@@ -187,6 +187,7 @@ class StripeHostRememberStatus(StrEnum):
 class StripeHostReserveStatus(StrEnum):
     ACQUIRED = "acquired"
     ALREADY_SUBMITTED = "already_submitted"
+    RESOURCE_BUSY = "resource_busy"
     UNAVAILABLE = "unavailable"
     STALE = "stale"
     ACKNOWLEDGEMENT_LOST = "acknowledgement_lost"
@@ -288,6 +289,7 @@ class StripeHostExerciseAdapter(Protocol):
         *,
         not_after: datetime,
         simulate_lost_acknowledgement: bool = False,
+        fail_if_resource_busy: bool = False,
     ) -> StripeHostReserveStatus: ...
 
     async def record_no_submission(
@@ -498,20 +500,25 @@ async def _exercise_scenario(
             )
         )
         try:
-            await asyncio.wait_for(checkpoint.wait_until_checked(), timeout=1.0)
-            reserve_task = asyncio.create_task(adapter.reserve(first, not_after=future))
-            completed, _ = await asyncio.wait({reserve_task}, timeout=0.1)
-            if completed:
-                checkpoint.release()
-                await writer_task
-                _require(scenario, False, "reservation_bypassed_writer_lock")
+            await checkpoint.wait_until_checked()
+            while_writer_open = await adapter.reserve(
+                first,
+                not_after=future,
+                fail_if_resource_busy=True,
+            )
+            _require(
+                scenario,
+                while_writer_open is StripeHostReserveStatus.RESOURCE_BUSY,
+                "reservation_bypassed_writer_lock",
+            )
             checkpoint.release()
-            normal, reserved = await asyncio.gather(writer_task, reserve_task)
+            normal = await writer_task
         finally:
             checkpoint.release()
             if not writer_task.done():
                 writer_task.cancel()
                 await asyncio.gather(writer_task, return_exceptions=True)
+        reserved = await adapter.reserve(first, not_after=future)
         _require(scenario, normal is StripeHostNormalWriteStatus.APPLIED, "writer_not_applied")
         _require(scenario, reserved is StripeHostReserveStatus.STALE, "writer_drift_not_detected")
         second = _intent(descriptor, scenario, suffix="two", resource_suffix="two")
@@ -668,16 +675,24 @@ async def assert_stripe_host_exercise(
     adapter: StripeHostExerciseAdapter,
     *,
     clock: Clock | None = None,
+    scenario_timeout: timedelta = timedelta(seconds=30),
 ) -> StripeHostExerciseReport:
     """Execute every scenario and return evidence only when library assertions pass."""
 
+    if scenario_timeout <= timedelta(0):
+        raise ValueError("scenario_timeout must be positive")
     resolved_clock = clock or SystemClock()
     results: list[StripeHostScenarioResult] = []
     for scenario in _REQUIRED_SCENARIOS:
         try:
-            await _exercise_scenario(adapter, scenario, clock=resolved_clock)
+            async with asyncio.timeout(scenario_timeout.total_seconds()):
+                await _exercise_scenario(adapter, scenario, clock=resolved_clock)
         except StripeHostConformanceError:
             raise
+        except TimeoutError:
+            raise StripeHostConformanceError(
+                f"stripe_host:{scenario.value}:scenario_timeout"
+            ) from None
         except Exception:
             raise StripeHostConformanceError(
                 f"stripe_host:{scenario.value}:adapter_error"
