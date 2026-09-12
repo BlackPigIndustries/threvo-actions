@@ -2,6 +2,14 @@
 
 ## Governed facade (0.3.x)
 
+Start with the credential-free `stripe_refund_scenario()` and then replace its
+boundaries through `StripeActions.from_services(StripeServices(...),
+refunds=RefundConfig(...))`. Both paths create the same facade and runtime. The
+supplied scenario is process-local and refuses live policy; its `approve()`
+helper is evaluation-only. Production code supplies authenticated evidence,
+durable storage and managed protection. The original `StripeActions(...)`
+constructor remains supported.
+
 Use `StripeActions.refunds` with a host-resolved `RefundPayment`, model-visible
 `RefundRequest`, private `RefundSnapshot`, minimized `RefundPreview`, explicit
 `RefundPolicy` and `StripeRefundSettings`. The host is a `RefundHost` containing

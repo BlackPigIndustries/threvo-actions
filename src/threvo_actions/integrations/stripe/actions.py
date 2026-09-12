@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     )
     from ...runtime import ActionOperationResult, Clock, IdentifierProvider, ProposalView
     from ...stores import ActionStore, RetentionStore
+    from .composition import RefundConfig, StripeServices
     from .gateway import StripeRefundGateway
     from .models import StripeRefundSettings
     from .ports import RefundHost
@@ -295,6 +296,26 @@ class StripeRefunds:
 
 class StripeActions:
     """Compose Stripe operations once per host scope; SDK ownership stays with the caller."""
+
+    @classmethod
+    def from_services(
+        cls,
+        services: StripeServices,
+        *,
+        refunds: RefundConfig | None = None,
+        subscriptions: SubscriptionCancellationConfig | None = None,
+        credit_notes: CreditNoteConfig | None = None,
+    ) -> StripeActions:
+        """Compose through the progressive typed service/configuration layer."""
+
+        from .composition import from_services
+
+        return from_services(
+            services,
+            refunds=refunds,
+            subscriptions=subscriptions,
+            credit_notes=credit_notes,
+        )
 
     def __init__(
         self,
