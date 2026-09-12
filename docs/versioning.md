@@ -3,6 +3,22 @@
 `threvo-actions` uses Semantic Versioning with an explicit `0.x` policy. Pin an
 exact patch release in applications that execute financial actions.
 
+## Contract map
+
+| Surface | Current commitment |
+| --- | --- |
+| Documented root exports, `Action`, `ActionDefinition`, and documented integration exports | Supported at the exact release and governed by the patch/minor policy below |
+| `threvo_actions.experimental.ActionApplication` and related authoring names | Conditional evaluation surface; exact-pin, equivalence-test and migration-review obligations apply |
+| Receipt JSON and canonicalization profile | `internal/v0`; readable by documented code but not a stable cross-system wire standard |
+| Database schema | Changed only through immutable, checksummed migrations; physical layout remains adapter-internal |
+| Provider and host effects | Never guaranteed by Python compatibility alone; require host conformance and authoritative verification |
+
+“Supported” describes compatibility for documented calls and meanings. It does
+not mean every host repository is atomic, every provider version is qualified,
+or every experimental serialization is frozen. Those are separate evidence
+gates. Release count is not a compatibility metric; migration records and
+contract tests identify actual changes.
+
 ## Supported at `0.3.2`
 
 The following surfaces are supported at the exact `0.3.2` release:

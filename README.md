@@ -1,7 +1,8 @@
 # threvo-actions
 
-`threvo-actions` is a Python runtime for approving, executing and reconciling
-governed business operations, starting with financial actions. It is
+`threvo-actions` is a Python runtime for governed actions: consequential
+application changes that require bound approval, controlled execution and
+authoritative verification. It starts with financial actions and is
 framework-neutral: hosts retain business truth, authorization, governed
 execution, authoritative verification, and retention policy.
 
@@ -118,6 +119,12 @@ See the [PostgreSQL guide](docs/postgres.md),
 helpers and two local reference applications exercise the same runtime against a
 PSP refund and a cross-service supplier-destination change. Application code
 continues to own canonical state and all business mutations.
+
+The layers are progressive. Start with a documented facade and supplied local
+dependencies, replace one host boundary at a time, and use `ActionDefinition`
+when the application needs direct control over every port. The simple and
+expert paths use the same runtime semantics; convenience never supplies live
+business authorization or production persistence.
 
 ## Guarantees
 

@@ -9,8 +9,10 @@ metadata:
 
 # Threvo Actions
 
-Use `threvo-actions` to coordinate a high-consequence mutation while the host
-application retains business truth, authorization, execution, key custody, and
+Use `threvo-actions` to build a governed action: a consequential application
+change that needs bound approval, controlled execution and authoritative
+verification. The host application retains business truth, authorization,
+execution, key custody, and
 authoritative verification. The library is a control runtime, not a payment
 rail, policy engine, or source of financial state.
 
