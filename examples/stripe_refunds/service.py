@@ -1,37 +1,45 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from examples.stripe_host.worker import PostgresRecoveryLeaseSchedule, RecoveryWorker
 from threvo_actions import (
     ActionOperationResult,
-    ActionRuntime,
+    ActionType,
     AnyApproval,
     AuthorityDecision,
     AuthorityEvidence,
-    ConfirmingAuthority,
     EvidenceConsumer,
+    GovernedExecutor,
     LifecycleStatus,
     ProposalView,
     ReadContext,
     RequestingPrincipal,
 )
-from threvo_actions.stores.postgres import PostgresActionStore
+from threvo_actions.integrations.stripe import (
+    RefundHost,
+    RefundPolicy,
+    RefundRequest,
+    StripeActions,
+    StripeEffectObservation,
+    StripeRefundSettings,
+)
+from threvo_actions.stores.postgres import PostgresActionStore, PostgresActionWorkSource
 
-from .action import StripeRefundAction
+from .action import RefundAuthorization, approvers
 from .models import AppError, Identity, RefundCommand, Settings
 from .protection import PostgresProtection
 from .storage import RefundRepository
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     import asyncpg
 
-    from threvo_actions import VerificationResult
-    from threvo_actions.integrations.stripe import RefundOutcome, StripeRefundConnector
-
-logger = logging.getLogger(__name__)
+    from threvo_actions.integrations.stripe import StripeRefundConnector
+    from threvo_actions.recovery import ActionRecoveryView
 
 
 class RefundService:
@@ -44,41 +52,70 @@ class RefundService:
         self.settings = settings
         self.repository = RefundRepository(pool)
         self.store = PostgresActionStore(pool)
-        self.runtime = ActionRuntime(store=self.store)
-        protection = PostgresProtection(pool, bytes.fromhex(settings.master_key.get_secret_value()))
-        authorities = tuple(
-            ConfirmingAuthority(reference=reference)
-            for reference in sorted(
-                {i.reference for i in settings.identities if i.role == "approver"}
-            )
+        self.connector = connector
+        protection = PostgresProtection(
+            pool, bytes.fromhex(settings.master_key.get_secret_value())
         )
-        self.action = StripeRefundAction(
-            authority_evaluator=AnyApproval(authorities),
+        authorization = RefundAuthorization(
+            repository=self.repository,
+            identities=settings.identities,
+        )
+        self.actions = StripeActions(
+            gateway=connector.gateway,
+            host=RefundHost(
+                repository=self.repository,
+                authorization=authorization,
+            ),
+            policy=RefundPolicy(limits=settings.refund_limits),
+            settings=StripeRefundSettings(
+                action_type=ActionType(
+                    namespace="example.stripe", name="refund", version=1
+                ),
+                executor_identity=GovernedExecutor(reference="service:stripe-refunds"),
+                authority_audience="service:stripe-refunds",
+                verification_delay=timedelta(seconds=10),
+                verification_lease_duration=timedelta(minutes=2),
+                max_verification_attempts=30,
+            ),
+            store=self.store,
+            authority_evaluator=AnyApproval(approvers(settings.identities)),
             commitment_provider=protection,
             protection_codec=protection,
         )
-        self.action.repository = self.repository
-        self.action.connector = connector
-        self.action.identities = settings.identities
-        self.action.store = self.store
-        self.definition = self.action.to_definition()
+        self.runtime = self.actions.refunds.runtime
+        self.definition = self.actions.refunds.definition
+        self._pool = pool
+        self._work_source = PostgresActionWorkSource(pool)
 
     async def prepare(self, identity: Identity, command: RefundCommand) -> ActionOperationResult:
-        return await self.runtime.prepare(
-            self.definition,
+        return await self.actions.refunds.prepare(
+            RefundRequest(
+                intent_reference=command.intent_reference,
+                payment_reference=command.order_reference,
+                amount=command.amount,
+            ),
             tenant_reference=identity.tenant_reference,
-            command=command,
             requesting_principal=RequestingPrincipal(reference=identity.reference),
         )
 
+    def _read_context(self, identity: Identity) -> ReadContext:
+        return ReadContext(
+            tenant_reference=identity.tenant_reference,
+            consumer=EvidenceConsumer(reference=identity.reference),
+        )
+
     async def read(self, identity: Identity, proposal: str) -> ProposalView:
-        return await self.runtime.read(
-            self.definition,
-            proposal_reference=proposal,
-            context=ReadContext(
-                tenant_reference=identity.tenant_reference,
-                consumer=EvidenceConsumer(reference=identity.reference),
-            ),
+        return await self.actions.refunds.read(
+            proposal,
+            context=self._read_context(identity),
+        )
+
+    async def read_recovery(
+        self, identity: Identity, proposal: str
+    ) -> ActionRecoveryView:
+        return await self.actions.refunds.read_recovery(
+            proposal,
+            context=self._read_context(identity),
         )
 
     async def decide(
@@ -94,12 +131,14 @@ class RefundService:
             raise AppError("proposal is no longer awaiting a decision")
         now = datetime.now(UTC)
         if now >= record.expires_at:
-            return await self.runtime.expire_due(
-                self.definition,
+            return await self.actions.refunds.expire_due(
                 tenant_reference=identity.tenant_reference,
                 proposal_reference=proposal,
             )
-        authority = ConfirmingAuthority(reference=identity.reference)
+        authority = next(
+            authority for authority in approvers(self.settings.identities)
+            if authority.reference == identity.reference
+        )
         evidence = AuthorityEvidence(
             tenant_reference=identity.tenant_reference,
             action_type=self.definition.action_type,
@@ -113,78 +152,87 @@ class RefundService:
             issued_at=now,
             expires_at=min(record.expires_at, now + timedelta(minutes=5)),
         )
-        # Return durable authorization. The sweeper executes it even if this HTTP
-        # request disconnects; the model never supplies financial authority.
-        return await self.runtime.record_authority(
-            self.definition, evidence=evidence, authenticated_authority=authority
+        return await self.actions.refunds.record_authority(
+            evidence,
+            authenticated_authority=authority,
         )
+
+    async def _proposal_for_effect(self, tenant: str, effect: str) -> str:
+        owner = await self.store.get_effect_claim_owner(
+            tenant_reference=tenant,
+            action_type=self.definition.action_type,
+            semantic_effect_reference=effect,
+        )
+        if owner is not None:
+            return owner
+        return await self.repository.proposal_for_effect(tenant, effect)
 
     async def refresh_case(
         self, identity: Identity, effect: str
-    ) -> VerificationResult[RefundOutcome]:
+    ) -> StripeEffectObservation:
         if identity.role != "approver":
             raise AppError("an approver is required")
-        record = await self.repository.intent(identity.tenant_reference, effect)
-        result = await self.action.connector.verify(record.snapshot.intent)
-        if result.result is not None:
-            await self.repository.observe(identity.tenant_reference, effect, result.result)
-        # This app observation never rewrites terminal runtime receipts or resends.
-        return result
+        proposal = await self._proposal_for_effect(identity.tenant_reference, effect)
+        observation = await self.actions.refunds.observe_effect(
+            proposal,
+            context=self._read_context(identity),
+        )
+        await self.repository.record_case_observation(
+            identity.tenant_reference,
+            effect,
+            observation,
+        )
+        return observation
 
     async def sweep(self) -> int:
         processed = 0
-        for tenant in sorted({i.tenant_reference for i in self.settings.identities}):
-            for proposal in await self.repository.due(tenant):
-                if not await self.repository.claim_attempt(tenant, proposal):
-                    continue
-                try:
-                    async with asyncio.timeout(30):
-                        record = await self.store.get(tenant, proposal)
-                        if record is None:
-                            await self.repository.completed_attempt(tenant, proposal)
-                            continue
-                        if record.lifecycle_status is LifecycleStatus.AWAITING_AUTHORITY:
-                            await self.runtime.expire_due(
-                                self.definition,
-                                tenant_reference=tenant,
-                                proposal_reference=proposal,
-                            )
-                        elif record.lifecycle_status is LifecycleStatus.AUTHORIZED:
-                            await self.runtime.execute(
-                                self.definition,
-                                tenant_reference=tenant,
-                                proposal_reference=proposal,
-                            )
-                        else:
-                            result = await self.runtime.reconcile(
-                                self.definition,
-                                tenant_reference=tenant,
-                                proposal_reference=proposal,
-                            )
-                            if result.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED:
-                                await self.repository.open_case(
-                                    tenant, record.semantic_effect_reference
-                                )
-                        current = await self.store.get(tenant, proposal)
-                        progressed = current is None or (
-                            current.lifecycle_status != record.lifecycle_status
-                            or current.next_verification_at != record.next_verification_at
-                        )
-                    if progressed:
-                        await self.repository.completed_attempt(tenant, proposal)
-                    else:
-                        await self.repository.defer_attempt(tenant, proposal)
-                    processed += 1
-                except Exception:
-                    await self.repository.defer_attempt(tenant, proposal)
-                    # Leave durable work discoverable. No raw provider/error text in logs.
-                    logger.error("refund recovery attempt failed")
+        for tenant in sorted({identity.tenant_reference for identity in self.settings.identities}):
+            operator = next(
+                identity
+                for identity in self.settings.identities
+                if identity.tenant_reference == tenant and identity.role == "approver"
+            )
+            action_type = self.definition.action_type
+            worker = RecoveryWorker(
+                source=self._work_source,
+                schedule=PostgresRecoveryLeaseSchedule(
+                    self._pool,
+                    tenant_reference=tenant,
+                    schema="stripe_refund_app",
+                ),
+                actions={
+                    (action_type.namespace, action_type.name, action_type.version): (
+                        self.actions.refunds
+                    )
+                },
+                read_context=self._read_context(operator),
+            )
+            results = await worker.scan(cutoff=datetime.now(UTC), page_size=100)
+            processed += len(results)
+            for result in results:
+                record = await self.store.get(tenant, result.proposal_reference)
+                if (
+                    record is not None
+                    and record.lifecycle_status
+                    is LifecycleStatus.VERIFICATION_UNRESOLVED
+                ):
+                    await self.repository.open_case(
+                        tenant, record.semantic_effect_reference
+                    )
             for effect in await self.repository.monitoring_due(tenant):
                 try:
-                    intent = await self.repository.intent(tenant, effect)
-                    observed = await self.action.connector.verify(intent.snapshot.intent)
-                    if observed.result is not None:
-                        await self.repository.observe(tenant, effect, observed.result)
+                    proposal = await self._proposal_for_effect(tenant, effect)
+                    observation = await self.actions.refunds.observe_effect(
+                        proposal,
+                        context=self._read_context(operator),
+                    )
+                    await self.repository.record_case_observation(
+                        tenant, effect, observation
+                    )
                 except Exception:
-                    logger.error("refund monitoring attempt failed")
+                    logger.exception(
+                        "refund case observation failed",
+                        extra={"tenant_reference": tenant, "effect_reference": effect},
+                    )
+                    continue
         return processed

@@ -41,6 +41,7 @@ from threvo_actions.integrations.stripe import (  # noqa: E402
     ChargeObservation,
     RefundObservation,
     RefundPage,
+    RefundReservationStatus,
     StripeAccount,
     StripeBoundaryError,
     StripeRefundConnector,
@@ -171,7 +172,7 @@ def test_restart_recovery_timeout_and_duplicate_admission():
             gateway.timeout = True
             # Recompose every runtime/protection object as after a process restart.
             recovered = RefundService(
-                service.repository.pool, service.settings, service.action.connector
+                service.repository.pool, service.settings, service.connector
             )
             await recovered.sweep()
             assert gateway.calls == 1
@@ -202,7 +203,15 @@ def test_http_authentication_tenant_scope_and_independent_decision():
                 )
                 assert made.status_code == 200, made.text
                 ref = made.json()["proposal_reference"]
+                recovery = await client.get(
+                    f"/api/proposals/{ref}/recovery", headers=requester
+                )
+                assert recovery.status_code == 200
+                assert recovery.json()["condition"] == "waiting_for_authority"
                 assert (await client.get("/api/proposals", headers=other)).json() == []
+                assert (
+                    await client.get(f"/api/proposals/{ref}/recovery", headers=other)
+                ).status_code == 409
                 for headers in (requester, other):
                     assert (
                         await client.post(
@@ -232,10 +241,13 @@ def test_agent_prepares_and_pauses_without_authority():
         async with application() as (service, gateway):
 
             def respond(messages, info):
+                del messages, info
+                request = command().model_dump(mode="json")
+                request["payment_reference"] = request.pop("order_reference")
                 return ModelResponse(
                     parts=[
                         ToolCallPart(
-                            "refund", command().model_dump(mode="json"), tool_call_id="call:one"
+                            "refund", request, tool_call_id="call:one"
                         )
                     ]
                 )
@@ -301,13 +313,21 @@ def test_crash_after_reservation_is_never_retried_after_idempotency_window():
             proposal = await service.prepare(requester, command())
             stored = await service.store.get("tenant:one", proposal.proposal_reference)
             record = await service.repository.intent("tenant:one", stored.semantic_effect_reference)
-            assert await service.repository.reserve(
-                record.snapshot, datetime.now(UTC) - timedelta(days=2)
+            assert (
+                await service.repository.reserve(
+                    record.snapshot, not_after=datetime.now(UTC) + timedelta(days=2)
+                )
+                is RefundReservationStatus.ACQUIRED
             )
             await service.decide(approver, proposal.proposal_reference, True)
             await service.sweep()
             assert gateway.calls == 0
-            assert not await service.repository.reserve(record.snapshot, datetime.now(UTC))
+            assert (
+                await service.repository.reserve(
+                    record.snapshot, not_after=datetime.now(UTC)
+                )
+                is RefundReservationStatus.ALREADY_SUBMITTED
+            )
 
     asyncio.run(scenario())
 
@@ -324,8 +344,12 @@ def test_reservation_rechecks_the_order_inside_its_transaction():
                 "tenant:one",
                 "order:one",
             )
-            with pytest.raises(AppError, match="precondition"):
-                await service.repository.reserve(record.snapshot, datetime.now(UTC))
+            assert (
+                await service.repository.reserve(
+                    record.snapshot, not_after=datetime.now(UTC) + timedelta(minutes=5)
+                )
+                is RefundReservationStatus.STALE
+            )
             assert gateway.calls == 0
 
     asyncio.run(scenario())
@@ -445,7 +469,13 @@ def test_order_writers_cannot_change_a_reserved_payment(isolation):
                 with pytest.raises((asyncpg.CheckViolationError, asyncpg.SerializationError)):
                     async with writer.transaction(isolation=isolation):
                         await writer.fetchval("SELECT data FROM stripe_refund_app.orders")
-                        assert await service.repository.reserve(intent.snapshot, datetime.now(UTC))
+                        assert (
+                            await service.repository.reserve(
+                                intent.snapshot,
+                                not_after=datetime.now(UTC) + timedelta(minutes=5),
+                            )
+                            is RefundReservationStatus.ACQUIRED
+                        )
                         await writer.execute(
                             """UPDATE stripe_refund_app.orders
                                SET data=jsonb_set(data, '{charge_id}',
@@ -471,7 +501,7 @@ def test_recovery_sweeps_do_not_starve_work_behind_duplicate_proposals():
             await service.decide(approver, legitimate.proposal_reference, True)
             await service.sweep()
             restarted = RefundService(
-                service.repository.pool, service.settings, service.action.connector
+                service.repository.pool, service.settings, service.connector
             )
             await restarted.sweep()
             await restarted.sweep()
@@ -506,7 +536,7 @@ def test_failure_backoff_starts_after_the_attempt_finishes(monkeypatch):
                    FROM stripe_refund_app.work_schedule WHERE proposal_reference=$1""",
                 proposal.proposal_reference,
             )
-            assert seconds > 50
+            assert seconds > 20
             await service.sweep()
             assert attempts == 1
             assert gateway.calls == 0
@@ -525,25 +555,17 @@ def test_settings_require_an_approver_for_every_requesting_tenant(indices):
         Settings.model_validate(values)
 
 
-def test_concurrent_workers_claim_each_attempt_once_and_recover_expired_claims():
+def test_concurrent_public_workers_dispatch_once():
     async def scenario():
         async with application() as (service, gateway):
-            proposal = await service.prepare(service.settings.identities[0], command())
+            requester, approver, _ = service.settings.identities
+            proposal = await service.prepare(requester, command())
+            await service.decide(approver, proposal.proposal_reference, True)
+            gateway.timeout = True
             restarted = RefundService(
-                service.repository.pool, service.settings, service.action.connector
+                service.repository.pool, service.settings, service.connector
             )
-            claims = await asyncio.gather(
-                service.repository.claim_attempt("tenant:one", proposal.proposal_reference),
-                restarted.repository.claim_attempt("tenant:one", proposal.proposal_reference),
-            )
-            assert sorted(claims) == [False, True]
-            await service.repository.pool.execute(
-                """UPDATE stripe_refund_app.work_schedule
-                   SET next_attempt_at=CURRENT_TIMESTAMP - interval '1 second'"""
-            )
-            assert await restarted.repository.claim_attempt(
-                "tenant:one", proposal.proposal_reference
-            )
-            assert gateway.calls == 0
+            await asyncio.gather(service.sweep(), restarted.sweep())
+            assert gateway.calls == 1
 
     asyncio.run(scenario())

@@ -22,6 +22,7 @@ from threvo_actions import (
 )
 from threvo_actions.integrations.stripe import StripeBoundaryError, verify_refund_webhook
 from threvo_actions.models import ExperimentalModel
+from threvo_actions.recovery import ActionRecoveryView  # noqa: TC001
 
 from .agent import AgentDependencies, build_agent
 from .models import AppError, Identity, RefundCommand
@@ -128,6 +129,12 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
     ) -> ActionOperationResult:
         return await service.decide(who, proposal, decision.approve)
 
+    @app.get("/api/proposals/{proposal}/recovery")
+    async def recovery(
+        proposal: str, who: Annotated[Identity, Depends(identity)]
+    ) -> ActionRecoveryView:
+        return await service.read_recovery(who, proposal)
+
     @app.get("/api/cases")
     async def cases(who: Annotated[Identity, Depends(identity)]) -> list[dict[str, str]]:
         if who.role != "approver":
@@ -136,7 +143,10 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
         for effect in await service.repository.cases(who.tenant_reference):
             record = await service.repository.intent(who.tenant_reference, effect)
             result.append(
-                {"effect_reference": effect, "order_reference": record.snapshot.order_reference}
+                {
+                    "effect_reference": effect,
+                    "order_reference": record.snapshot.payment_reference,
+                }
             )
         return result
 
@@ -151,7 +161,11 @@ def create_app(service: RefundService, *, run_worker: bool = True) -> FastAPI:
             raise HTTPException(403, "Requester required")
         if service.settings.model is None:
             raise HTTPException(503, "Configure an agent model to enable the assistant")
-        agent = build_agent(service, infer_model(service.settings.model))
+        agent = build_agent(
+            service,
+            infer_model(service.settings.model),
+            include_recovery=service.settings.agent_recovery_enabled,
+        )
         async with asyncio.timeout(45):
             result = await agent.run(
                 body.message,

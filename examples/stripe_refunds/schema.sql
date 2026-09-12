@@ -39,7 +39,10 @@ CREATE INDEX IF NOT EXISTS stripe_intent_cases ON stripe_refund_app.intents
 CREATE TABLE IF NOT EXISTS stripe_refund_app.work_schedule (
     tenant_reference text NOT NULL,
     proposal_reference text NOT NULL,
+    lease_token text NOT NULL,
+    leased_until timestamptz NOT NULL,
     next_attempt_at timestamptz NOT NULL,
+    attention_reason text,
     PRIMARY KEY (tenant_reference, proposal_reference)
 );
 CREATE OR REPLACE FUNCTION stripe_refund_app.guard_reserved_order()

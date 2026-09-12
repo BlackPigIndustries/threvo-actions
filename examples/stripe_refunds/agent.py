@@ -9,6 +9,7 @@ from threvo_actions import EvidenceConsumer, ProposingAgent, RequestingPrincipal
 from threvo_actions.integrations.pydantic_ai import (
     ActionAgentContext,
     ActionCapability,
+    ActionRecoveryToolBinding,
     ActionToolBinding,
 )
 
@@ -19,9 +20,13 @@ from .models import (
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
-    from threvo_actions.integrations.stripe import RefundOutcome
+    from threvo_actions.integrations.stripe import (
+        RefundOutcome,
+        RefundPreview,
+        RefundRequest,
+        RefundSnapshot,
+    )
 
-    from .models import RefundCommand, RefundPreview, RefundSnapshot
     from .service import RefundService
 
 
@@ -40,10 +45,10 @@ def action_context(deps: AgentDependencies) -> ActionAgentContext:
 
 
 def build_agent(
-    service: RefundService, model: Model
+    service: RefundService, model: Model, *, include_recovery: bool = False
 ) -> Agent[AgentDependencies, str | DeferredToolRequests]:
     binding: ActionToolBinding[
-        AgentDependencies, RefundCommand, RefundSnapshot, RefundPreview, RefundOutcome
+        AgentDependencies, RefundRequest, RefundSnapshot, RefundPreview, RefundOutcome
     ] = ActionToolBinding(
         definition=service.definition,
         context_resolver=action_context,
@@ -53,14 +58,34 @@ def build_agent(
             "Use decimal strings for amounts."
         ),
     )
+    recovery: ActionRecoveryToolBinding[
+        AgentDependencies, RefundRequest, RefundSnapshot, RefundPreview, RefundOutcome
+    ] = ActionRecoveryToolBinding(
+        definition=service.definition,
+        context_resolver=action_context,
+        name="refund_recovery",
+        description=(
+            "Read the safe recovery condition and next step for an existing refund proposal."
+        ),
+    )
+    capabilities = [ActionCapability(bindings=[binding], runtime=service.runtime)]
+    if include_recovery:
+        capabilities.append(
+            ActionCapability(
+                bindings=[recovery],
+                runtime=service.runtime,
+                id="threvo_actions_recovery",
+            )
+        )
     return Agent(
         model,
         deps_type=AgentDependencies,
         output_type=[str, DeferredToolRequests],
         instructions=(
-            "Help prepare refunds in the user's language. Ask for order, amount, currency "
+            "Help prepare refunds in the user's language. Ask for payment reference, "
+            "amount, currency "
             "and a unique business intent reference if missing. Never claim a refund "
             "completed. Independent finance approval is required outside this conversation."
         ),
-        capabilities=[ActionCapability(bindings=[binding], runtime=service.runtime)],
+        capabilities=capabilities,
     )
