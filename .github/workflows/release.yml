@@ -219,6 +219,7 @@ jobs:
           uv pip install --python "$consumer_root/venv/bin/python" "${wheel}[stripe-app]" pytest
           mkdir -p "$consumer_root/tests/integration" "$consumer_root/examples"
           cp -R tests/integration/stripe "$consumer_root/tests/integration/stripe"
+          cp -R examples/stripe_host "$consumer_root/examples/stripe_host"
           cp -R examples/stripe_refunds "$consumer_root/examples/stripe_refunds"
           cp -R examples/stripe_actions "$consumer_root/examples/stripe_actions"
           cp -R examples/stripe_billing "$consumer_root/examples/stripe_billing"

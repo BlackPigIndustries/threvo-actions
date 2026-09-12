@@ -606,8 +606,8 @@ def test_release_manifest_covers_the_stripe_package() -> None:
         assert f"examples/{example}/agent.py" in REQUIRED_SDIST_FILES
 
 
-def test_installed_stripe_qualification_includes_facade_examples() -> None:
+def test_installed_stripe_qualification_includes_all_reference_examples() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text()
     stripe_job = workflow.split("  qualify-stripe:\n", 1)[1].split("  qualify-pydantic:\n", 1)[0]
-    for example in ("stripe_actions", "stripe_billing"):
+    for example in ("stripe_host", "stripe_refunds", "stripe_actions", "stripe_billing"):
         assert f'cp -R examples/{example} "$consumer_root/examples/{example}"' in stripe_job
