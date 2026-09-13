@@ -9,7 +9,7 @@ connector, Stripe action group, lifecycle, or authoring abstraction is eligible
 for publication during this period.
 
 A patch may be released only for a correctness, security, compatibility, or
-material documentation defect in the supported 0.4 contract. Patch work must
+material documentation defect in the supported 0.5 contract. Patch work must
 remain additive or preserve already valid calls unless a fail-closed safety fix
 requires an explicit migration note.
 
