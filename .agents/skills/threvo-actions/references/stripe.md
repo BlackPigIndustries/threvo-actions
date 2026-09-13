@@ -1,5 +1,20 @@
 # Stripe refund integration
 
+## Where this sits
+
+AP2, ACP and UCP can carry a purchase or delegated-payment interaction to the
+merchant. They do not operate the merchant application's later refund,
+cancellation, credit-note, concurrency, recovery and completion controls. The
+Stripe actions in this package apply the same governed lifecycle at that host
+boundary. Stripe remains the provider of record; the host remains responsible
+for identity, current permission, database transactions and credentials.
+
+The package does not implement those commerce protocols or a card-network
+identity scheme. An externally verified mandate or network identity may inform
+host policy, but it never becomes unconditional runtime authority or completion
+proof. See `NON_GOALS.md`, `docs/design/protocol-watch.md`, and the public
+guarantees table for the maintained boundary.
+
 ## Governed facade (0.4.2)
 
 Start with the credential-free `stripe_refund_scenario()` and then replace its

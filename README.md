@@ -27,6 +27,25 @@ Use it when an operation has all of these properties:
 For an ordinary reversible CRUD update with no separate authority or ambiguous
 external effect, this lifecycle may be unnecessary.
 
+## Where this sits
+
+Agentic-commerce protocols help a buyer, agent, merchant, and payment provider
+agree on a purchase or delegated payment. They do not remove the merchant
+application's responsibility for later operational changes and for proving what
+actually happened. `threvo-actions` is the merchant/application control layer
+between an approved proposal and a verified consequential effect.
+
+| Ecosystem surface | Relationship to `threvo-actions` |
+| --- | --- |
+| [AP2](https://github.com/google-agentic-commerce/AP2/blob/main/docs/ap2/specification.md) | AP2 carries purchase intent and mandate evidence. A host may verify that evidence before creating local authority; this runtime still rechecks business permission, state, execution and completion. |
+| [ACP delegated payments](https://agentic-commerce-protocol.com/docs/commerce/specs/payment) | ACP assigns settlement, refunds, chargebacks and compliance to the merchant and its PSP. Those merchant-owned operations are where this lifecycle can be applied. |
+| [UCP](https://ucp.dev/documentation/announcements/) | UCP standardizes commerce capabilities and transport. It can invoke a merchant service, while the merchant still owns local policy, durable admission, recovery and authoritative verification. |
+| Visa and Mastercard agent programs | Network identity and payment credentials can become host-verified inputs. They do not replace tenant mapping, current authorization or the merchant's application transaction. |
+| Stripe and other provider SDKs | SDKs submit and query provider operations. `threvo-actions` governs when a host may call them and how it treats acceptance, uncertainty and final evidence. |
+
+The library implements none of those protocols. See the explicit
+[non-goals](NON_GOALS.md) and the dated [protocol watch](docs/design/protocol-watch.md).
+
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
 or start with the [first-action guide](docs/getting-started/first-action.md).
 
@@ -168,6 +187,7 @@ as independent production qualification.
     uv sync --extra stripe-app --locked
     uv run pytest -q examples/refund/test_example.py
     uv run pytest -q examples/supplier_destination/test_example.py
+    uv run pytest -q examples/merchant_apply/test_example.py
     uv run python -m examples.stripe_actions.demo
     uv run python -m examples.stripe_billing.demo
     uv run python -m examples.stripe_refunds --help

@@ -33,6 +33,11 @@ runners are now implemented; the same participant must repeat the second-action
 exercise through shared runtime,
 worker, conflict, and evidence services.
 
+The [qualification brief](stripe-adopter-recruitment.md) defines the participant
+profile, fit check, privacy boundary, intake fields and a ready-to-send outreach
+draft. Preparing that material does not authorize outreach; the maintainer must
+select and contact a prospective participant.
+
 Until both exercises are recorded, the library can describe its implemented
 recipes and deterministic evidence. It cannot claim external qualification,
 repeat adoption, stable promotion, or production validation.

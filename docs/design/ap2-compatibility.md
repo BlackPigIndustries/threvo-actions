@@ -10,6 +10,9 @@ observed on 12 September 2026. The protocol is moving independently of this
 library, so any implementation must pin and re-review the exact AP2 version it
 accepts.
 
+The dated cross-protocol baseline and implementation triggers are maintained in
+the [protocol watch](protocol-watch.md).
+
 ## Decision boundary
 
 AP2 secures an agent-performed purchase. It defines Shopping Agent, Credential

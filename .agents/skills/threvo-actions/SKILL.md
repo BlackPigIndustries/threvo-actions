@@ -36,6 +36,12 @@ If any seam is missing, surface it as an integration gap. Do not replace it
 with model output, conversation history, a framework approval flag, or a
 successful HTTP response.
 
+For an agentic merchant portal, keep its provenance and proposal guardrails in
+front, then map the consequential `apply_change` boundary to this lifecycle.
+The source example at `examples/merchant_apply` demonstrates state drift,
+provisional target absence and competing proposals against one semantic effect.
+Those runtime results must remain typed; prompt wording cannot replace them.
+
 ## Choose the authoring surface
 
 - Use the experimental `ActionApplication` plus a strict `ActionSpec` only when
