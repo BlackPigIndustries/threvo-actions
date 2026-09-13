@@ -168,6 +168,7 @@ ignore_missing_imports = true
 [tool.bandit]
 exclude_dirs = [
     "tests",
+    "examples/merchant_apply/test_example.py",
     "examples/refund/test_example.py",
     "examples/supplier_destination/test_example.py",
 ]
