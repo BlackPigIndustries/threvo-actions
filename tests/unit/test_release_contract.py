@@ -192,7 +192,18 @@ def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None
         "v0.4.1",
         "v0.4.2",
         "v0.4.3",
+        "v0.5.0",
     ]
+
+
+def test_release_050_pilot_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert 'test "$RELEASE_TAG" = "v0.5.0"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "one-time v0.5.0 Threvo-pilot release bypass" in workflow
+    assert "release=v0.5.0" not in adoption_record
 
 
 def test_release_030_adoption_bypass_is_explicit_default_off_and_not_reusable() -> None:
@@ -514,6 +525,9 @@ def test_0_1_public_root_contract_is_frozen() -> None:
         "ProtectionCodecPort",
         "ReadContext",
         "Receipt",
+        "RecoveryOperator",
+        "RecoveryReceipt",
+        "RecoveryReceiptStatus",
         "RequestingPrincipal",
         "ResolvedState",
         "RetentionPort",

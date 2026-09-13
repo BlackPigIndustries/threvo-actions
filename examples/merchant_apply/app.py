@@ -308,6 +308,6 @@ def build_application(*, product: Product | None = None) -> MerchantApplyApplica
         retention_store=store,
         clock=clock,
         identifiers=SequentialIdentifiers(),
-        runtime_revision="threvo-actions/0.4.3",
+        runtime_revision="threvo-actions/0.5.0",
     )
     return MerchantApplyApplication(catalog, host, store, runtime, definition, clock)

@@ -13,6 +13,7 @@ from .models import (
     GovernedExecutor,
     LifecycleStatus,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
     SafeReference,
 )
@@ -49,6 +50,10 @@ class VerificationReceiptStatus(StrEnum):
     TARGET_UNAVAILABLE = "target_unavailable"
     VERIFICATION_UNRESOLVED = "verification_unresolved"
     MISSING = "missing"
+
+
+class RecoveryReceiptStatus(StrEnum):
+    VERIFICATION_RESUMED = "verification_resumed"
 
 
 class ExternalReference(ExperimentalModel):
@@ -112,8 +117,14 @@ class VerificationReceipt(_ReceiptBase):
     item_outcomes: tuple[ItemOutcome, ...] = ()
 
 
+class RecoveryReceipt(_ReceiptBase):
+    receipt_type: Literal["recovery"] = "recovery"
+    status: RecoveryReceiptStatus
+    participant: RecoveryOperator
+
+
 Receipt = Annotated[
-    ProposalReceipt | AuthorityReceipt | ExecutionReceipt | VerificationReceipt,
+    ProposalReceipt | AuthorityReceipt | ExecutionReceipt | VerificationReceipt | RecoveryReceipt,
     Field(discriminator="receipt_type"),
 ]
 
@@ -123,6 +134,7 @@ class RuntimeEventType(StrEnum):
     AUTHORITY_RECORDED = "authority_recorded"
     LIFECYCLE_CHANGED = "lifecycle_changed"
     VERIFICATION_OBSERVED = "verification_observed"
+    VERIFICATION_RESUMED = "verification_resumed"
     PROPOSAL_ERASED = "proposal_erased"
 
 

@@ -102,6 +102,13 @@ _POSTGRES_MIGRATION_COMPATIBILITY = (
         False,
         True,
     ),
+    MigrationCompatibility(
+        5,
+        "005_operator_recovery.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
 )
 
 
@@ -252,7 +259,10 @@ def render_postgres_migration_script(
         )
     for migration in planned:
         sections.append(f"-- Migration {migration.version}: {migration.filename}")
-        if migration.filename == "004_active_lifecycle_guard.sql":
+        if migration.filename in {
+            "004_active_lifecycle_guard.sql",
+            "005_operator_recovery.sql",
+        }:
             sections.append(_render_postgres_retired_state_assertion(quoted_schema))
         sections.append(migration.sql.rstrip())
         sections.append(

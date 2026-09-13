@@ -13,7 +13,11 @@ from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .migration_compatibility import MigrationCompatibility, MigrationPhase
+from .migration_compatibility import (
+    MigrationCompatibility,
+    MigrationPhase,
+    migrations_requiring_writer_quiescence,
+)
 
 if TYPE_CHECKING:
     import os
@@ -40,6 +44,13 @@ class _SQLiteMigration:
 
 _SQLITE_MIGRATION_COMPATIBILITY = (
     MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
+    MigrationCompatibility(
+        2,
+        "002_operator_recovery.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
 )
 
 
@@ -51,21 +62,23 @@ def sqlite_migration_compatibility() -> tuple[MigrationCompatibility, ...]:
 
 @cache
 def _packaged_sqlite_migrations() -> tuple[_SQLiteMigration, ...]:
-    compatibility = sqlite_migration_compatibility()[0]
-    filename = compatibility.filename
-    sql = (
-        files("threvo_actions")
-        .joinpath("_migrations", "sqlite", filename)
-        .read_text(encoding="utf-8")
-    )
-    return (
-        _SQLiteMigration(
-            version=compatibility.version,
-            filename=filename,
-            sql=sql,
-            checksum=hashlib.sha256(sql.encode()).hexdigest(),
-        ),
-    )
+    migrations: list[_SQLiteMigration] = []
+    for compatibility in sqlite_migration_compatibility():
+        filename = compatibility.filename
+        sql = (
+            files("threvo_actions")
+            .joinpath("_migrations", "sqlite", filename)
+            .read_text(encoding="utf-8")
+        )
+        migrations.append(
+            _SQLiteMigration(
+                version=compatibility.version,
+                filename=filename,
+                sql=sql,
+                checksum=hashlib.sha256(sql.encode()).hexdigest(),
+            )
+        )
+    return tuple(migrations)
 
 
 def _database_path(database: str | os.PathLike[str]) -> Path:
@@ -143,7 +156,12 @@ async def inspect_sqlite(
     return await asyncio.to_thread(_inspect_sync, _database_path(database))
 
 
-def _migrate_sync(path: Path, *, timeout_milliseconds: int) -> SQLiteMigrationStatus:
+def _migrate_sync(
+    path: Path,
+    *,
+    timeout_milliseconds: int,
+    writers_quiesced: bool,
+) -> SQLiteMigrationStatus:
     migrations = _packaged_sqlite_migrations()
     connection = sqlite3.connect(
         path,
@@ -169,6 +187,18 @@ def _migrate_sync(path: Path, *, timeout_milliseconds: int) -> SQLiteMigrationSt
             "SELECT version, filename, checksum FROM schema_migrations ORDER BY version"
         ).fetchall()
         status = _migration_status(rows, migrations)
+        required_quiescence = migrations_requiring_writer_quiescence(
+            sqlite_migration_compatibility(),
+            applied_versions=status.applied_versions,
+            pending_versions=status.pending_versions,
+        )
+        if status.applied_versions and required_quiescence and not writers_quiesced:
+            versions = ", ".join(str(item.version) for item in required_quiescence)
+            raise SQLiteMigrationStateError(
+                "SQLite migrations "
+                f"{versions} require stopped runtime and retention writers; "
+                "retry with writers_quiesced=True after draining them"
+            )
         for migration in migrations:
             if migration.version not in status.pending_versions:
                 continue
@@ -209,6 +239,7 @@ async def migrate_sqlite(
     database: str | os.PathLike[str],
     *,
     lock_timeout: timedelta = timedelta(seconds=30),
+    writers_quiesced: bool = False,
 ) -> SQLiteMigrationStatus:
     """Apply packaged migrations under one SQLite write transaction."""
 
@@ -218,4 +249,5 @@ async def migrate_sqlite(
         _migrate_sync,
         path,
         timeout_milliseconds=timeout_milliseconds,
+        writers_quiesced=writers_quiesced,
     )

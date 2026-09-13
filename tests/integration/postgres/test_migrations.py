@@ -53,7 +53,7 @@ def test_migration_is_explicit_repeatable_and_dry_inspection_does_not_write() ->
         try:
             before = await inspect_postgres(pool, schema=schema)
             assert before.applied_versions == ()
-            assert before.pending_versions == (1, 2, 3, 4)
+            assert before.pending_versions == (1, 2, 3, 4, 5)
             assert before.connected_role_owns_proposals is None
             async with pool.acquire() as connection:
                 assert await connection.fetchval("SELECT to_regnamespace($1)", schema) is None
@@ -61,7 +61,7 @@ def test_migration_is_explicit_repeatable_and_dry_inspection_does_not_write() ->
             first = await migrate_postgres(pool, schema=schema)
             second = await migrate_postgres(pool, schema=schema)
 
-            assert first.applied_versions == (1, 2, 3, 4)
+            assert first.applied_versions == (1, 2, 3, 4, 5)
             assert first.pending_versions == ()
             assert first.connected_role_owns_proposals is True
             assert second == first
@@ -94,7 +94,7 @@ def test_offline_script_bootstraps_the_same_immutable_migration_history() -> Non
                 await connection.execute(script)
 
             status = await inspect_postgres(pool, schema=schema)
-            assert status.applied_versions == (1, 2, 3, 4)
+            assert status.applied_versions == (1, 2, 3, 4, 5)
             assert status.pending_versions == ()
             async with pool.acquire() as connection:
                 rows = await connection.fetch(
@@ -116,7 +116,7 @@ def test_offline_script_bootstraps_the_same_immutable_migration_history() -> Non
             async with pool.acquire() as connection:
                 with pytest.raises(asyncpg.PostgresError, match="expected version 0"):
                     await connection.execute(script)
-            assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3, 4)
+            assert (await inspect_postgres(pool, schema=schema)).applied_versions == (1, 2, 3, 4, 5)
         finally:
             async with pool.acquire() as connection:
                 await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
@@ -134,8 +134,8 @@ def test_two_connections_serialize_the_first_migration() -> None:
                 migrate_postgres(pool, schema=schema),
                 migrate_postgres(pool, schema=schema),
             )
-            assert first.applied_versions == (1, 2, 3, 4)
-            assert second.applied_versions == (1, 2, 3, 4)
+            assert first.applied_versions == (1, 2, 3, 4, 5)
+            assert second.applied_versions == (1, 2, 3, 4, 5)
         finally:
             async with pool.acquire() as connection:
                 await connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
@@ -249,8 +249,8 @@ def test_existing_version_one_schema_upgrades_without_checksum_or_grant_drift() 
             after = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
 
             assert before.applied_versions == (1,)
-            assert before.pending_versions == (2, 3, 4)
-            assert after.applied_versions == (1, 2, 3, 4)
+            assert before.pending_versions == (2, 3, 4, 5)
+            assert after.applied_versions == (1, 2, 3, 4, 5)
             async with pool.acquire() as connection:
                 assert await connection.fetchval(
                     "SELECT has_function_privilege($1, $2, 'EXECUTE')",
@@ -307,7 +307,7 @@ def test_populated_version_one_schema_preserves_every_active_status_on_upgrade()
 
             after = await migrate_postgres(pool, schema=schema, writers_quiesced=True)
 
-            assert after.applied_versions == (1, 2, 3, 4)
+            assert after.applied_versions == (1, 2, 3, 4, 5)
             async with pool.acquire() as connection:
                 statuses = await connection.fetch(
                     f'SELECT lifecycle_status FROM "{schema}".proposals'
@@ -468,7 +468,7 @@ def test_retired_row_blocks_upgrade_transaction_and_recovery_is_forward_only() -
                 )
                 await connection.execute(script)
             recovered = await inspect_postgres(pool, schema=schema)
-            assert recovered.applied_versions == (1, 2, 3, 4)
+            assert recovered.applied_versions == (1, 2, 3, 4, 5)
         finally:
             async with pool.acquire() as connection:
                 await connection.execute(f"DROP SCHEMA IF EXISTS {quoted_schema} CASCADE")

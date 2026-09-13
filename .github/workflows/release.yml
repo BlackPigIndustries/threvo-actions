@@ -482,6 +482,11 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 0; then
             echo "Using the repository owner's one-time v0.4.3 documentation-release bypass."
+          elif test "$RELEASE_TAG" = "v0.5.0" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.5.0 Threvo-pilot release bypass."
           else
             echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1

@@ -22,9 +22,9 @@ release cadence separately affects whether adopters can evaluate and trust a
 supported line. The [0.4 stabilization policy](stabilization.md) pauses feature
 releases until its evidence gates pass.
 
-## Supported at `0.4.3`
+## Supported at `0.5.0`
 
-The following surfaces are supported at the exact `0.4.3` release:
+The following surfaces are supported at the exact `0.5.0` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -51,8 +51,15 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.4.3` without another explicitly
+safety check is not permitted after `0.5.0` without another explicitly
 documented exception.
+
+`0.5.0` adds host-authorized operator recovery for pending or unresolved
+verification. It extends the experimental `internal/v0` receipt union with the
+closed `recovery` discriminator and adds contract migrations for PostgreSQL,
+MySQL, and SQLite. Existing databases must stop runtime and retention writers
+and apply the adapter migration before starting 0.5.0. Follow the
+[`0.5.0` migration record](releases/0.5.0.md).
 
 `0.4.3` preserves the complete `0.4.2` Python and persistence contract. It adds
 documentation, an executable merchant integration example and maintainer-owned

@@ -18,6 +18,9 @@ from threvo_actions import (
     EvidenceConsumer,
     LifecycleStatus,
     ReadContext,
+    RecoveryOperator,
+    VerificationResult,
+    VerificationStatus,
 )
 from threvo_actions.evidence import (
     ActionEvidenceBundle,
@@ -89,6 +92,48 @@ def _context() -> ReadContext:
 
 def _redigest(bundle: ActionEvidenceBundle) -> ActionEvidenceBundle:
     return bundle.model_copy(update={"content_digest": evidence_digest(bundle)})
+
+
+def test_operator_recovery_export_has_a_valid_receipt_chain() -> None:
+    async def scenario() -> None:
+        runtime, store, clock, _ = runtime_parts()
+        host = HostPorts()
+        host.verifications = [
+            VerificationResult(status=VerificationStatus.TARGET_UNAVAILABLE),
+            VerificationResult(status=VerificationStatus.VERIFIED_COMPLETION),
+        ]
+        action = definition(host, DeterministicSecrets(), max_attempts=1)
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        clock.advance(timedelta(seconds=30))
+        unresolved = await runtime.reconcile(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        await runtime.resume_verification(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+            expected_revision=unresolved.revision,
+            operator=RecoveryOperator(reference="operator:case-42"),
+            intervention_reference="case:42",
+        )
+
+        bundle = await runtime.export_evidence(
+            action,
+            proposal_reference=prepared.proposal_reference,
+            context=_context(),
+        )
+
+        assert validate_evidence_bundle(bundle).status is EvidenceValidationStatus.CONSISTENT
+
+    asyncio.run(scenario())
 
 
 def test_authorized_export_round_trips_as_immutable_minimized_json() -> None:

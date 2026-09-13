@@ -111,12 +111,20 @@ class EvidenceConsumer(ExperimentalModel):
     reference: SafeReference
 
 
+class RecoveryOperator(ExperimentalModel):
+    """Trusted host operator who authorizes another observation after review."""
+
+    kind: Literal["recovery_operator"] = "recovery_operator"
+    reference: SafeReference
+
+
 Participant = Annotated[
     RequestingPrincipal
     | ProposingAgent
     | ConfirmingAuthority
     | GovernedExecutor
     | AuthoritativeTarget
-    | EvidenceConsumer,
+    | EvidenceConsumer
+    | RecoveryOperator,
     Field(discriminator="kind"),
 ]

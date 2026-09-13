@@ -4,7 +4,7 @@ description: Build or integrate governed actions with the threvo-actions Python 
 license: Apache-2.0
 metadata:
   author: Threvo
-  version: "0.4.3"
+  version: "0.5.0"
 ---
 
 # Threvo Actions
@@ -141,7 +141,7 @@ For SDK-backed Stripe refunds, install the optional `stripe` extra through uv an
 durable intent reservation and reconciliation scheduling in the host. Never
 resubmit an ambiguous refund solely because Stripe's idempotency key is stable.
 
-At the current supported 0.4.3 surface, prefer `StripeActions.refunds` for a new direct-charge
+At the current supported 0.5.0 surface, prefer `StripeActions.refunds` for a new direct-charge
 refund integration. Bind
 `RefundHost` to the existing authorization port and a durable `RefundRepository`,
 declare `RefundPolicy` currency ceilings and `StripeRefundSettings` authority
@@ -154,7 +154,7 @@ services, pass the host clock, identifiers, event sink, retention store and exac
 revision through `StripeActions`; one runtime and clock are shared by all groups.
 Map an observed pending refund to provisional absence, not target unavailability.
 
-The 0.4.3 surface also includes independent `StripeActions.subscriptions` and
+The 0.5.0 surface also includes independent `StripeActions.subscriptions` and
 `StripeActions.credit_notes` groups. Read the billing section in
 [references/stripe.md](references/stripe.md). Cancellation scheduling is not
 termination; invoice reduction and customer balance credit are not cash refunds.
@@ -163,9 +163,13 @@ Start evaluation with `stripe_refund_scenario()` or
 `stripe_billing_scenario()`, then replace policy, gateway, host services, and
 runtime services one layer at a time. Stripe action groups expose
 `observe_effect` for separately attributed late provider reads. The core runtime
-and gradual-reveal `BoundAction` expose `read_recovery`, `export_evidence`, and
-`observation_context`; the last is the authorized input for a custom read-only
+and gradual-reveal `BoundAction` expose `read_recovery`, `export_evidence`,
+`observation_context`, and `resume_verification`; observation context is the
+authorized input for a custom read-only
 observer. None grants authority or makes a provider mutation safe to resend.
+Authenticate recovery operators in the host, use pseudonymous references, and
+bound operator retries. Resume invokes the verifier immediately and never the
+executor.
 The `threvo.actions.evidence/v1` bundle and its validation/rendering helpers are
 available from `threvo_actions.experimental`. Pin the exact package version and
 review migration notes before persisting or exchanging that envelope; strict,

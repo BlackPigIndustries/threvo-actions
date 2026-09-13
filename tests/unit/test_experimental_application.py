@@ -32,6 +32,7 @@ from threvo_actions.models import (
     AuthoritativeTarget,
     EvidenceConsumer,
     GovernedExecutor,
+    RecoveryOperator,
     RequestingPrincipal,
 )
 from threvo_actions.registry import (
@@ -372,6 +373,7 @@ def test_bound_facade_forwards_recovery_evidence_and_observation(
         "read_recovery": object(),
         "export_evidence": object(),
         "observation_context": object(),
+        "resume_verification": object(),
     }
 
     with application.bind(registered, dependencies=Dependencies()) as bound:
@@ -396,13 +398,34 @@ def test_bound_facade_forwards_recovery_evidence_and_observation(
             )
             is values["observation_context"]
         )
+        assert (
+            asyncio.run(
+                bound.resume_verification(
+                    tenant_reference="tenant:test",
+                    proposal_reference="proposal:test",
+                    expected_revision=7,
+                    operator=RecoveryOperator(reference="operator:test"),
+                    intervention_reference="case:test",
+                )
+            )
+            is values["resume_verification"]
+        )
 
-    for method in calls.values():
+    for name in ("read_recovery", "export_evidence", "observation_context"):
+        method = calls[name]
         method.assert_awaited_once_with(
             definition,
             proposal_reference="proposal:test",
             context=context,
         )
+    calls["resume_verification"].assert_awaited_once_with(
+        definition,
+        tenant_reference="tenant:test",
+        proposal_reference="proposal:test",
+        expected_revision=7,
+        operator=RecoveryOperator(reference="operator:test"),
+        intervention_reference="case:test",
+    )
 
 
 def test_repeated_bindings_keep_tenant_scoped_services_separate() -> None:

@@ -31,6 +31,7 @@ from ..models import (
     EffectKind,
     GovernedExecutor,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
     SafeReference,
 )
@@ -332,6 +333,27 @@ class BoundAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
             definition,
             tenant_reference=tenant_reference,
             proposal_reference=proposal_reference,
+        )
+
+    async def resume_verification(
+        self,
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+        expected_revision: int,
+        operator: RecoveryOperator,
+        intervention_reference: str,
+    ) -> ActionOperationResult:
+        """Resume verification after a trusted host operator intervention."""
+
+        definition, runtime = self._state.parts()
+        return await runtime.resume_verification(
+            definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
+            expected_revision=expected_revision,
+            operator=operator,
+            intervention_reference=intervention_reference,
         )
 
     async def read(

@@ -61,7 +61,7 @@ ALLOWED_LIFECYCLE_TRANSITIONS: dict[LifecycleStatus, frozenset[LifecycleStatus]]
     LifecycleStatus.FAILED_KNOWN: frozenset(),
     LifecycleStatus.PARTIALLY_SUCCEEDED: frozenset(),
     LifecycleStatus.SUPERSEDED: frozenset(),
-    LifecycleStatus.VERIFICATION_UNRESOLVED: frozenset(),
+    LifecycleStatus.VERIFICATION_UNRESOLVED: frozenset({LifecycleStatus.VERIFICATION_PENDING}),
 }
 
 ERASABLE_LIFECYCLE_STATUSES = frozenset(

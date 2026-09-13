@@ -68,7 +68,7 @@ def test_postgres_plan_emits_exact_rendered_pending_sql_and_metadata() -> None:
 
 def test_postgres_plan_rejects_unknown_versions() -> None:
     with pytest.raises(MigrationStateError, match="unknown version"):
-        plan_postgres_migrations(schema="actions", pending_versions=(5,))
+        plan_postgres_migrations(schema="actions", pending_versions=(6,))
 
 
 def test_postgres_script_renders_complete_fresh_database_bundle() -> None:
@@ -107,13 +107,13 @@ def test_postgres_script_pins_and_validates_an_existing_prefix() -> None:
 
 def test_postgres_script_rejects_invalid_history_and_missing_quiescence() -> None:
     with pytest.raises(MigrationStateError, match="unknown from-version"):
-        render_postgres_migration_script(schema="actions", from_version=5)
+        render_postgres_migration_script(schema="actions", from_version=6)
 
     with pytest.raises(MigrationStateError, match="stopped runtime and retention writers"):
         render_postgres_migration_script(schema="actions", from_version=2)
 
-    current = render_postgres_migration_script(schema="actions", from_version=4)
-    assert "expected version 4" in current
+    current = render_postgres_migration_script(schema="actions", from_version=5)
+    assert "expected version 5" in current
     assert "-- Migration" not in current
 
 

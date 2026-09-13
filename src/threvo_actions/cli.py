@@ -83,6 +83,7 @@ def _parser() -> argparse.ArgumentParser:
         command = sqlite_commands.add_parser(name)
         command.add_argument("--database", required=True, metavar="PATH")
         if name == "migrate":
+            command.add_argument("--writers-quiesced", action="store_true")
             command.add_argument(
                 "--lock-timeout-seconds",
                 type=_positive_seconds,
@@ -226,6 +227,7 @@ async def _sqlite(
     command: str,
     database: str,
     lock_timeout_seconds: float,
+    writers_quiesced: bool,
 ) -> int:
     from .sqlite_migrations import inspect_sqlite, migrate_sqlite
 
@@ -233,6 +235,7 @@ async def _sqlite(
         await migrate_sqlite(
             database,
             lock_timeout=timedelta(seconds=lock_timeout_seconds),
+            writers_quiesced=writers_quiesced,
         )
         if command == "migrate"
         else await inspect_sqlite(database)
@@ -426,6 +429,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 command=args.sqlite_command,
                 database=args.database,
                 lock_timeout_seconds=getattr(args, "lock_timeout_seconds", 30.0),
+                writers_quiesced=getattr(args, "writers_quiesced", False),
             )
         )
     if args.command == "mysql":

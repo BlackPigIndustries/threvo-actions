@@ -15,10 +15,36 @@ from threvo_actions.stores.base import ALLOWED_LIFECYCLE_TRANSITIONS
 _VERSION_ONE_CHECKSUM = "b4975181a0373a66eb3ab2f3060bfe995c6c535d94ca4a92003fb896b8049fe7"
 
 
-def test_sqlite_version_one_is_immutable_and_matches_python_contract() -> None:
+def test_sqlite_version_one_is_immutable() -> None:
     sql = (
         files("threvo_actions")
         .joinpath("_migrations", "sqlite", "001_action_runtime.sql")
+        .read_text(encoding="utf-8")
+    )
+    rendered_edges = set(
+        re.findall(
+            r"OLD\.lifecycle_status = '([^']+)' AND\s+NEW\.lifecycle_status = '([^']+)'",
+            sql,
+        )
+    )
+    current_edges = {
+        (source.value, target.value)
+        for source, targets in ALLOWED_LIFECYCLE_TRANSITIONS.items()
+        for target in targets
+    }
+
+    assert hashlib.sha256(sql.encode()).hexdigest() == _VERSION_ONE_CHECKSUM
+    assert "__THREVO_ACTIONS_" not in sql
+    assert rendered_edges == current_edges - {("verification_unresolved", "verification_pending")}
+    assert all(f"'{status.value}'" in sql for status in LifecycleStatus)
+    assert "'prepared'" not in sql
+    assert "'compensated'" not in sql
+
+
+def test_sqlite_operator_recovery_migration_matches_python_contract() -> None:
+    sql = (
+        files("threvo_actions")
+        .joinpath("_migrations", "sqlite", "002_operator_recovery.sql")
         .read_text(encoding="utf-8")
     )
     rendered_edges = set(
@@ -33,12 +59,7 @@ def test_sqlite_version_one_is_immutable_and_matches_python_contract() -> None:
         for target in targets
     }
 
-    assert hashlib.sha256(sql.encode()).hexdigest() == _VERSION_ONE_CHECKSUM
-    assert "__THREVO_ACTIONS_" not in sql
     assert rendered_edges == expected_edges
-    assert all(f"'{status.value}'" in sql for status in LifecycleStatus)
-    assert "'prepared'" not in sql
-    assert "'compensated'" not in sql
 
 
 @pytest.mark.parametrize(

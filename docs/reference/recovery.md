@@ -4,8 +4,8 @@
 of one authorized proposal without changing it. Stripe action groups expose the
 same call as `read_recovery(proposal_reference, context=...)`.
 The experimental gradual-reveal `BoundAction` forwards the same operation and
-also forwards `export_evidence` and `observation_context`; callers do not need
-private binding state.
+also forwards `export_evidence`, `observation_context`, and
+`resume_verification`; callers do not need private binding state.
 
 The returned `ActionRecoveryView` is a strict, frozen
 `threvo.actions.recovery/v1` projection. It includes the source revision,
@@ -66,3 +66,27 @@ expiry, scheduling, attempts, reason, last observation, and owner details.
 `ActionRecoveryView` is also exported from `threvo_actions` in 0.4.1. Import the
 complete supporting vocabulary from `threvo_actions.recovery`. Unknown fields
 and coercions fail validation.
+
+## Resume verification after operator review
+
+`ActionRuntime.resume_verification(...)` and the bound-action forwarder accept
+only `verification_pending` or `verification_unresolved` proposals. The call
+appends a recovery receipt, resets the observation budget, and immediately
+invokes the verifier. It never invokes the executor.
+
+```python
+result = await action.resume_verification(
+    tenant_reference=authenticated_tenant,
+    proposal_reference=proposal_reference,
+    expected_revision=recovery.revision,
+    operator=RecoveryOperator(reference=authenticated_operator_reference),
+    intervention_reference=case_reference,
+)
+```
+
+The host must authenticate and authorize the operator before this call. Use
+pseudonymous, bounded references; `SafeReference` validates syntax and is not a
+privacy transform. The host must also bound retries and retain the case or
+intervention record named by `intervention_reference`. A revision mismatch
+returns `conflict`, and repeated calls after the proposal leaves a recoverable
+state do not reopen execution.
