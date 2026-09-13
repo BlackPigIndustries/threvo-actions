@@ -36,6 +36,7 @@ from .models import (
     LifecycleStatus,
     ProposalIdentity,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
     SafeReference,
 )
@@ -45,10 +46,13 @@ from .receipts import (
     EventSink,
     ExecutionReceipt,
     ExecutionReceiptStatus,
+    ExternalReference,
     NoopEventSink,
     ProposalReceipt,
     ProposalReceiptStatus,
     Receipt,
+    RecoveryReceipt,
+    RecoveryReceiptStatus,
     RuntimeEvent,
     RuntimeEventType,
     VerificationReceipt,
@@ -76,7 +80,13 @@ from .registry import (
     VerificationResult,
     VerificationStatus,
 )
-from .stores.base import ActionStore, EffectClaimResult, RetentionStore, StoredProposal
+from .stores.base import (
+    ActionStore,
+    EffectClaimResult,
+    RetentionStore,
+    StoredProposal,
+    StoreInvariantError,
+)
 
 CommandT = TypeVar("CommandT", bound=BaseModel)
 PrivateSnapshotT = TypeVar("PrivateSnapshotT", bound=BaseModel)
@@ -245,6 +255,7 @@ class RuntimeReasonCode(StrEnum):
     PARTIAL_NOT_DECLARED = "partial_not_declared"
     VERIFIED_TERMINAL_FAILURE = "verified_terminal_failure"
     AUTHORITATIVE_FINAL_ABSENCE = "authoritative_final_absence"
+    OPERATOR_VERIFICATION_RESUMED = "operator_verification_resumed"
 
 
 _LIFECYCLE_DISPOSITIONS: dict[LifecycleStatus, tuple[bool, bool]] = {
@@ -857,6 +868,86 @@ class ActionRuntime:
             record=record,
             verification=verification,
             now=now,
+        )
+
+    async def resume_verification(
+        self,
+        definition: ActionDefinition[CommandT, PrivateSnapshotT, PreviewT, ResultT],
+        *,
+        tenant_reference: str,
+        proposal_reference: str,
+        expected_revision: int,
+        operator: RecoveryOperator,
+        intervention_reference: str,
+    ) -> ActionOperationResult:
+        """Resume observation after a host operator resolves an external ambiguity.
+
+        This transition never calls the executor. It records the intervention,
+        advances an unresolved or waiting verification state, and immediately
+        performs one fresh authoritative observation through the action verifier.
+        """
+
+        record = await self._required(tenant_reference, proposal_reference)
+        if record.action_type != definition.action_type:
+            raise ProposalNotFoundError
+        if record.erasure_pending_at is not None or record.erased_at is not None:
+            raise ProposalNotFoundError
+        if record.lifecycle_status not in {
+            LifecycleStatus.VERIFICATION_PENDING,
+            LifecycleStatus.VERIFICATION_UNRESOLVED,
+        }:
+            return self._result(record, self._outcome_for(record.lifecycle_status))
+        if record.revision != expected_revision:
+            return self._result(record, OperationOutcome.CONFLICT)
+        causal_receipt: Receipt | None = next(
+            (
+                receipt
+                for receipt in reversed(record.receipts)
+                if isinstance(receipt, VerificationReceipt)
+            ),
+            None,
+        )
+        if causal_receipt is None:
+            causal_receipt = record.receipts[-1] if record.receipts else None
+        if causal_receipt is None:
+            raise StoreInvariantError("verification recovery requires a prior receipt")
+        now = self._clock.now()
+        receipt = RecoveryReceipt(
+            receipt_reference=self._identifiers.new("receipt"),
+            correlation_reference=record.proposal_reference,
+            causation_reference=causal_receipt.receipt_reference,
+            observed_at=now,
+            runtime_revision=self._runtime_revision,
+            status=RecoveryReceiptStatus.VERIFICATION_RESUMED,
+            participant=operator,
+            external_reference=ExternalReference(
+                system="host_operator_intervention",
+                reference=intervention_reference,
+            ),
+            reason_code=RuntimeReasonCode.OPERATOR_VERIFICATION_RESUMED.value,
+        )
+        resumed = record.model_copy(
+            update={
+                "lifecycle_status": LifecycleStatus.VERIFICATION_PENDING,
+                "verification_attempts": 0,
+                "next_verification_at": now,
+                "receipts": (*record.receipts, receipt),
+                "revision": record.revision + 1,
+            }
+        )
+        if not await self._cas(record, resumed):
+            current = await self._required(tenant_reference, proposal_reference)
+            return self._result(current, OperationOutcome.CONFLICT)
+        await self._emit(
+            resumed,
+            event_type=RuntimeEventType.VERIFICATION_RESUMED,
+            observed_at=now,
+            reason_code=RuntimeReasonCode.OPERATOR_VERIFICATION_RESUMED.value,
+        )
+        return await self.reconcile(
+            definition,
+            tenant_reference=tenant_reference,
+            proposal_reference=proposal_reference,
         )
 
     async def read(

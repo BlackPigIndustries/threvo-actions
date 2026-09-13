@@ -37,6 +37,7 @@ from .models import (
     Participant,
     ProposalIdentity,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
 )
 from .receipts import (
@@ -52,6 +53,8 @@ from .receipts import (
     ProposalReceipt,
     ProposalReceiptStatus,
     Receipt,
+    RecoveryReceipt,
+    RecoveryReceiptStatus,
     RuntimeEvent,
     RuntimeEventType,
     VerificationReceipt,
@@ -193,6 +196,9 @@ __all__ = [
     "ProtectionCodecPort",
     "ReadContext",
     "Receipt",
+    "RecoveryOperator",
+    "RecoveryReceipt",
+    "RecoveryReceiptStatus",
     "RequestingPrincipal",
     "ResolvedState",
     "RetentionPort",
@@ -223,4 +229,4 @@ __all__ = [
     "validate_proposal_update",
 ]
 
-__version__ = "0.4.3"
+__version__ = "0.5.0"

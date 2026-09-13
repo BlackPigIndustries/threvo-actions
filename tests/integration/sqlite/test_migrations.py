@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import sqlite3
+from importlib.resources import files
 
 import pytest
 
@@ -24,15 +26,52 @@ def test_migrate_inspect_and_reopen_are_explicit_and_idempotent(tmp_path) -> Non
 
         missing = await inspect_sqlite(path)
         assert missing.applied_versions == ()
-        assert missing.pending_versions == (1,)
+        assert missing.pending_versions == (1, 2)
         assert not path.exists()
 
         migrated = await migrate_sqlite(path)
-        assert migrated.applied_versions == (1,)
+        assert migrated.applied_versions == (1, 2)
         assert migrated.pending_versions == ()
         assert path.exists()
         assert await migrate_sqlite(path) == migrated
         assert await inspect_sqlite(path) == migrated
+
+    asyncio.run(scenario())
+
+
+def test_existing_sqlite_schema_requires_writer_quiescence(tmp_path) -> None:
+    async def scenario() -> None:
+        path = database_path(tmp_path)
+        connection = sqlite3.connect(path)
+        try:
+            migration_sql = (
+                files("threvo_actions")
+                .joinpath("_migrations", "sqlite", "001_action_runtime.sql")
+                .read_text(encoding="utf-8")
+            )
+            connection.executescript(migration_sql)
+            connection.execute(
+                """
+                CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    checksum TEXT NOT NULL,
+                    applied_at TEXT NOT NULL
+                ) STRICT
+                """
+            )
+            connection.execute(
+                "INSERT INTO schema_migrations VALUES (1, ?, ?, 'IÓN')",
+                ("001_action_runtime.sql", hashlib.sha256(migration_sql.encode()).hexdigest()),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        with pytest.raises(SQLiteMigrationStateError, match="stopped runtime"):
+            await migrate_sqlite(path)
+        migrated = await migrate_sqlite(path, writers_quiesced=True)
+        assert migrated.applied_versions == (1, 2)
 
     asyncio.run(scenario())
 

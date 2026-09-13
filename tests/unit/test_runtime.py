@@ -23,6 +23,7 @@ from threvo_actions.models import (
     LifecycleStatus,
     ProposalIdentity,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
 )
 from threvo_actions.receipts import (
@@ -31,6 +32,7 @@ from threvo_actions.receipts import (
     ExecutionReceipt,
     ExecutionReceiptStatus,
     ExternalReference,
+    RecoveryReceipt,
     RuntimeEvent,
     VerificationReceipt,
 )
@@ -2388,6 +2390,96 @@ def test_exhausted_verification_and_verifier_failure_preserve_both_evidence_plan
             ExecutionReceiptStatus.ACCEPTED,
         ]
         assert sum(isinstance(receipt, VerificationReceipt) for receipt in record.receipts) == 2
+
+    asyncio.run(scenario())
+
+
+def test_operator_review_resumes_observation_without_reexecuting() -> None:
+    async def scenario() -> None:
+        runtime, store, clock, events = runtime_parts()
+        host = HostPorts()
+        host.verifications = [
+            VerificationResult[Result](status=VerificationStatus.TARGET_UNAVAILABLE),
+            VerificationResult[Result](
+                status=VerificationStatus.VERIFIED_COMPLETION,
+                result=Result(provider_reference="provider:refund:42"),
+            ),
+        ]
+        action = definition(host, DeterministicSecrets(), max_attempts=1)
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        clock.advance(timedelta(seconds=30))
+        unresolved = await runtime.reconcile(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        assert unresolved.lifecycle_status is LifecycleStatus.VERIFICATION_UNRESOLVED
+
+        resumed = await runtime.resume_verification(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+            expected_revision=unresolved.revision,
+            operator=RecoveryOperator(reference="operator:case-42"),
+            intervention_reference="case:42",
+        )
+        record = await store.get("tenant:a", prepared.proposal_reference)
+
+        assert resumed.outcome is OperationOutcome.VERIFIED
+        assert resumed.lifecycle_status is LifecycleStatus.VERIFIED
+        assert host.executor_calls == 1
+        assert host.verifier_calls == 2
+        assert record is not None
+        recovery_receipts = [
+            receipt for receipt in record.receipts if isinstance(receipt, RecoveryReceipt)
+        ]
+        assert len(recovery_receipts) == 1
+        assert recovery_receipts[0].participant.reference == "operator:case-42"
+        assert recovery_receipts[0].external_reference == ExternalReference(
+            system="host_operator_intervention", reference="case:42"
+        )
+        assert events.events[-2].event_type.value == "verification_resumed"
+
+    asyncio.run(scenario())
+
+
+def test_operator_review_can_advance_a_waiting_verification_lease() -> None:
+    async def scenario() -> None:
+        runtime, store, clock, _ = runtime_parts()
+        host = HostPorts()
+        host.verifications = [
+            VerificationResult[Result](
+                status=VerificationStatus.VERIFIED_COMPLETION,
+                result=Result(provider_reference="provider:refund:42"),
+            ),
+        ]
+        action = definition(host, DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        waiting = await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+
+        resumed = await runtime.resume_verification(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+            expected_revision=waiting.revision,
+            operator=RecoveryOperator(reference="operator:case-42"),
+            intervention_reference="case:42",
+        )
+
+        assert resumed.outcome is OperationOutcome.VERIFIED
+        assert host.executor_calls == 1
+        assert host.verifier_calls == 1
 
     asyncio.run(scenario())
 

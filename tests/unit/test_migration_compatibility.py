@@ -28,6 +28,13 @@ def test_packaged_migrations_publish_explicit_compatibility_metadata() -> None:
             False,
             True,
         ),
+        MigrationCompatibility(
+            5,
+            "005_operator_recovery.sql",
+            MigrationPhase.CONTRACT,
+            False,
+            True,
+        ),
     )
     assert mysql_migration_compatibility() == (
         MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
@@ -38,9 +45,23 @@ def test_packaged_migrations_publish_explicit_compatibility_metadata() -> None:
             False,
             True,
         ),
+        MigrationCompatibility(
+            3,
+            "003_operator_recovery.sql",
+            MigrationPhase.CONTRACT,
+            False,
+            True,
+        ),
     )
     assert sqlite_migration_compatibility() == (
         MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),
+        MigrationCompatibility(
+            2,
+            "002_operator_recovery.sql",
+            MigrationPhase.CONTRACT,
+            False,
+            True,
+        ),
     )
 
 
@@ -48,7 +69,7 @@ def test_fresh_bootstrap_does_not_claim_that_writers_need_draining() -> None:
     required = migrations_requiring_writer_quiescence(
         postgres_migration_compatibility(),
         applied_versions=(),
-        pending_versions=(1, 2, 3, 4),
+        pending_versions=(1, 2, 3, 4, 5),
     )
 
     assert required == ()
@@ -58,7 +79,7 @@ def test_existing_schema_identifies_every_pending_contract_migration() -> None:
     required = migrations_requiring_writer_quiescence(
         postgres_migration_compatibility(),
         applied_versions=(1, 2),
-        pending_versions=(3, 4),
+        pending_versions=(3, 4, 5),
     )
 
-    assert tuple(migration.version for migration in required) == (3, 4)
+    assert tuple(migration.version for migration in required) == (3, 4, 5)

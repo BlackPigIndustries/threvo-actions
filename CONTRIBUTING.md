@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported exact `0.4.3` Python API and experimental
+`threvo-actions` has a supported exact `0.5.0` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.
@@ -106,6 +106,15 @@ not count as independent adoption or resume feature releases. Candidate
 qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
 protected environments remain mandatory. See the
 [`0.4.3` release record](docs/releases/0.4.3.md).
+
+The repository owner's 2026-09-13 direction permits the exact Threvo-pilot
+minor release `v0.5.0` with `skip_adoption_gate=true`. It adds the reusable
+operator-verification recovery boundary and the durable contract migrations
+required by that boundary. Threvo remains a maintainer-owned test bed, so this
+exception does not count as outside adoption or resume feature releases.
+Candidate qualification, signed tags, artifact identity, TestPyPI/PyPI
+verification, and protected environments remain mandatory. See the
+[`0.5.0` release record](docs/releases/0.5.0.md).
 
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag

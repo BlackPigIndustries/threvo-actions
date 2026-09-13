@@ -18,6 +18,14 @@ _VERSION_ONE_CHECKSUM = "0f05e6aaca717db1c103a082046c0a72bbb224d3297f0b4238699d1
 _VERSION_TWO_CHECKSUM = "d8de20d85622ca886c45f4d58145888a614cdb83b7a11ae6a8770bc832fc3b98"
 
 
+def _current_edges() -> set[tuple[str, str]]:
+    return {
+        (source.value, target.value)
+        for source, targets in ALLOWED_LIFECYCLE_TRANSITIONS.items()
+        for target in targets
+    }
+
+
 def test_mysql_definition_normalization_preserves_literal_case() -> None:
     assert _normalize_mysql_definition("SELECT `Value` FROM T") == _normalize_mysql_definition(
         "select value from t"
@@ -42,15 +50,11 @@ def test_mysql_version_one_is_immutable_and_matches_python_contract() -> None:
             sql,
         )
     )
-    expected_edges = {
-        (source.value, target.value)
-        for source, targets in ALLOWED_LIFECYCLE_TRANSITIONS.items()
-        for target in targets
-    }
-
     assert hashlib.sha256(sql.encode()).hexdigest() == _VERSION_ONE_CHECKSUM
     assert "__THREVO_ACTIONS_" not in sql
-    assert rendered_edges == expected_edges
+    assert rendered_edges == _current_edges() - {
+        ("verification_unresolved", "verification_pending")
+    }
     assert all(f"'{status.value}'" in sql for status in LifecycleStatus)
     assert "lifecycle_status = 'prepared'" not in sql
     assert "lifecycle_status = 'compensated'" not in sql
@@ -68,18 +72,36 @@ def test_mysql_version_two_is_immutable_and_matches_python_contract() -> None:
             sql,
         )
     )
-    expected_edges = {
-        (source.value, target.value)
-        for source, targets in ALLOWED_LIFECYCLE_TRANSITIONS.items()
-        for target in targets
-    }
-
     assert hashlib.sha256(sql.encode()).hexdigest() == _VERSION_TWO_CHECKSUM
     assert "__THREVO_ACTIONS_" not in sql
-    assert rendered_edges == expected_edges
+    assert rendered_edges == _current_edges() - {
+        ("verification_unresolved", "verification_pending")
+    }
     assert all(f"'{status.value}'" in sql for status in LifecycleStatus)
     assert "lifecycle_status = 'prepared'" not in sql
     assert "lifecycle_status = 'compensated'" not in sql
+
+
+def test_mysql_operator_recovery_migration_matches_python_contract() -> None:
+    sql = (
+        files("threvo_actions")
+        .joinpath("_migrations", "mysql", "003_operator_recovery.sql")
+        .read_text(encoding="utf-8")
+    )
+    rendered_edges = set(
+        re.findall(
+            r"OLD\.lifecycle_status = '([^']+)' AND NEW\.lifecycle_status = '([^']+)'",
+            sql,
+        )
+    )
+
+    assert rendered_edges == _current_edges()
+    assert "'recovery_operator'" in sql
+    assert "'verification_resumed'" in sql
+    drop_update_procedure = "DROP PROCEDURE IF EXISTS threvo_actions_runtime_update_proposal;"
+    create_update_procedure = "CREATE PROCEDURE threvo_actions_runtime_update_proposal("
+    assert sql.count(drop_update_procedure) == 1
+    assert sql.index(drop_update_procedure) < sql.index(create_update_procedure)
 
 
 def test_mysql_grants_quote_accounts_and_keep_lanes_distinct() -> None:

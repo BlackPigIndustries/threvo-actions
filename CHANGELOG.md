@@ -6,6 +6,29 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-13
+
+### Added
+
+- Add host-authorized `resume_verification` for pending and unresolved work,
+  including a typed recovery operator, retained recovery receipt, lifecycle
+  event, and gradual-reveal `BoundAction` forwarder.
+- Add immutable PostgreSQL, MySQL, and SQLite contract migrations for the new
+  lifecycle transition and closed receipt discriminator.
+
+### Fixed
+
+- Link recovery receipts to an earlier retained receipt so exported evidence
+  validates as one causal chain.
+- Require SQLite writer quiescence when an existing database crosses the
+  recovery contract migration.
+
+### Documentation
+
+- Document operator authentication, pseudonymous references, retry ownership,
+  immediate verification, and the guarantee that recovery never executes the
+  governed effect.
+
 ## [0.4.3] - 2026-09-13
 
 ### Added
@@ -436,7 +459,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.0...v0.4.1

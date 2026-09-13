@@ -12,12 +12,12 @@ def test_sqlite_cli_requires_no_optional_dependency_and_reports_status(tmp_path,
     assert json.loads(capsys.readouterr().out) == {
         "applied_versions": [],
         "database": str(path),
-        "pending_versions": [1],
+        "pending_versions": [1, 2],
     }
 
     assert main(["sqlite", "migrate", "--database", str(path)]) == 0
     assert json.loads(capsys.readouterr().out) == {
-        "applied_versions": [1],
+        "applied_versions": [1, 2],
         "database": str(path),
         "pending_versions": [],
     }

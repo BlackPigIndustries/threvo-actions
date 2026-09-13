@@ -54,6 +54,13 @@ _MYSQL_MIGRATION_COMPATIBILITY = (
         False,
         True,
     ),
+    MigrationCompatibility(
+        3,
+        "003_operator_recovery.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
 )
 
 

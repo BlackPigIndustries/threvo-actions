@@ -1,9 +1,9 @@
-# 0.4 stabilization policy
+# 0.x stabilization policy
 
-Status: active after 0.4.3.
+Status: active after 0.5.0.
 
 The project is holding feature releases and public-surface expansion after the
-0.4.3 documentation and executable-example release. Development may continue
+0.5.0 Threvo-pilot recovery release. Development may continue
 on develop, but no new
 connector, Stripe action group, lifecycle, or authoring abstraction is eligible
 for publication during this period.
@@ -41,6 +41,9 @@ satisfy the outside-adoption condition.
 Threvo is selected as the first maintainer-owned application test bed. It can
 produce realistic integration evidence but cannot satisfy the independent
 outside-adoption condition. No outside participant or production observation
-is recorded for 0.4.3.
+is recorded for 0.5.0. The repository owner's 2026-09-13 direction permits the
+exact 0.5.0 pilot integration release because the generic operator-recovery
+boundary avoids Threvo-only recovery code. This exception does not count as
+independent adoption or end the hold.
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
 source of truth. This release does not claim otherwise.

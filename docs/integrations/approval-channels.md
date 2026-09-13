@@ -15,7 +15,7 @@ The package provides:
 
 Install the PostgreSQL dependency with:
 
-    uv add "threvo-actions[postgres]==0.4.3"
+    uv add "threvo-actions[postgres]==0.5.0"
 
 Apply the migration in a serialized deployment step. Constructors perform no
 I/O and never migrate automatically:
