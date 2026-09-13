@@ -114,7 +114,7 @@ nav:
       - Stripe qualification matrix: testing/stripe-qualification.md
       - Stripe sandbox qualification: testing/stripe-sandbox-qualification.md
       - Stripe adoption protocol: testing/stripe-adoption-protocol.md
-      - Outside-adopter qualification brief: testing/stripe-adopter-recruitment.md
+      - Threvo Stripe test bed: testing/threvo-stripe-test-bed.md
       - Stripe outside-host status: testing/stripe-outside-adoption-status.md
       - Clean-room adoption result: testing/clean-room-adoption-2026-08-30.md
       - Gradual-reveal adoption record: testing/gradual-reveal-adoption.md
@@ -160,6 +160,7 @@ nav:
       - Framework access design: design/framework-access.md
       - AP2 compatibility decision: design/ap2-compatibility.md
       - Versioning: versioning.md
+      - Release record 0.4.3: releases/0.4.3.md
       - Release record 0.4.2: releases/0.4.2.md
       - Release record 0.4.1: releases/0.4.1.md
       - Release record 0.4.0: releases/0.4.0.md

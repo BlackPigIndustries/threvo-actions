@@ -1,6 +1,6 @@
 # Contributing
 
-`threvo-actions` has a supported exact `0.4.2` Python API and experimental
+`threvo-actions` has a supported exact `0.4.3` Python API and experimental
 interoperability surfaces. Start discussion before changing either boundary or
 adding a production dependency. Changes to the supported surface follow
 `docs/versioning.md` and update its contract test deliberately.
@@ -97,6 +97,15 @@ does not count as outside adoption or resume feature releases. Candidate
 qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
 protected environments remain mandatory. See the
 [`0.4.2` release record](docs/releases/0.4.2.md).
+
+The repository owner's 2026-09-13 direction permits the exact documentation
+and executable-example patch `v0.4.3` with `skip_adoption_gate=true`. It adds no
+connector, Stripe action, lifecycle, authoring abstraction, or supported API
+surface. Selecting the maintainer-owned Threvo application as a test bed does
+not count as independent adoption or resume feature releases. Candidate
+qualification, signed tags, artifact identity, TestPyPI/PyPI verification, and
+protected environments remain mandatory. See the
+[`0.4.3` release record](docs/releases/0.4.3.md).
 
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag

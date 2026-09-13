@@ -6,6 +6,28 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-13
+
+### Added
+
+- Add a strict-Pydantic merchant `apply_change` example that proves drift
+  refusal, safe pending recovery and one-write behavior for competing
+  proposals, plus a pinned compatibility probe against Anthropic's public
+  `commerce-agents` retail fixture.
+- Publish a code-linked guarantees and limitations index, explicit non-goals,
+  ecosystem placement, a dated protocol watch, and trigger-bound designs for
+  external authority artifacts and additional framework access.
+
+### Documentation
+
+- Explain the concrete problem the library solves and its relationship to AP2,
+  ACP, UCP, card-network agent programs, and provider SDKs without claiming
+  protocol support.
+- Record Threvo as the maintainer-owned Stripe adoption test bed and remove the
+  external-project outreach shortlist. This selection does not count as
+  independent adoption or end the 0.4 stabilization hold.
+- Keep all installation and example commands on exact `uv` pins.
+
 ## [0.4.2] - 2026-09-12
 
 ### Fixed
@@ -414,7 +436,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.3.2...v0.4.0
