@@ -28,6 +28,7 @@ and uses Semantic Versioning for the supported surface described in
 - Document operator authentication, pseudonymous references, retry ownership,
   immediate verification, and the guarantee that recovery never executes the
   governed effect.
+- Set the post-release stabilization policy against the supported 0.5 contract.
 
 ## [0.4.3] - 2026-09-13
 
