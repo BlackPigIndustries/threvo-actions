@@ -98,6 +98,14 @@ def test_mysql_operator_recovery_migration_matches_python_contract() -> None:
     assert rendered_edges == _current_edges()
     assert "'recovery_operator'" in sql
     assert "'verification_resumed'" in sql
+    drop_update_procedure = (
+        "DROP PROCEDURE IF EXISTS threvo_actions_runtime_update_proposal;"
+    )
+    create_update_procedure = (
+        "CREATE PROCEDURE threvo_actions_runtime_update_proposal("
+    )
+    assert sql.count(drop_update_procedure) == 1
+    assert sql.index(drop_update_procedure) < sql.index(create_update_procedure)
 
 
 def test_mysql_grants_quote_accounts_and_keep_lanes_distinct() -> None:

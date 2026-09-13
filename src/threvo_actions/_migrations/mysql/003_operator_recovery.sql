@@ -645,6 +645,8 @@ BEGIN
     END IF;
 END;
 -- threvo-actions:next
+DROP PROCEDURE IF EXISTS threvo_actions_runtime_update_proposal;
+-- threvo-actions:next
 CREATE PROCEDURE threvo_actions_runtime_update_proposal(
     IN p_tenant_reference VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
     IN p_proposal_reference VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
