@@ -5,8 +5,8 @@ replace the application that knows whether an action is allowed or the system
 that knows whether the financial effect occurred. Every guarantee below is
 therefore assigned to the component that actually supplies it.
 
-The documented Python API and CLI are supported at the exact `0.4.2` release;
-upgrading requires the [documented migration review](releases/0.4.2.md).
+The documented Python API and CLI are supported at the exact `0.4.3` release;
+upgrading requires the [documented migration review](releases/0.4.3.md).
 Serialized interoperability forms remain experimental. These are implementation
 guarantees for a tested release, not a promise that the host application or an
 external financial system implemented its side correctly. See
@@ -38,6 +38,59 @@ The library cannot upgrade a weak host implementation into a strong guarantee.
 Custom stores, commitment providers, protection codecs, action ports, and
 verifiers should be treated as security-relevant code and exercised with the
 conformance helpers plus domain-specific adversarial tests.
+
+## Enforcement and proof index
+
+This index points from each claim to the code that enforces it and the closest
+executable proof. A test establishes behavior for its fixture and version; it
+does not certify an adopter's implementation.
+
+| Rule | Enforced in | Executable proof or refusal path |
+| --- | --- | --- |
+| Boundary models reject coercion and extra fields | `models.ActionModel`; every public Pydantic boundary derives from it | `tests/unit/test_models.py`; package-wide strict-model tests |
+| Canonical payloads are deterministic and reject floats | `canonical.canonicalize_v1` | `tests/unit/test_canonical.py` |
+| Private snapshots are committed and protected separately from previews | `runtime.ActionRuntime.prepare`, `_load_private`; `canonical.commitment_payload_v1` | runtime tamper, missing-protection and leakage cases in `tests/unit/test_runtime.py` |
+| Authority is bound, time-bounded and insufficient by itself | `authority.validate_authority_evidence`; `runtime.ActionRuntime.record_authority`, `execute` | binding, future/expired evidence and authority-expiry tests in `tests/unit/test_runtime.py` |
+| Live permission is checked again before durable admission | `runtime.ActionRuntime.execute` calls `can_execute` before its final admission time | revocation and slow-authorization tests in `tests/unit/test_runtime.py` |
+| `admitted_at` is re-stamped after live authorization | `runtime.ActionRuntime.execute` assigns a fresh clock value immediately before authority revalidation and `admit_execution` | controllable-clock expiry tests in `tests/unit/test_runtime.py` |
+| The execution lease guards the durable write as well as dispatch | `runtime.ActionRuntime.execute`; official store `admit_execution` implementations; Stripe `PostgresStripeLedger.reserve` uses database `clock_timestamp()` | runtime lease-expiry tests; Stripe exercise `expired_admission` |
+| Material state drift refuses the approved snapshot | host `StateResolverPort.resolve`, coordinated by `runtime.ActionRuntime.execute`; executor enforces `execution_precondition` | runtime drift tests; Stripe policy/snapshot drift qualification tests |
+| Stripe policy changes invalidate approved work | `integrations.stripe.actions._RefundWorkflow.resolve`, `subscriptions._SubscriptionWorkflow.resolve`, and `credit_notes._CreditNoteWorkflow.resolve` compare `policy_fingerprint` | `tests/integration/stripe/test_*actions.py` and qualification fixtures |
+| Lifecycle transitions and effect admission are atomic in official stores | `stores.memory`, `stores.postgres`, `stores.mysql`, `stores.sqlite` implementations of `compare_and_set` and `admit_execution` | store conformance; Stripe exercises `same_effect_race`, `conflicting_resource_race`, `normal_writer_exclusion` |
+| Transport acceptance is not completion | `runtime.ActionRuntime.execute` maps accepted submission to verification-pending; only `_apply_verification` can reach verified completion | refund timeout and delayed-visibility examples; qualification recovery cases |
+| Known no-effect results are returned; uncertain persistence is raised | Stripe repository protocols in `integrations.stripe.ports`; `PostgresStripeLedger` returns typed conflict/closed statuses and raises `StripePostgresHostError` for uncertain writes | Stripe exercises `immutable_intent`, `outcome_idempotence`, `lost_reservation_acknowledgement`; `tests/unit/test_stripe_postgres.py` |
+| Error-message text never determines known versus uncertain outcome | Stripe group actions branch on typed gateway/repository statuses; PostgreSQL adapter uses distinct typed returns and uncertainty exceptions | `tests/unit/test_stripe_postgres.py`; adapter conformance tests |
+| Ambiguous submissions are not blindly resent | `runtime.ActionRuntime._settle_execution`, `_settle_verification`; action definition resend policy | refund lost-acknowledgement tests and `examples/refund/test_example.py` |
+| Verification attempts are leased and bounded | `runtime.ActionRuntime.reconcile`; store verification-claim transitions | runtime competing-reconcile and exhaustion tests |
+| Recovery advice is read-only and suppresses unsafe execute steps | `recovery.recovery_condition`, `recovery.recovery_steps`; `runtime.ActionRuntime.read_recovery` | `tests/integration/stripe/test_recovery_view.py` including changed-owner uncertainty |
+| Receipts are typed lifecycle records | `receipts.py`; `runtime.ActionRuntime` receipt builders; store append transitions | runtime receipt tests and cross-adapter store suites |
+| Evidence reads and erasure are host-authorized | `runtime.ActionRuntime.read`, `export_evidence`, `erase`; host authorization/retention ports | cross-tenant, denied and erased cases in `tests/unit/test_evidence.py` and runtime tests |
+| Evidence export is an unsigned internal-consistency projection | `evidence.ActionEvidenceBundle`, `evidence.validate_evidence_bundle` | digest, forgery, duplicate, dangling-link and erased-source cases in `tests/unit/test_evidence.py` |
+| Framework approval does not become authority | `integrations.pydantic_ai.ActionCapability`; core runtime authority checks remain on every continuation | Pydantic AI deferred-tool and argument-tampering tests |
+
+Stripe repository refusal codes are judged by the library-orchestrated
+`integrations.stripe.conformance.assert_stripe_host_exercise`. Its twelve
+scenario identifiers are stable lookup keys for the rule above; the deprecated
+driver-attestation helper is not proof that a repository was exercised.
+
+## Not enforced by the runtime
+
+The runtime does not judge whether a model's explanation is truthful, detect
+prompt injection, verify third-party provenance, decide which business fields
+are material, or decide who should approve. A host may ask a model to extract
+or propose values, but typed shape validation only establishes shape. The host
+must resolve every actionable reference from authoritative state and implement
+the authorization and drift rules used by its action.
+
+## What a deployment owns
+
+The deployment owns identity authentication and tenant mapping, current roles
+and segregation policy, approval UI and channel authentication, commitment and
+encryption keys, atomic business writers, external credentials, target-side
+idempotency, reconciliation scheduling, operator routing, audit completeness,
+telemetry redaction, retention and incident response. The conformance suites
+exercise contracts at these seams; passing them does not operate those controls
+for the adopter.
 
 ## Explicitly limited claims
 

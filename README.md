@@ -27,11 +27,30 @@ Use it when an operation has all of these properties:
 For an ordinary reversible CRUD update with no separate authority or ambiguous
 external effect, this lifecycle may be unnecessary.
 
+## Where this sits
+
+Agentic-commerce protocols help a buyer, agent, merchant, and payment provider
+agree on a purchase or delegated payment. They do not remove the merchant
+application's responsibility for later operational changes and for proving what
+actually happened. `threvo-actions` is the merchant/application control layer
+between an approved proposal and a verified consequential effect.
+
+| Ecosystem surface | Relationship to `threvo-actions` |
+| --- | --- |
+| [AP2](https://github.com/google-agentic-commerce/AP2/blob/main/docs/ap2/specification.md) | AP2 carries purchase intent and mandate evidence. A host may verify that evidence before creating local authority; this runtime still rechecks business permission, state, execution and completion. |
+| [ACP delegated payments](https://agentic-commerce-protocol.com/docs/commerce/specs/payment) | ACP assigns settlement, refunds, chargebacks and compliance to the merchant and its PSP. Those merchant-owned operations are where this lifecycle can be applied. |
+| [UCP](https://ucp.dev/documentation/announcements/) | UCP standardizes commerce capabilities and transport. It can invoke a merchant service, while the merchant still owns local policy, durable admission, recovery and authoritative verification. |
+| Visa and Mastercard agent programs | Network identity and payment credentials can become host-verified inputs. They do not replace tenant mapping, current authorization or the merchant's application transaction. |
+| Stripe and other provider SDKs | SDKs submit and query provider operations. `threvo-actions` governs when a host may call them and how it treats acceptance, uncertainty and final evidence. |
+
+The library implements none of those protocols. See the explicit
+[non-goals](NON_GOALS.md) and the dated [protocol watch](docs/design/protocol-watch.md).
+
 **[Read the documentation](https://blackpigindustries.github.io/threvo-actions/)**
 or start with the [first-action guide](docs/getting-started/first-action.md).
 
 > [!IMPORTANT]
-> Version **0.4.2** is the current supported release. Pin the exact patch for
+> Version **0.4.3** is the current supported release. Pin the exact patch for
 > consequential actions and review the [versioning policy](docs/versioning.md).
 > Receipt serialization, canonicalization, physical database layouts, and the
 > namespaced gradual-reveal authoring API retain their documented experimental
@@ -44,15 +63,15 @@ authoring API, and read migration notes before every minor-line upgrade.
 
 Python 3.11 through 3.13 is supported.
 
-    uv add "threvo-actions==0.4.2"
+    uv add "threvo-actions==0.4.3"
 
 Install only the integrations the application uses:
 
-    uv add "threvo-actions[postgres]==0.4.2"
-    uv add "threvo-actions[mysql]==0.4.2"
-    uv add "threvo-actions[sqlalchemy]==0.4.2"
-    uv add "threvo-actions[pydantic-ai]==0.4.2"
-    uv add "threvo-actions[stripe]==0.4.2"
+    uv add "threvo-actions[postgres]==0.4.3"
+    uv add "threvo-actions[mysql]==0.4.3"
+    uv add "threvo-actions[sqlalchemy]==0.4.3"
+    uv add "threvo-actions[pydantic-ai]==0.4.3"
+    uv add "threvo-actions[stripe]==0.4.3"
 
 The base package includes the governed Stripe facade and its typed gateway
 protocols. The Stripe extra adds the maintained Stripe SDK transports and
@@ -168,6 +187,7 @@ as independent production qualification.
     uv sync --extra stripe-app --locked
     uv run pytest -q examples/refund/test_example.py
     uv run pytest -q examples/supplier_destination/test_example.py
+    uv run pytest -q examples/merchant_apply/test_example.py
     uv run python -m examples.stripe_actions.demo
     uv run python -m examples.stripe_billing.demo
     uv run python -m examples.stripe_refunds --help

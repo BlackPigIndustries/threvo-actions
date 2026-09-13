@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 /path/to/commerce-agents" >&2
+  exit 2
+fi
+
+checkout=$1
+expected=fd4d59224ab96b43c6dc6888207c67b3bd5a24cf
+observed=$(git -C "$checkout" rev-parse HEAD)
+if [[ "$observed" != "$expected" ]]; then
+  echo "expected commerce-agents $expected, found $observed" >&2
+  exit 1
+fi
+
+PYTHONPATH="$checkout/examples${PYTHONPATH:+:$PYTHONPATH}" uv run \
+  --with-editable "$(pwd)" \
+  --with-editable "$checkout/commerce-common" \
+  --with-editable "$checkout/merchant-agent/core" \
+  --with-editable "$checkout/merchant-agent/runtime-messages-api" \
+  --with-editable "$checkout/shopping-agent/core" \
+  --with-editable "$checkout/shopping-agent/runtime-messages-api" \
+  --with "python-dotenv==1.2.2" \
+  --env-file /dev/null \
+  python - <<'PY'
+import asyncio
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+from merchant_agent import (
+    ChangeItem,
+    ChangeKind,
+    MerchantAgentConfig,
+    MerchantSessionContext,
+    MerchantSessionState,
+    PriceUpdateItem,
+    StagedChange,
+)
+from merchant_agent.gates import check_apply_change
+
+from examples.merchant_apply.app import build_application
+from examples.merchant_apply.models import Product
+from retail.api.mock_merchant import MockRetailMerchant
+from retail.api.mock_retail import MockRetail
+
+state = MerchantSessionState()
+change = StagedChange(
+    change_id="change:price-planter",
+    kind=ChangeKind.PRICE_UPDATE,
+    summary="Price move",
+    items=[
+        ChangeItem(
+            target="listing:planter",
+            field="price",
+            before=100.0,
+            after=105.0,
+        )
+    ],
+    created_at=datetime.now(UTC),
+    created_by="operator:merchant-user",
+)
+state.remember_change(change)
+config = MerchantAgentConfig(
+    brand_name="ACME",
+    require_host_approval=True,
+)
+held = check_apply_change(state, config, change.change_id)
+assert held is not None and held.blocked == "approval"
+state.approved_change_ids.add(change.change_id)
+assert check_apply_change(state, config, change.change_id) is None
+print("commerce-agents provenance, guardrail, and approval gate passed")
+
+
+async def retail_fixture_path() -> None:
+    merchant = MockRetailMerchant(MockRetail())
+    session = MerchantSessionContext(
+        session_id="merchant-session:1",
+        merchant_id="acme-retail",
+        operator="operator:merchant-user",
+    )
+    listing = await merchant.get_listing(session, "AR-2102")
+    assert listing is not None
+    after = round(listing.price * 1.05, 2)
+    staged = await merchant.stage_price_update(
+        session,
+        [PriceUpdateItem(listing_id=listing.listing_id, new_price=after)],
+    )
+    state = MerchantSessionState()
+    state.remember_change(staged)
+    gated = merchant.config.model_copy(update={"require_host_approval": True})
+    held = check_apply_change(state, gated, staged.change_id)
+    assert held is not None and held.blocked == "approval"
+    state.approved_change_ids.add(staged.change_id)
+    assert check_apply_change(state, gated, staged.change_id) is None
+
+    application = build_application(
+        product=Product(
+            listing_reference=listing.listing_id,
+            price=Decimal(str(listing.price)),
+            currency="USD",
+        )
+    )
+    application.catalog.stage_price_update(
+        change_reference=staged.change_id,
+        listing_reference=listing.listing_id,
+        after_price=Decimal(str(after)),
+    )
+    prepared = await application.prepare(staged.change_id)
+    await application.approve(prepared.proposal_reference)
+    accepted = await application.execute(prepared.proposal_reference)
+    application.clock.advance(timedelta(seconds=1))
+    verified = await application.reconcile(prepared.proposal_reference)
+    assert accepted.outcome.value == "verification_pending"
+    assert verified.outcome.value == "verified"
+    assert application.catalog.write_count == 1
+
+
+asyncio.run(retail_fixture_path())
+print("commerce-agents retail fixture passed through threvo-actions")
+PY

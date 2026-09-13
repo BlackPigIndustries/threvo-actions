@@ -1,6 +1,21 @@
 # Stripe refund integration
 
-## Governed facade (0.4.2)
+## Where this sits
+
+AP2, ACP and UCP can carry a purchase or delegated-payment interaction to the
+merchant. They do not operate the merchant application's later refund,
+cancellation, credit-note, concurrency, recovery and completion controls. The
+Stripe actions in this package apply the same governed lifecycle at that host
+boundary. Stripe remains the provider of record; the host remains responsible
+for identity, current permission, database transactions and credentials.
+
+The package does not implement those commerce protocols or a card-network
+identity scheme. An externally verified mandate or network identity may inform
+host policy, but it never becomes unconditional runtime authority or completion
+proof. See `NON_GOALS.md`, `docs/design/protocol-watch.md`, and the public
+guarantees table for the maintained boundary.
+
+## Governed facade (0.4.3)
 
 Start with the credential-free `stripe_refund_scenario()` and then replace its
 boundaries through `StripeActions.from_services(StripeServices(...),
@@ -29,13 +44,13 @@ The facade does not turn framework approvals into authority, infer currency
 precision, supply production identity/key custody or schedule recovery. Use its
 public definition/runtime with the existing Pydantic AI capability and trusted
 dependency context. Never register the server-side facade methods directly as
-model tools. Default erasure authorization is denied. The 0.4.2 package includes the facade
+model tools. Default erasure authorization is denied. The 0.4.3 package includes the facade
 and the compatible connector below.
 
 ## Existing connector
 
 ```bash
-uv add "threvo-actions[stripe]==0.4.2"
+uv add "threvo-actions[stripe]==0.4.3"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
@@ -81,7 +96,7 @@ identity and key custody with the production host's implementations before
 qualifying financial use. It is not a Stripe Marketplace extension or a
 Visa/Mastercard/AP2/UCP adapter.
 
-## Billing groups (0.4.2)
+## Billing groups (0.4.3)
 
 The facade adds `subscriptions=SubscriptionCancellationConfig(...)`
 and `credit_notes=CreditNoteConfig(...)`. Either can be used without refunds.

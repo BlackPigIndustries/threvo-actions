@@ -14,6 +14,7 @@ account or model API key.
 | Custom-store conformance | Official SQLite adapter, explicit migration, and reusable store contract | `uv run python -m examples.docs.custom_store_conformance` |
 | PSP refund | Timeout-after-acceptance recovery, stable target idempotency, and final-absence rules | `uv run pytest -q examples/refund/test_example.py` |
 | Supplier destination change | Two FastAPI services, dual authority, receiver binding, and a later payment tied to the verified destination version | `uv run pytest -q examples/supplier_destination/test_example.py` |
+| [Merchant apply change](merchant-apply.md) | An upstream merchant-agent guardrail followed by drift refusal, uncertain-outcome recovery, and one semantic-effect admission | `uv run pytest -q examples/merchant_apply/test_example.py` |
 
 The installed-wheel quickstart is designed for literal copy-paste use. The
 source quickstart and lifecycle scenarios are designed for reading. The

@@ -39,3 +39,6 @@ Source: https://github.com/blackpigindustries/threvo-actions
 - Clean-room adoption result: https://blackpigindustries.github.io/threvo-actions/testing/clean-room-adoption-2026-08-30/
 - Testing helpers: https://blackpigindustries.github.io/threvo-actions/testing/helpers/
 - Security guarantees: https://blackpigindustries.github.io/threvo-actions/guarantees-and-limitations/
+- Explicit non-goals: https://blackpigindustries.github.io/threvo-actions/non-goals/
+- Merchant apply example: https://blackpigindustries.github.io/threvo-actions/examples/merchant-apply/
+- Protocol watch: https://blackpigindustries.github.io/threvo-actions/design/protocol-watch/

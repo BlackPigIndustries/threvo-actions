@@ -114,6 +114,7 @@ nav:
       - Stripe qualification matrix: testing/stripe-qualification.md
       - Stripe sandbox qualification: testing/stripe-sandbox-qualification.md
       - Stripe adoption protocol: testing/stripe-adoption-protocol.md
+      - Threvo Stripe test bed: testing/threvo-stripe-test-bed.md
       - Stripe outside-host status: testing/stripe-outside-adoption-status.md
       - Clean-room adoption result: testing/clean-room-adoption-2026-08-30.md
       - Gradual-reveal adoption record: testing/gradual-reveal-adoption.md
@@ -124,6 +125,7 @@ nav:
       - Lifecycle edge cases: examples/lifecycle-scenarios.md
       - Refund: examples/refund.md
       - Stripe refund operations: examples/stripe-refunds.md
+      - Merchant apply change: examples/merchant-apply.md
       - Supplier destination change: examples/supplier-destination.md
   - Reference:
       - Public API: reference/index.md
@@ -152,7 +154,13 @@ nav:
       - CLI: reference/cli.md
   - Project:
       - Stabilization policy: stabilization.md
+      - Non-goals: non-goals.md
+      - Protocol watch: design/protocol-watch.md
+      - External authority artifact design: design/external-authority-artifacts.md
+      - Framework access design: design/framework-access.md
+      - AP2 compatibility decision: design/ap2-compatibility.md
       - Versioning: versioning.md
+      - Release record 0.4.3: releases/0.4.3.md
       - Release record 0.4.2: releases/0.4.2.md
       - Release record 0.4.1: releases/0.4.1.md
       - Release record 0.4.0: releases/0.4.0.md
@@ -160,6 +168,7 @@ nav:
       - Stripe implementation plan: plans/2026-09-08-stripe-connector.md
       - Stripe Actions proposition and pipeline: plans/2026-09-10-stripe-actions.md
       - Stripe billing design and review: plans/2026-09-11-stripe-billing-actions.md
+      - Ecosystem and adoption execution: plans/2026-09-13-ecosystem-adoption.md
       - Next steps: plans/2026-09-08-next-steps.md
       - Release record 0.3.2: releases/0.3.2.md
       - Release record 0.3.1: releases/0.3.1.md

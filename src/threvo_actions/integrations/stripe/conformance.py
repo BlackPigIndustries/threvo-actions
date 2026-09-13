@@ -1,4 +1,8 @@
-"""Honest host attestations and library-orchestrated Stripe exercises."""
+"""Honest host attestations and library-orchestrated Stripe exercises.
+
+The guarantees mapped to these scenarios are documented at
+https://blackpigindustries.github.io/threvo-actions/guarantees-and-limitations/#enforcement-and-proof-index.
+"""
 
 from __future__ import annotations
 
