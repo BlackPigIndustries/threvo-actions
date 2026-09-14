@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, ClassVar, Generic, Literal, TypeVar, cast, get
 
 from pydantic import BaseModel
 
-from .registry import ActionDefinition
+from .registry import ActionDefinition, AuthorizationResult
 
 if TYPE_CHECKING:
     from .authority import AuthorityEvidence
@@ -16,13 +16,13 @@ if TYPE_CHECKING:
     from .models import ActionType, AuthoritativeTarget, EffectKind, GovernedExecutor
     from .registry import (
         AuthorityEvaluatorPort,
-        AuthorizationResult,
         DecisionContext,
         ExecutionContext,
         ExecutionResult,
         PreparationContext,
         PreparedAction,
         ReadContext,
+        RecoveryContext,
         ResolvedState,
         VerificationResult,
     )
@@ -132,6 +132,7 @@ class Action(ABC, Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
             target_identity=target_identity,
             authority_audience=authority_audience,
             authority_channel_assurance=authority_channel_assurance,
+            recovery_authorization=self,
             verification_delay=self.verification_delay,
             max_verification_attempts=self.max_verification_attempts,
             effect_kind=self.effect_kind,
@@ -162,6 +163,14 @@ class Action(ABC, Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
 
     @abstractmethod
     async def can_read(self, proposal_reference: str, *, context: ReadContext) -> bool: ...
+
+    async def can_recover(
+        self, proposal_reference: str, *, context: RecoveryContext
+    ) -> AuthorizationResult:
+        """Deny operator recovery until an action explicitly authorizes it."""
+
+        del proposal_reference, context
+        return AuthorizationResult(allowed=False, reason_code="recovery_not_authorized")
 
     @abstractmethod
     async def resolve(

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -27,7 +28,7 @@ try:
         ToolDenied,
     )
     from pydantic_ai.capabilities import AbstractCapability
-    from pydantic_ai.tools import Tool
+    from pydantic_ai.tools import Tool, ToolFuncEither
     from pydantic_ai.toolsets import FunctionToolset
 except ModuleNotFoundError as exc:
     if exc.name is not None and exc.name.startswith("pydantic_ai"):
@@ -68,6 +69,18 @@ ResultT = TypeVar("ResultT", bound=BaseModel)
 
 JsonObject = dict[str, JsonValue]
 _TOOL_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$", flags=re.ASCII)
+DEFAULT_INTERNAL_ACTION_ARGUMENTS = frozenset(
+    {
+        "authority_evidence",
+        "organization_id",
+        "private_snapshot",
+        "proposal_reference",
+        "request_id",
+        "snapshot",
+        "tenant_reference",
+        "user_id",
+    }
+)
 
 
 class ActionAgentContext(ExperimentalModel):
@@ -140,6 +153,72 @@ class ActionToolFailureHandler(Protocol):
         action_type: ActionType,
         tool_name: str,
     ) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ExistingToolActionBinding:
+    """Bind a host's existing model tool to a durable action identity.
+
+    This is the small, brownfield layer: the host keeps its established tool
+    function and confirmation record while the binding makes approval
+    suspension explicit and prevents internal action material from becoming
+    model-controlled input.
+    """
+
+    name: str
+    action_type: ActionType
+    forbidden_model_arguments: frozenset[str] = DEFAULT_INTERNAL_ACTION_ARGUMENTS
+
+    def __post_init__(self) -> None:
+        if _TOOL_NAME_PATTERN.fullmatch(self.name) is None:
+            raise ValueError("tool name must be a lowercase Python-style identifier")
+        if not self.forbidden_model_arguments:
+            raise ValueError("forbidden model arguments must not be empty")
+
+    def validate_executor(
+        self,
+        executor: ToolFuncEither[DepsT, ...],
+    ) -> ToolFuncEither[DepsT, ...]:
+        """Fail at composition time if a host tool exposes internal authority."""
+
+        if getattr(executor, "__name__", None) != self.name:
+            raise ValueError(f"action tool {self.name!r} changed executor identity")
+        model_arguments = set(inspect.signature(executor).parameters) - {"ctx"}
+        forbidden = model_arguments & self.forbidden_model_arguments
+        if forbidden:
+            names = ", ".join(sorted(forbidden))
+            raise ValueError(f"action tool {self.name!r} exposes internal arguments: {names}")
+        return executor
+
+
+def build_existing_tool_action_toolset(
+    *,
+    bindings: Sequence[ExistingToolActionBinding],
+    executors: Mapping[str, ToolFuncEither[DepsT, ...]],
+    id: str = "threvo_actions_existing_tools",
+) -> FunctionToolset[DepsT]:
+    """Add approval suspension to validated host-owned tool functions.
+
+    Pydantic AI approval remains routing metadata. The tool itself must create
+    and later execute its durable action through the normal runtime authority
+    checks.
+    """
+
+    if not bindings:
+        raise ValueError("at least one existing tool action binding is required")
+    names = [binding.name for binding in bindings]
+    if len(set(names)) != len(names):
+        raise ValueError("existing action tool names must be unique")
+    toolset = FunctionToolset[DepsT](id=id, sequential=True)
+    for binding in bindings:
+        executor = executors.get(binding.name)
+        if executor is None:
+            raise ValueError(f"action tool {binding.name!r} has no executor")
+        toolset.add_function(
+            binding.validate_executor(executor),
+            requires_approval=True,
+        )
+    return toolset
 
 
 class _ContinuationMetadata(ExperimentalModel):
@@ -750,7 +829,10 @@ __all__ = [
     "ActionToolFailureHandler",
     "ActionToolResult",
     "DeferredActionRequest",
+    "DEFAULT_INTERNAL_ACTION_ARGUMENTS",
+    "ExistingToolActionBinding",
     "InlineAuthorityHandler",
     "IntegrationOutcome",
     "ScopedActionToolBinding",
+    "build_existing_tool_action_toolset",
 ]

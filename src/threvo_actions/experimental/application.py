@@ -271,6 +271,7 @@ class BoundAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
         command: CommandT,
         requesting_principal: RequestingPrincipal,
         proposing_agent: ProposingAgent | None = None,
+        proposal_reference: str | None = None,
     ) -> ActionOperationResult:
         definition, runtime = self._state.parts()
         return await runtime.prepare(
@@ -279,6 +280,7 @@ class BoundAction(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
             command=command,
             requesting_principal=requesting_principal,
             proposing_agent=proposing_agent,
+            proposal_reference=proposal_reference,
         )
 
     async def record_authority(

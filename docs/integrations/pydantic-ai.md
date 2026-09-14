@@ -5,7 +5,7 @@ model can propose a command and see a safe preview, but it cannot create
 financial authority or bypass the runtime.
 
 ```bash
-uv add "threvo-actions[pydantic-ai]==0.5.0"
+uv add "threvo-actions[pydantic-ai]==0.6.0"
 ```
 
 The integration is tested against `pydantic-ai-slim==2.33.0`. It installs no
@@ -90,6 +90,38 @@ agent = Agent(
 
 Replace the offline `FunctionModel` with your provider and set its credentials
 as Pydantic AI documents. The action control flow stays the same.
+
+## Keep an existing confirmation flow
+
+Brownfield applications often already have model tools and a durable approval
+record. `ExistingToolActionBinding` is the smaller first layer for that case.
+It keeps the existing function and confirmation UI, validates at composition
+time that the model cannot supply tenant, proposal, snapshot, or authority
+fields, and marks the tool `requires_approval=True`.
+
+```python
+from threvo_actions.integrations.pydantic_ai import (
+    ExistingToolActionBinding,
+    build_existing_tool_action_toolset,
+)
+
+toolset = build_existing_tool_action_toolset(
+    bindings=(
+        ExistingToolActionBinding(
+            name="change_supplier_bank_account",
+            action_type=SUPPLIER_BANK_CHANGE,
+        ),
+    ),
+    executors={"change_supplier_bank_account": change_supplier_bank_account},
+)
+```
+
+The executor still prepares and continues the durable action through the
+runtime. Pydantic AI approval is a suspension and routing signal; it is never
+converted into `AuthorityEvidence`. Applications ready for library-owned
+proposal continuation can move one layer deeper to `ActionToolBinding`, then to
+`ScopedActionToolBinding` for per-call resources, and finally to direct runtime
+composition when they need every port.
 
 ## Deferred approval across requests
 

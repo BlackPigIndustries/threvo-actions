@@ -39,6 +39,15 @@ class AuthorityValidationResult(ExperimentalModel):
     failure: AuthorityValidationFailure | None = None
 
 
+class ExternalAuthorityAttestation(ExperimentalModel):
+    """Reference to an artifact the host verified outside this library."""
+
+    format: SafeReference
+    issuer_reference: SafeReference
+    artifact_reference: SafeReference
+    artifact_digest: SafeReference
+
+
 class AuthorityEvidence(ExperimentalModel):
     """A bound authority decision; it is not authorization by itself."""
 
@@ -56,6 +65,7 @@ class AuthorityEvidence(ExperimentalModel):
     channel_assurance: SafeReference
     issued_at: AwareDatetime
     expires_at: AwareDatetime
+    external_attestation: ExternalAuthorityAttestation | None = None
 
     @model_validator(mode="after")
     def expiry_follows_issue_time(self) -> AuthorityEvidence:

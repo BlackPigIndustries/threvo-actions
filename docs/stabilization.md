@@ -1,10 +1,10 @@
 # 0.x stabilization policy
 
-Status: active after 0.5.0.
+Status: active after the owner-directed 0.6.0 pilot-consolidation release.
 
 The project is holding feature releases and public-surface expansion after the
-0.5.0 Threvo-pilot recovery release. Development may continue
-on develop, but no new
+0.6.0 Threvo-pilot consolidation release. Development may continue on develop,
+but no new
 connector, Stripe action group, lifecycle, or authoring abstraction is eligible
 for publication during this period.
 
@@ -45,5 +45,14 @@ is recorded for 0.5.0. The repository owner's 2026-09-13 direction permits the
 exact 0.5.0 pilot integration release because the generic operator-recovery
 boundary avoids Threvo-only recovery code. This exception does not count as
 independent adoption or end the hold.
+The repository owner's 2026-09-15 direction permits one additional release,
+0.6.0, to move generally useful integration work discovered by the Threvo pilot
+into the library: recovery authorization, host-owned proposal references,
+public lifecycle classification, a local-KEK protection provider, an installed
+recovery worker, an installed Stripe PostgreSQL conformance adapter, and a
+brownfield Pydantic AI binding layer. This is a bounded consolidation of
+observed adopter needs, not permission for further connector or action-group
+expansion. It does not count as independent adoption or end the hold.
+
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
-source of truth. This release does not claim otherwise.
+source of truth. Neither 0.5.0 nor 0.6.0 claims otherwise.

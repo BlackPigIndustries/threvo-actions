@@ -13,6 +13,7 @@ ALLOWED_EXTERNAL_IMPORTS = {"pydantic"}
 ALLOWED_OPTIONAL_IMPORTS = {
     Path("cli.py"): {"aiomysql", "asyncpg"},
     Path("integrations/aws_kms.py"): {"cryptography"},
+    Path("integrations/local_kek.py"): {"cryptography"},
     Path("integrations/pydantic_ai.py"): {"pydantic_ai"},
     Path("integrations/stripe/gateway.py"): {"stripe"},
     Path("integrations/stripe/actions.py"): {"stripe"},

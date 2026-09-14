@@ -84,9 +84,16 @@ result = await action.resume_verification(
 )
 ```
 
-The host must authenticate and authorize the operator before this call. Use
-pseudonymous, bounded references; `SafeReference` validates syntax and is not a
-privacy transform. The host must also bound retries and retain the case or
-intervention record named by `intervention_reference`. A revision mismatch
-returns `conflict`, and repeated calls after the proposal leaves a recoverable
-state do not reopen execution.
+The definition must provide `recovery_authorization`. Its `can_recover()` method
+receives a strict `RecoveryContext` containing the tenant, proposal, operator,
+intervention reference, and request time. The runtime calls it before writing a
+receipt, resetting the budget, or invoking the verifier. An absent port or a
+false result raises `AuthorizationDeniedError` with
+`recovery_not_authorized` and changes nothing.
+
+The host authenticates the operator before constructing `RecoveryOperator` and
+authorizes the exact context in that port. Use pseudonymous, bounded references;
+`SafeReference` validates syntax and is not a privacy transform. The host also
+retains the case or intervention record named by `intervention_reference`. A
+revision mismatch returns `conflict`, and repeated calls after the proposal
+leaves a recoverable state do not reopen execution.

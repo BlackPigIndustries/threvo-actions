@@ -589,7 +589,10 @@ async def _exercise_scenario(
 
     if scenario is StripeHostScenario.EXPIRED_ADMISSION:
         await adapter.remember(first)
-        expired = await adapter.reserve(first, not_after=now - timedelta(microseconds=1))
+        # The exercise clock and the database clock are independent in a real
+        # host. Use a material margin so ordinary sub-second clock skew cannot
+        # turn the expiry assertion into a race between those clocks.
+        expired = await adapter.reserve(first, not_after=now - timedelta(minutes=1))
         observed = await adapter.load(
             tenant_reference=first.tenant_reference,
             action_group=first.action_group,

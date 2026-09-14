@@ -275,7 +275,10 @@ class PostgresStripeLedger:
             return StripeLedgerReservationStatus.STALE
         if entry.phase is not StripeLedgerPhase.READY:
             return StripeLedgerReservationStatus.ALREADY_SUBMITTED
-        unexpired = await connection.fetchval("SELECT clock_timestamp() < $1", not_after)
+        unexpired = await connection.fetchval(
+            "SELECT clock_timestamp() < $1::timestamptz",
+            not_after,
+        )
         if unexpired is not True:
             return StripeLedgerReservationStatus.STALE
         conflict = await connection.fetchval(

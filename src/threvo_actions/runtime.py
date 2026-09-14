@@ -77,6 +77,7 @@ from .registry import (
     PreparationContext,
     PreparedAction,
     ReadContext,
+    RecoveryContext,
     VerificationResult,
     VerificationStatus,
 )
@@ -256,24 +257,121 @@ class RuntimeReasonCode(StrEnum):
     VERIFIED_TERMINAL_FAILURE = "verified_terminal_failure"
     AUTHORITATIVE_FINAL_ABSENCE = "authoritative_final_absence"
     OPERATOR_VERIFICATION_RESUMED = "operator_verification_resumed"
+    RECOVERY_NOT_AUTHORIZED = "recovery_not_authorized"
 
 
-_LIFECYCLE_DISPOSITIONS: dict[LifecycleStatus, tuple[bool, bool]] = {
-    LifecycleStatus.AWAITING_AUTHORITY: (False, False),
-    LifecycleStatus.DENIED: (True, False),
-    LifecycleStatus.EXPIRED: (True, False),
-    LifecycleStatus.AUTHORIZED: (False, False),
-    LifecycleStatus.BLOCKED: (True, False),
-    LifecycleStatus.STALE: (True, False),
-    LifecycleStatus.SUPERSEDED: (True, False),
-    LifecycleStatus.EXECUTING: (False, True),
-    LifecycleStatus.FAILED_KNOWN: (True, False),
-    LifecycleStatus.FAILED_UNKNOWN: (False, True),
-    LifecycleStatus.VERIFICATION_PENDING: (False, True),
-    LifecycleStatus.VERIFICATION_UNRESOLVED: (True, False),
-    LifecycleStatus.PARTIALLY_SUCCEEDED: (True, False),
-    LifecycleStatus.VERIFIED: (True, False),
+class LifecycleCategory(StrEnum):
+    """Small product-facing category for exhaustive lifecycle handling."""
+
+    AWAITING_AUTHORITY = "awaiting_authority"
+    PENDING = "pending"
+    SETTLED = "settled"
+    STALE = "stale"
+    REFUSED = "refused"
+    NEEDS_ATTENTION = "needs_attention"
+
+
+class LifecycleDisposition(ExperimentalModel):
+    """Portable processing capabilities for one lifecycle state."""
+
+    category: LifecycleCategory
+    automatic_processing_closed: bool
+    reconciliation_available: bool
+    operator_recovery_available: bool
+
+
+_LIFECYCLE_DISPOSITIONS: dict[LifecycleStatus, LifecycleDisposition] = {
+    LifecycleStatus.AWAITING_AUTHORITY: LifecycleDisposition(
+        category=LifecycleCategory.AWAITING_AUTHORITY,
+        automatic_processing_closed=False,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.DENIED: LifecycleDisposition(
+        category=LifecycleCategory.REFUSED,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.EXPIRED: LifecycleDisposition(
+        category=LifecycleCategory.STALE,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.AUTHORIZED: LifecycleDisposition(
+        category=LifecycleCategory.PENDING,
+        automatic_processing_closed=False,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.BLOCKED: LifecycleDisposition(
+        category=LifecycleCategory.REFUSED,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.STALE: LifecycleDisposition(
+        category=LifecycleCategory.STALE,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.SUPERSEDED: LifecycleDisposition(
+        category=LifecycleCategory.STALE,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.EXECUTING: LifecycleDisposition(
+        category=LifecycleCategory.PENDING,
+        automatic_processing_closed=False,
+        reconciliation_available=True,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.FAILED_KNOWN: LifecycleDisposition(
+        category=LifecycleCategory.REFUSED,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.FAILED_UNKNOWN: LifecycleDisposition(
+        category=LifecycleCategory.PENDING,
+        automatic_processing_closed=False,
+        reconciliation_available=True,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.VERIFICATION_PENDING: LifecycleDisposition(
+        category=LifecycleCategory.PENDING,
+        automatic_processing_closed=False,
+        reconciliation_available=True,
+        operator_recovery_available=True,
+    ),
+    LifecycleStatus.VERIFICATION_UNRESOLVED: LifecycleDisposition(
+        category=LifecycleCategory.NEEDS_ATTENTION,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=True,
+    ),
+    LifecycleStatus.PARTIALLY_SUCCEEDED: LifecycleDisposition(
+        category=LifecycleCategory.NEEDS_ATTENTION,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
+    LifecycleStatus.VERIFIED: LifecycleDisposition(
+        category=LifecycleCategory.SETTLED,
+        automatic_processing_closed=True,
+        reconciliation_available=False,
+        operator_recovery_available=False,
+    ),
 }
+
+
+def classify_lifecycle(status: LifecycleStatus) -> LifecycleDisposition:
+    """Return the stable processing capabilities associated with ``status``."""
+
+    return _LIFECYCLE_DISPOSITIONS[status]
 
 
 class ActionOperationResult(ExperimentalModel):
@@ -288,17 +386,24 @@ class ActionOperationResult(ExperimentalModel):
 
     @property
     def is_terminal(self) -> bool:
-        """Whether the proposal lifecycle has no valid transition left."""
+        """Whether this proposal has no reconciliation or recovery path."""
 
-        terminal, _ = _LIFECYCLE_DISPOSITIONS[self.lifecycle_status]
-        return terminal
+        disposition = classify_lifecycle(self.lifecycle_status)
+        return (
+            disposition.automatic_processing_closed and not disposition.operator_recovery_available
+        )
+
+    @property
+    def automatic_processing_closed(self) -> bool:
+        """Whether unattended processing should stop for this proposal."""
+
+        return classify_lifecycle(self.lifecycle_status).automatic_processing_closed
 
     @property
     def needs_reconciliation(self) -> bool:
         """Whether authoritative reconciliation may advance this proposal."""
 
-        _, reconcile = _LIFECYCLE_DISPOSITIONS[self.lifecycle_status]
-        return reconcile
+        return classify_lifecycle(self.lifecycle_status).reconciliation_available
 
 
 class ProposalView(ExperimentalModel):
@@ -372,6 +477,7 @@ class ActionRuntime:
         command: CommandT,
         requesting_principal: RequestingPrincipal,
         proposing_agent: ProposingAgent | None = None,
+        proposal_reference: str | None = None,
     ) -> ActionOperationResult:
         now = self._clock.now()
         context = PreparationContext(
@@ -394,6 +500,7 @@ class ActionRuntime:
             requesting_principal=requesting_principal,
             proposing_agent=proposing_agent,
             now=now,
+            proposal_reference=proposal_reference,
         )
         await self._emit(
             record,
@@ -899,6 +1006,24 @@ class ActionRuntime:
             return self._result(record, self._outcome_for(record.lifecycle_status))
         if record.revision != expected_revision:
             return self._result(record, OperationOutcome.CONFLICT)
+        now = self._clock.now()
+        recovery_context = RecoveryContext(
+            tenant_reference=tenant_reference,
+            operator=operator,
+            intervention_reference=intervention_reference,
+            requested_at=now,
+        )
+        if definition.recovery_authorization is None:
+            raise AuthorizationDeniedError(RuntimeReasonCode.RECOVERY_NOT_AUTHORIZED.value)
+        recovery_authorization = await definition.recovery_authorization.can_recover(
+            proposal_reference,
+            context=recovery_context,
+        )
+        if not recovery_authorization.allowed:
+            raise AuthorizationDeniedError(
+                recovery_authorization.reason_code
+                or RuntimeReasonCode.RECOVERY_NOT_AUTHORIZED.value
+            )
         causal_receipt: Receipt | None = next(
             (
                 receipt
@@ -911,7 +1036,6 @@ class ActionRuntime:
             causal_receipt = record.receipts[-1] if record.receipts else None
         if causal_receipt is None:
             raise StoreInvariantError("verification recovery requires a prior receipt")
-        now = self._clock.now()
         receipt = RecoveryReceipt(
             receipt_reference=self._identifiers.new("receipt"),
             correlation_reference=record.proposal_reference,
@@ -1254,16 +1378,19 @@ class ActionRuntime:
         requesting_principal: RequestingPrincipal,
         proposing_agent: ProposingAgent | None,
         now: datetime,
+        proposal_reference: str | None = None,
     ) -> StoredProposal:
-        proposal_reference = self._identifiers.new("proposal")
+        resolved_proposal_reference = (
+            self._identifiers.new("proposal") if proposal_reference is None else proposal_reference
+        )
         proposal_identity = ProposalIdentity(
             tenant_reference=tenant_reference,
-            proposal_reference=proposal_reference,
+            proposal_reference=resolved_proposal_reference,
         )
         private_json = model_json_object(prepared.private_snapshot)
         private_canonical = canonicalize_v1(private_json)
         commitment_input = commitment_payload_v1(
-            proposal_reference=proposal_reference,
+            proposal_reference=resolved_proposal_reference,
             canonical_payload=private_canonical,
         )
         commitment = await _create_commitment(
@@ -1282,8 +1409,8 @@ class ActionRuntime:
             )
             proposal_receipt = ProposalReceipt(
                 receipt_reference=self._identifiers.new("receipt"),
-                correlation_reference=proposal_reference,
-                causation_reference=proposal_reference,
+                correlation_reference=resolved_proposal_reference,
+                causation_reference=resolved_proposal_reference,
                 observed_at=now,
                 runtime_revision=self._runtime_revision,
                 status=ProposalReceiptStatus.PREPARED,
@@ -1292,7 +1419,7 @@ class ActionRuntime:
             )
             record = StoredProposal(
                 tenant_reference=tenant_reference,
-                proposal_reference=proposal_reference,
+                proposal_reference=resolved_proposal_reference,
                 action_type=definition.action_type,
                 semantic_effect_reference=prepared.semantic_effect_reference,
                 effect_kind=definition.effect_kind,

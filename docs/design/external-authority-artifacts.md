@@ -1,73 +1,35 @@
-# External authority artifact design
+# External authority artifacts
 
-Status: **designed; implementation held pending adopter evidence**.
+Status: **minimized reference implemented in 0.6.0; format adapters remain
+trigger-bound**.
 
 Some hosts verify an AP2 mandate, SD-JWT, managed-agent interrupt, or another
-signed record before they create `AuthorityEvidence`. The current runtime can
-consume the host's authorization decision, but it cannot retain a minimized
-reference to that external artifact. Adding one prematurely would put an
-unproven schema on the authority hot path during the 0.4 stabilization hold.
+signed record before they create `AuthorityEvidence`. The optional
+`ExternalAuthorityAttestation` retains the minimum reference needed to bind
+that host evidence to the action:
 
-## Proposed boundary
-
-A future `ExternalAuthorityArtifact` should be a strict, frozen Pydantic model
-and an optional member of `AuthorityEvidence`. It should carry only:
-
-- `format_reference`: exact host-understood format/profile;
+- `format`: exact host-understood format or profile;
 - `issuer_reference`: opaque issuer or trust-domain reference;
-- `artifact_reference`: opaque lookup handle to host custody;
-- `artifact_digest_algorithm` and `artifact_digest`;
-- optional `verifier_reference`, `verifier_revision`, and `verified_at` when
-  the host asserts that verification occurred.
+- `artifact_reference`: opaque lookup handle to host custody; and
+- `artifact_digest`: the host's algorithm-qualified content digest.
 
-The raw token, disclosure, signature and personal claims remain in host-owned
-custody. The runtime neither parses the format nor verifies signatures. The
-artifact block becomes part of the recorded authority representation so a
-later substitution changes the evidence digest and cannot preserve the same
-binding.
+The raw token, disclosure, signature, and personal claims stay in host-owned
+custody. The runtime does not parse the format or verify signatures. The block
+is part of the persisted authority record and its evidence export, so replacing
+the reference or digest changes the bundle digest. Validation detects that
+internal inconsistency; it cannot establish that the artifact was valid or that
+the exporter is authentic.
 
-One block may prove insufficient. Real adoption must determine whether a
-decision needs several artifacts, an issuer chain, verifier-key revision,
-revocation state, or supersession. That is why the implementation cannot assume
-a single `external_attestation` field today.
+Hosts define issuer trust, audience, time, replay, revocation, retention, and
+erasure. Destroying runtime proposal content cannot erase an issuer's or
+verifier's copy. The evidence bundle therefore continues to say
+`authenticity: unsigned_host_projection`.
 
-The same constraint applies to a proposing agent. Visa TAP key identifiers or
-another network's agent-token binding may be useful receipt evidence, but an
-optional `ProposingAgent.attestation_reference` would be too narrow without a
-real host. The adopter must first establish whether the proposal needs one or
-several artifacts, the verified agent principal, issuer and verifier revisions,
-rotation/revocation state, and which minimized fields may enter reads and
-exports. Design that projection with the authority artifact rather than adding
-an isolated opaque string to every proposal now.
+Build a format-specific verifier only when a named adopter supplies a real
+artifact profile and fixtures for valid, tampered, swapped, expired, revoked,
+and cross-tenant cases. That adapter belongs behind host authority evaluation;
+no protocol or signature dependency belongs in the core package.
 
-## Evidence export
-
-The public evidence bundle may expose the minimized artifact references and
-digests only when the evidence-read policy permits it. Validation can detect an
-internal digest or reference inconsistency. It cannot prove that the artifact
-was valid, that the verifier ran, or that the exporter is authentic. The bundle
-must retain `authenticity: unsigned_host_projection` until a separately reviewed
-signature and custody design changes that claim.
-
-Hosts must define retention and erasure for the raw artifact, verifier logs,
-exported references and backups. Destroying runtime proposal content cannot
-erase an issuer's or verifier's copy.
-
-## Implementation trigger and qualification
-
-Implement only when a named adopter supplies one real artifact format and its:
-
-1. exact schema/profile and digest rules;
-2. issuer, audience, time, replay and revocation policy;
-3. verifier identity and versioning model;
-4. retention, erasure and evidence-export requirements; and
-5. valid, tampered, swapped, expired, revoked and cross-tenant fixtures.
-
-If the artifact identifies a proposing agent, qualification also covers agent
-key rotation, a valid artifact bound to the wrong proposal, and retention in
-proposal receipts and authorized evidence reads.
-
-The first implementation must update authority persistence, all official store
-migrations, canonical evidence tests, leakage tests, export validation,
-versioning documentation and the bundled coding-agent guide in one change.
-No cryptography or protocol dependency belongs in the core package.
+An agent-identity attestation remains unimplemented. A real adopter must first
+establish whether the proposal needs one or several artifacts, key rotation and
+revocation state, and which minimized fields may enter authorized reads.

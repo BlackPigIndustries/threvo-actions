@@ -22,7 +22,12 @@ from threvo_actions.stores.base import (
     ProposalAlreadyExistsError,
     StoredProposal,
 )
-from threvo_actions.stores.postgres import PostgresActionStore, PostgresRetentionStore
+from threvo_actions.stores.postgres import (
+    CallerOwnedTransactionSource,
+    PostgresActionStore,
+    PostgresRetentionStore,
+    TransactionOwnershipError,
+)
 
 from .conftest import migrated_pool, require_test_dsn
 
@@ -120,6 +125,31 @@ def test_round_trip_guarded_cas_and_sanitized_duplicate_error() -> None:
                 updated=authorized,
             )
             assert await store.get("tenant:a", child_record.proposal_reference) == authorized
+
+    asyncio.run(scenario())
+
+
+def test_caller_owned_transaction_commits_or_rolls_back_with_host_state() -> None:
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, schema), pool.acquire() as connection:
+            source = CallerOwnedTransactionSource(connection)
+            store = PostgresActionStore(source, schema=schema)
+
+            with pytest.raises(TransactionOwnershipError):
+                await store.create(proposal("proposal:no-transaction"))
+
+            transaction = connection.transaction()
+            await transaction.start()
+            await store.create(proposal("proposal:rolled-back"))
+            assert await store.get("tenant:a", "proposal:rolled-back") is not None
+            await transaction.rollback()
+
+            independent = PostgresActionStore(pool, schema=schema)
+            assert await independent.get("tenant:a", "proposal:rolled-back") is None
+
+            async with connection.transaction():
+                await store.create(proposal("proposal:committed"))
+            assert await independent.get("tenant:a", "proposal:committed") is not None
 
     asyncio.run(scenario())
 

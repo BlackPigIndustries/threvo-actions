@@ -81,7 +81,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: >-
-          uv sync --extra aws-kms --extra dev --extra mysql --extra pydantic-ai
+          uv sync --extra aws-kms --extra dev --extra local-kek --extra mysql --extra pydantic-ai
           --extra postgres --extra docs --extra stripe-app --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -123,7 +123,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        profile: [core, aws-kms, postgres, pydantic-ai, stripe, all]
+        profile: [core, aws-kms, local-kek, postgres, pydantic-ai, stripe, all]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -142,10 +142,11 @@ jobs:
           case "$PROFILE" in
             core) profile_extras="" ;;
             aws-kms) profile_extras="[aws-kms]" ;;
+            local-kek) profile_extras="[local-kek]" ;;
             postgres) profile_extras="[postgres]" ;;
             pydantic-ai) profile_extras="[pydantic-ai]" ;;
             stripe) profile_extras="[stripe]" ;;
-            all) profile_extras="[aws-kms,mysql,postgres,pydantic-ai,stripe-app]" ;;
+            all) profile_extras="[aws-kms,local-kek,mysql,postgres,pydantic-ai,stripe-app]" ;;
             *) exit 1 ;;
           esac
           for artifact in release/packages/*.whl release/packages/*.tar.gz; do
@@ -167,6 +168,8 @@ jobs:
           assert len(approval_postgres_migration().checksum) == 64
           if "$PROFILE" in ("aws-kms", "all"):
               import threvo_actions.integrations.aws_kms
+          if "$PROFILE" in ("local-kek", "all"):
+              import threvo_actions.integrations.local_kek
           if "$PROFILE" in ("stripe", "all"):
               import threvo_actions.integrations.stripe
           if "$PROFILE" == "core":
@@ -184,6 +187,12 @@ jobs:
               cp scripts/smoke_aws_kms_artifact.py "$consumer_root/"
               cd "$consumer_root"
               "$consumer_root/venv/bin/python" smoke_aws_kms_artifact.py
+              cd "$GITHUB_WORKSPACE"
+            fi
+            if test "$PROFILE" = "local-kek" || test "$PROFILE" = "all"; then
+              cp scripts/smoke_local_kek_artifact.py "$consumer_root/"
+              cd "$consumer_root"
+              "$consumer_root/venv/bin/python" smoke_local_kek_artifact.py
               cd "$GITHUB_WORKSPACE"
             fi
           done
@@ -487,6 +496,11 @@ jobs:
             && test "$passed_gate_count" -eq 0 \
             && test "$waiver_gate_count" -eq 0; then
             echo "Using the repository owner's one-time v0.5.0 Threvo-pilot release bypass."
+          elif test "$RELEASE_TAG" = "v0.6.0" \
+            && test "$SKIP_ADOPTION_GATE" = "true" \
+            && test "$passed_gate_count" -eq 0 \
+            && test "$waiver_gate_count" -eq 0; then
+            echo "Using the repository owner's one-time v0.6.0 pilot-consolidation release bypass."
           else
             echo "Adoption evidence did not pass and no exact one-time release exception matched." >&2
             exit 1
