@@ -8,6 +8,7 @@ import aiomysql
 import pytest
 from pydantic import ValidationError
 
+from threvo_actions.authority import ExternalAuthorityAttestation
 from threvo_actions.conformance import (
     IndependentStoreConformanceCase,
     StoreConformanceCase,
@@ -91,6 +92,43 @@ def test_independent_pools_match_the_mysql_security_profile() -> None:
             finally:
                 second_pool.close()
                 await second_pool.wait_closed()
+
+    asyncio.run(scenario())
+
+
+def test_external_authority_attestation_round_trips() -> None:
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, _):
+            store = MySQLActionStore(pool)
+            original = proposal("proposal:external-attestation")
+            await store.create(original)
+            evidence = authority(original).model_copy(
+                update={
+                    "external_attestation": ExternalAuthorityAttestation(
+                        format="jwt",
+                        issuer_reference="issuer:example",
+                        artifact_reference="approval:42",
+                        artifact_digest="sha256:opaque",
+                    )
+                }
+            )
+            updated = original.model_copy(
+                update={
+                    "authority_evidence": (evidence,),
+                    "lifecycle_status": LifecycleStatus.AUTHORIZED,
+                    "revision": 1,
+                }
+            )
+
+            assert await store.compare_and_set(
+                tenant_reference=original.tenant_reference,
+                proposal_reference=original.proposal_reference,
+                expected_revision=0,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=updated,
+            )
+            loaded = await store.get(original.tenant_reference, original.proposal_reference)
+            assert loaded == updated
 
     asyncio.run(scenario())
 

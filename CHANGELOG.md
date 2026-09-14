@@ -35,6 +35,8 @@ and uses Semantic Versioning for the supported surface described in
   tells unattended workers to stop.
 - Make the PostgreSQL Stripe deadline query explicitly timezone-aware and give
   the host exercise a material cross-clock margin.
+- Extend the MySQL strict evidence contract and guarded append-only update
+  routine for optional external authority attestations through migration `004`.
 - Remove lifecycle classification tables from the Threvo pilot and use the
   library's exhaustive categories for worker and product projections.
 
