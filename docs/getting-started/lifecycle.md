@@ -85,7 +85,9 @@ replay result carrying that current lifecycle.
 Do not translate `accepted`, an HTTP 2xx, a queue acknowledgement, or model
 text into `verified`. Only the configured verifier can do that.
 
-Use `result.is_terminal` instead of copying terminal-state sets into an
-application. Use `result.needs_reconciliation` to decide whether the runtime can
-advance the proposal through authoritative reconciliation. Both properties are
-derived from the lifecycle state, including replay and conflict results.
+Use `result.is_terminal` instead of copying states that have no reconciliation
+or recovery path into an application. Use `result.automatic_processing_closed`
+to stop unattended polling while leaving authorized operator recovery
+available, and `result.needs_reconciliation` to decide whether the runtime can
+advance the proposal through authoritative reconciliation. All three properties
+are derived from the lifecycle state, including replay and conflict results.

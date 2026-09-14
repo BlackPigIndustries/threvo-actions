@@ -8,7 +8,7 @@ requires host-protected private state and separate runtime and retention roles;
 it does not claim storage encryption or deletion from external copies.
 
 ```bash
-uv add "threvo-actions[postgres]==0.5.0"
+uv add "threvo-actions[postgres]==0.6.0"
 ```
 
 The action schema can live beside the application's tables or in a dedicated
@@ -150,6 +150,38 @@ runtime = ActionRuntime(
     identifiers=identifiers,
 )
 ```
+
+## Choose transaction ownership deliberately
+
+An internal business mutation usually needs the lifecycle write and the
+application row change in the same caller-owned transaction. Wrap an already
+active asyncpg connection with `CallerOwnedTransactionSource` and give that
+source to `PostgresActionStore`:
+
+```python
+from threvo_actions.stores.postgres import (
+    CallerOwnedTransactionSource,
+    PostgresActionStore,
+)
+
+async with application_pool.acquire() as connection:
+    async with connection.transaction():
+        store = PostgresActionStore(
+            CallerOwnedTransactionSource(connection),
+            schema="threvo_actions",
+        )
+        # The application mutation and runtime transition commit or roll back together.
+```
+
+The source refuses a connection without an active outer transaction. Store
+methods use nested transactions as savepoints; the caller owns the final commit
+or rollback and must not share that connection concurrently.
+
+For a remote provider effect, persist lifecycle state on independent committed
+connections before and after the network call. A caller rollback cannot undo
+the fact that Stripe or another provider may already have accepted the effect.
+Use the ordinary pool-backed `PostgresActionStore` for that topology. This is a
+business-effect distinction, not a convenience setting.
 
 Create a separate `PostgresActionWorkSource(runtime_pool)` when a worker needs
 bounded, tenant-scoped discovery of expired, executable, or due verification

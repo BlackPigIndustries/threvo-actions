@@ -50,7 +50,7 @@ The library implements none of those protocols. See the explicit
 or start with the [first-action guide](docs/getting-started/first-action.md).
 
 > [!IMPORTANT]
-> Version **0.5.0** is the current supported release. Pin the exact patch for
+> Version **0.6.0** is the current supported release. Pin the exact patch for
 > consequential actions and review the [versioning policy](docs/versioning.md).
 > Receipt serialization, canonicalization, physical database layouts, and the
 > namespaced gradual-reveal authoring API retain their documented experimental
@@ -63,15 +63,16 @@ authoring API, and read migration notes before every minor-line upgrade.
 
 Python 3.11 through 3.13 is supported.
 
-    uv add "threvo-actions==0.5.0"
+    uv add "threvo-actions==0.6.0"
 
 Install only the integrations the application uses:
 
-    uv add "threvo-actions[postgres]==0.5.0"
-    uv add "threvo-actions[mysql]==0.5.0"
-    uv add "threvo-actions[sqlalchemy]==0.5.0"
-    uv add "threvo-actions[pydantic-ai]==0.5.0"
-    uv add "threvo-actions[stripe]==0.5.0"
+    uv add "threvo-actions[postgres]==0.6.0"
+    uv add "threvo-actions[mysql]==0.6.0"
+    uv add "threvo-actions[sqlalchemy]==0.6.0"
+    uv add "threvo-actions[pydantic-ai]==0.6.0"
+    uv add "threvo-actions[local-kek]==0.6.0"
+    uv add "threvo-actions[stripe]==0.6.0"
 
 The base package includes the governed Stripe facade and its typed gateway
 protocols. The Stripe extra adds the maintained Stripe SDK transports and
@@ -82,7 +83,8 @@ authenticated webhook parsing. Custom gateways do not require the Stripe SDK.
 Every governed action follows the same sequence:
 
 1. **Prepare** reads canonical application state and creates a minimized preview
-   plus a protected private snapshot.
+   plus a protected private snapshot. Brownfield hosts may use their existing
+   durable record reference as the proposal reference.
 2. **Record authority** stores an authenticated decision bound to the tenant,
    proposal, semantic effect, commitment, audience, assurance, and expiry.
 3. **Resolve again** reloads current state and rejects material drift.
@@ -107,6 +109,11 @@ control. `ActionApplication` under `threvo_actions.experimental` provides
 shorter, scoped composition for exact-pinned adopters. All three use the same
 runtime semantics.
 
+Applications with existing Pydantic AI tools can start even smaller with
+`ExistingToolActionBinding`: retain the current tool and confirmation record,
+validate that internal authority fields are absent from its model schema, and
+then move layer by layer into library-owned continuation when useful.
+
 Storage can start with the in-memory implementation for tests. PostgreSQL,
 MySQL 8, and SQLite adapters have explicit migrations and documented support
 boundaries. The Pydantic AI integration exposes typed tools while keeping
@@ -118,6 +125,8 @@ framework approval flags and conversation history outside the authority model.
 - [SQLite](docs/integrations/sqlite.md)
 - [SQLAlchemy and Alembic](docs/integrations/sqlalchemy-alembic.md)
 - [Pydantic AI](docs/integrations/pydantic-ai.md)
+- [Brownfield adoption](docs/integrations/brownfield-adoption.md)
+- [Local KEK envelope protection](docs/integrations/local-kek.md)
 - [Recovery views](docs/reference/recovery.md)
 - [Evidence exports](docs/reference/evidence.md)
 

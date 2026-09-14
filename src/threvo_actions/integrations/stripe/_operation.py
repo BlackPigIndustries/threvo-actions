@@ -291,6 +291,7 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
         tenant_reference: str,
         requesting_principal: RequestingPrincipal,
         proposing_agent: ProposingAgent | None = None,
+        proposal_reference: str | None = None,
     ) -> ActionOperationResult:
         return await self.runtime.prepare(
             self.definition,
@@ -298,6 +299,7 @@ class _StripeOperation(Generic[CommandT, SnapshotT, PreviewT, ResultT]):
             command=request,
             requesting_principal=requesting_principal,
             proposing_agent=proposing_agent,
+            proposal_reference=proposal_reference,
         )
 
     async def record_authority(

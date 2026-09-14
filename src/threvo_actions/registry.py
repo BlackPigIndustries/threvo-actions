@@ -18,6 +18,7 @@ from .models import (
     ExperimentalModel,
     GovernedExecutor,
     ProposingAgent,
+    RecoveryOperator,
     RequestingPrincipal,
     SafeReference,
 )
@@ -53,6 +54,15 @@ class DecisionContext(ExperimentalModel):
 class ReadContext(ExperimentalModel):
     tenant_reference: SafeReference
     consumer: EvidenceConsumer
+
+
+class RecoveryContext(ExperimentalModel):
+    """Authenticated host context for an operator-requested verification reset."""
+
+    tenant_reference: SafeReference
+    operator: RecoveryOperator
+    intervention_reference: SafeReference
+    requested_at: AwareDatetime
 
 
 class ExecutionContext(ExperimentalModel):
@@ -200,6 +210,14 @@ class AuthorizationPort(Protocol[CommandContraT, PrivateContraT]):
     async def can_read(self, proposal_reference: str, *, context: ReadContext) -> bool: ...
 
 
+class RecoveryAuthorizationPort(Protocol):
+    """Host authorization boundary for operator-requested verification recovery."""
+
+    async def can_recover(
+        self, proposal_reference: str, *, context: RecoveryContext
+    ) -> AuthorizationResult: ...
+
+
 class AuthorityEvaluatorPort(Protocol):
     async def evaluate(
         self,
@@ -254,6 +272,7 @@ class ActionDefinition(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     target_identity: AuthoritativeTarget
     authority_audience: str
     authority_channel_assurance: str
+    recovery_authorization: RecoveryAuthorizationPort | None = None
     verification_delay: timedelta = timedelta(0)
     max_verification_attempts: int = 3
     effect_kind: EffectKind = "single"

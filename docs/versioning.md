@@ -22,9 +22,9 @@ release cadence separately affects whether adopters can evaluate and trust a
 supported line. The [0.4 stabilization policy](stabilization.md) pauses feature
 releases until its evidence gates pass.
 
-## Supported at `0.5.0`
+## Supported at `0.6.0`
 
-The following surfaces are supported at the exact `0.5.0` release:
+The following surfaces are supported at the exact `0.6.0` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -44,6 +44,7 @@ The following surfaces are supported at the exact `0.5.0` release:
 - documented Pydantic AI names in
   `threvo_actions.integrations.pydantic_ai`;
 - names listed in `threvo_actions.integrations.aws_kms.__all__`;
+- names listed in `threvo_actions.integrations.local_kek.__all__`;
 - the documented contracts in `threvo_actions.integrations.stripe`; and
 - the documented `threvo-actions` CLI commands and exit behavior.
 
@@ -51,8 +52,17 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.5.0` without another explicitly
+safety check is not permitted after `0.6.0` without another explicitly
 documented exception.
+
+`0.6.0` is the Threvo pilot consolidation release. It adds an explicit recovery
+authorization port, host-owned proposal references, lifecycle categories,
+caller-owned PostgreSQL transaction composition, an installed recovery worker
+and Stripe host exercise, local-KEK envelope protection, existing-tool Pydantic
+AI bindings, and minimized external-attestation references. The root additions
+are additive; the experimental authoring and evidence surfaces still require an
+exact pin and equivalence tests. Follow the
+[`0.6.0` migration record](releases/0.6.0.md).
 
 `0.5.0` adds host-authorized operator recovery for pending or unresolved
 verification. It extends the experimental `internal/v0` receipt union with the

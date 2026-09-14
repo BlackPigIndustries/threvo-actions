@@ -2,77 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from threvo_actions.migrations import quote_schema_name
-from threvo_actions.models import ExperimentalModel, SafeReference
 from threvo_actions.recovery import (
-    ActionRecoveryOperation,
-    ActionRecoveryView,
-    ActionWorkCursor,
     ActionWorkItem,
-    ActionWorkOperation,
-    ActionWorkSource,
+    RecoveryLeaseSchedule,
+    RecoveryWorker,
+    RecoveryWorkerDisposition,
+    RecoveryWorkerResult,
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     import asyncpg
-
-    from threvo_actions import ReadContext
-    from threvo_actions.runtime import ActionOperationResult
-
-
-class RecoveryActionGroup(Protocol):
-    async def read_recovery(
-        self, proposal_reference: str, *, context: ReadContext
-    ) -> ActionRecoveryView: ...
-
-    async def execute(
-        self, *, tenant_reference: str, proposal_reference: str
-    ) -> ActionOperationResult: ...
-
-    async def reconcile(
-        self, *, tenant_reference: str, proposal_reference: str
-    ) -> ActionOperationResult: ...
-
-    async def expire_due(
-        self, *, tenant_reference: str, proposal_reference: str
-    ) -> ActionOperationResult: ...
-
-
-class RecoveryLeaseSchedule(Protocol):
-    """Host-owned durable scheduling; tokens prevent stale acknowledgements."""
-
-    async def claim(
-        self, item: ActionWorkItem, *, now: datetime, lease_until: datetime
-    ) -> str | None: ...
-
-    async def complete(
-        self,
-        *,
-        proposal_reference: str,
-        token: str,
-        next_attempt_at: datetime | None,
-        attention_reason: str | None,
-    ) -> bool: ...
-
-
-class RecoveryWorkerDisposition(StrEnum):
-    COMPLETED = "completed"
-    DEFERRED = "deferred"
-    ATTENTION = "attention"
-    ALREADY_LEASED = "already_leased"
-
-
-class RecoveryWorkerResult(ExperimentalModel):
-    proposal_reference: SafeReference
-    disposition: RecoveryWorkerDisposition
-    operation: ActionWorkOperation
-    reason_code: SafeReference | None = None
 
 
 class PostgresRecoveryLeaseSchedule:
@@ -152,120 +97,10 @@ class PostgresRecoveryLeaseSchedule:
         return result in {"DELETE 1", "UPDATE 1"}
 
 
-@dataclass(frozen=True)
-class RecoveryWorker:
-    source: ActionWorkSource
-    schedule: RecoveryLeaseSchedule
-    actions: dict[tuple[str, str, int], RecoveryActionGroup]
-    read_context: ReadContext
-    lease_duration: timedelta = timedelta(minutes=1)
-    retry_delay: timedelta = timedelta(seconds=30)
-
-    async def scan(
-        self, *, cutoff: datetime, page_size: int = 100
-    ) -> tuple[RecoveryWorkerResult, ...]:
-        if self.read_context.tenant_reference == "":
-            raise ValueError("worker read context requires a tenant")
-        results: list[RecoveryWorkerResult] = []
-        cursor: ActionWorkCursor | None = None
-        while True:
-            page = await self.source.discover_due(
-                tenant_reference=self.read_context.tenant_reference,
-                cutoff=cutoff,
-                limit=page_size,
-                cursor=cursor,
-            )
-            for item in page.items:
-                results.append(await self._run(item, now=cutoff))
-            if page.next_cursor is None:
-                return tuple(results)
-            cursor = page.next_cursor
-
-    async def _run(self, item: ActionWorkItem, *, now: datetime) -> RecoveryWorkerResult:
-        token = await self.schedule.claim(
-            item,
-            now=now,
-            lease_until=now + self.lease_duration,
-        )
-        if token is None:
-            return RecoveryWorkerResult(
-                proposal_reference=item.proposal_reference,
-                disposition=RecoveryWorkerDisposition.ALREADY_LEASED,
-                operation=item.operation,
-            )
-        key = (
-            item.action_type.namespace,
-            item.action_type.name,
-            item.action_type.version,
-        )
-        group = self.actions.get(key)
-        if group is None or item.operation is ActionWorkOperation.ATTENTION:
-            await self.schedule.complete(
-                proposal_reference=item.proposal_reference,
-                token=token,
-                next_attempt_at=now + self.retry_delay,
-                attention_reason=item.reason_code or "recovery_action_unconfigured",
-            )
-            return RecoveryWorkerResult(
-                proposal_reference=item.proposal_reference,
-                disposition=RecoveryWorkerDisposition.ATTENTION,
-                operation=item.operation,
-                reason_code=item.reason_code or "recovery_action_unconfigured",
-            )
-        try:
-            if item.operation is ActionWorkOperation.EXECUTE:
-                view = await group.read_recovery(item.proposal_reference, context=self.read_context)
-                if not any(
-                    step.operation is ActionRecoveryOperation.EXECUTE
-                    for step in view.recommended_steps
-                ):
-                    await self.schedule.complete(
-                        proposal_reference=item.proposal_reference,
-                        token=token,
-                        next_attempt_at=now + self.retry_delay,
-                        attention_reason="recovery_execution_deferred",
-                    )
-                    return RecoveryWorkerResult(
-                        proposal_reference=item.proposal_reference,
-                        disposition=RecoveryWorkerDisposition.DEFERRED,
-                        operation=item.operation,
-                        reason_code="recovery_execution_deferred",
-                    )
-                await group.execute(
-                    tenant_reference=self.read_context.tenant_reference,
-                    proposal_reference=item.proposal_reference,
-                )
-            elif item.operation is ActionWorkOperation.EXPIRE:
-                await group.expire_due(
-                    tenant_reference=self.read_context.tenant_reference,
-                    proposal_reference=item.proposal_reference,
-                )
-            else:
-                await group.reconcile(
-                    tenant_reference=self.read_context.tenant_reference,
-                    proposal_reference=item.proposal_reference,
-                )
-        except Exception:
-            await self.schedule.complete(
-                proposal_reference=item.proposal_reference,
-                token=token,
-                next_attempt_at=now + self.retry_delay,
-                attention_reason="recovery_operation_failed",
-            )
-            return RecoveryWorkerResult(
-                proposal_reference=item.proposal_reference,
-                disposition=RecoveryWorkerDisposition.DEFERRED,
-                operation=item.operation,
-                reason_code="recovery_operation_failed",
-            )
-        await self.schedule.complete(
-            proposal_reference=item.proposal_reference,
-            token=token,
-            next_attempt_at=None,
-            attention_reason=None,
-        )
-        return RecoveryWorkerResult(
-            proposal_reference=item.proposal_reference,
-            disposition=RecoveryWorkerDisposition.COMPLETED,
-            operation=item.operation,
-        )
+__all__ = [
+    "PostgresRecoveryLeaseSchedule",
+    "RecoveryLeaseSchedule",
+    "RecoveryWorker",
+    "RecoveryWorkerDisposition",
+    "RecoveryWorkerResult",
+]

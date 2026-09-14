@@ -169,6 +169,7 @@ def test_action_compiles_field_for_field_to_the_public_definition() -> None:
         target_identity=RefundAction.target_identity,
         authority_audience="service:refunds",
         authority_channel_assurance="authenticated_session",
+        recovery_authorization=action,
     )
 
     assert compiled == explicit

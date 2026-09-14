@@ -93,6 +93,7 @@ nav:
   - Integrations:
       - Coding agents: integrations/coding-agents.md
       - Pydantic AI: integrations/pydantic-ai.md
+      - Brownfield adoption: integrations/brownfield-adoption.md
       - Approval channels: integrations/approval-channels.md
       - Stripe refunds: integrations/stripe.md
       - Stripe Actions: integrations/stripe-actions.md
@@ -101,6 +102,7 @@ nav:
       - Recovery worker: integrations/recovery-worker.md
       - Stripe recovery cases: integrations/stripe-recovery.md
       - AWS KMS protection: integrations/aws-kms.md
+      - Local KEK protection: integrations/local-kek.md
       - PostgreSQL quickstart: integrations/postgres.md
       - PostgreSQL deployment: postgres.md
       - SQLAlchemy and Alembic: integrations/sqlalchemy-alembic.md
@@ -160,6 +162,7 @@ nav:
       - Framework access design: design/framework-access.md
       - AP2 compatibility decision: design/ap2-compatibility.md
       - Versioning: versioning.md
+      - Release record 0.6.0: releases/0.6.0.md
       - Release record 0.5.0: releases/0.5.0.md
       - Release record 0.4.3: releases/0.4.3.md
       - Release record 0.4.2: releases/0.4.2.md

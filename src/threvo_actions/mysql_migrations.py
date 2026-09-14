@@ -61,6 +61,13 @@ _MYSQL_MIGRATION_COMPATIBILITY = (
         False,
         True,
     ),
+    MigrationCompatibility(
+        4,
+        "004_external_authority_attestation.sql",
+        MigrationPhase.CONTRACT,
+        False,
+        True,
+    ),
 )
 
 

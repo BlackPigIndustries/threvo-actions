@@ -35,9 +35,9 @@ def test_explicit_migration_is_idempotent_and_checksum_protected() -> None:
         async with empty_database() as (pool, _):
             initial = await inspect_mysql(pool)
             assert initial.applied_versions == ()
-            assert initial.pending_versions == (1, 2, 3)
+            assert initial.pending_versions == (1, 2, 3, 4)
             migrated = await migrate_mysql(pool)
-            assert migrated.applied_versions == (1, 2, 3)
+            assert migrated.applied_versions == (1, 2, 3, 4)
             assert migrated.pending_versions == ()
             assert await migrate_mysql(pool) == migrated
             async with pool.acquire() as connection, connection.cursor() as cursor:
@@ -191,7 +191,7 @@ def test_missing_history_recovers_idempotent_objects_and_schema_drift_fails_clos
                 await connection.commit()
 
             recovered = await migrate_mysql(pool)
-            assert recovered.applied_versions == (1, 2, 3)
+            assert recovered.applied_versions == (1, 2, 3, 4)
             assert recovered.pending_versions == ()
 
             async with pool.acquire() as connection, connection.cursor() as cursor:
@@ -467,7 +467,8 @@ def test_populated_version_one_preserves_maximum_public_reference_widths(
             ):
                 await migrate_mysql(pool)
             assert (await inspect_mysql(pool)).applied_versions == (1,)
-            assert (await migrate_mysql(pool, writers_quiesced=True)).applied_versions == (1, 2, 3)
+            migrated = await migrate_mysql(pool, writers_quiesced=True)
+            assert migrated.applied_versions == (1, 2, 3, 4)
             loaded = await MySQLActionStore(pool).get(
                 record.tenant_reference, record.proposal_reference
             )
@@ -621,7 +622,7 @@ def test_migration_recovers_after_real_failure_between_ddl_boundaries(
 
             monkeypatch.setattr(mysql_migrations, "_packaged_mysql_migrations", original_loader)
             recovered = await migrate_mysql(pool, writers_quiesced=True)
-            assert recovered.applied_versions == (1, 2, 3)
+            assert recovered.applied_versions == (1, 2, 3, 4)
             assert recovered.pending_versions == ()
 
     asyncio.run(scenario())

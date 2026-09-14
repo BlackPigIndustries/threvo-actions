@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --extra dev --locked
+      - run: uv sync --extra dev --extra local-kek --locked
       - run: >-
           uv run pytest -q
           --ignore=tests/integration/postgres

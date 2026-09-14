@@ -36,8 +36,10 @@ from threvo_actions.integrations.pydantic_ai import (
     ActionCapability,
     ActionRecoveryToolBinding,
     ActionToolBinding,
+    ExistingToolActionBinding,
     ScopedActionToolBinding,
     _contains_json_float_for_decimal,
+    build_existing_tool_action_toolset,
 )
 
 
@@ -46,6 +48,44 @@ def test_capability_requires_at_least_one_explicit_action_binding() -> None:
 
     with pytest.raises(ValueError, match="at least one"):
         ActionCapability(runtime=stack.runtime, bindings=[])
+
+
+def test_existing_tool_binding_adds_approval_without_exposing_action_internals() -> None:
+    stack = build_stack()
+
+    async def update_limit(ctx: RunContext[AgentDeps], amount: str) -> str:
+        del ctx
+        return amount
+
+    toolset = build_existing_tool_action_toolset(
+        bindings=(
+            ExistingToolActionBinding(
+                name="update_limit",
+                action_type=stack.action.action_type,
+            ),
+        ),
+        executors={"update_limit": update_limit},
+    )
+
+    tool = toolset.tools["update_limit"]
+    assert tool.requires_approval is True
+    assert tool.function_schema.json_schema["properties"] == {"amount": {"type": "string"}}
+
+
+def test_existing_tool_binding_rejects_model_controlled_proposal_reference() -> None:
+    stack = build_stack()
+
+    async def update_limit(ctx: RunContext[AgentDeps], proposal_reference: str) -> str:
+        del ctx
+        return proposal_reference
+
+    binding = ExistingToolActionBinding(
+        name="update_limit",
+        action_type=stack.action.action_type,
+    )
+
+    with pytest.raises(ValueError, match="exposes internal arguments: proposal_reference"):
+        binding.validate_executor(update_limit)
 
 
 @pytest.mark.parametrize(

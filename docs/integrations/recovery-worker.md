@@ -19,8 +19,11 @@ worker = RecoveryWorker(
 results = await worker.scan(cutoff=clock.now(), page_size=100)
 ```
 
-The reference implementation is in `examples/stripe_host/worker.py`. Its host
-schema contains a separate `recovery_schedule` table. The schedule leases work
+`RecoveryWorker`, `RecoveryLeaseSchedule`, and `RecoveryActionGroup` are
+installed library contracts under `threvo_actions.experimental`. The concrete
+PostgreSQL schedule in `examples/stripe_host/worker.py` remains a host recipe
+because queue ownership, retry timing, and operator escalation belong to the
+application. Its schema contains a separate `recovery_schedule` table. The schedule leases work
 with opaque tokens, defers failed or unchanged attempts, and rejects an old
 worker's acknowledgement after a newer lease was issued. It is operational
 throttling; runtime compare-and-set, execution admission, authority, expiry,

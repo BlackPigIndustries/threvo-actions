@@ -69,6 +69,16 @@ def test_experimental_authoring_surface_stays_namespaced() -> None:
         "DependencyScopeFactory",
         "EvidenceValidationReport",
         "RegisteredAction",
+        "RecoveryAuthorizationPort",
+        "RecoveryActionGroup",
+        "RecoveryContext",
+        "RecoveryLeaseSchedule",
+        "RecoveryWorker",
+        "RecoveryWorkerDisposition",
+        "RecoveryWorkerResult",
+        "LifecycleDisposition",
+        "LifecycleCategory",
+        "classify_lifecycle",
         "render_evidence_html",
         "validate_evidence_bundle",
     }
@@ -121,6 +131,14 @@ def test_release_behaviorally_qualifies_the_installed_aws_kms_extra() -> None:
 
     assert "scripts/smoke_aws_kms_artifact.py" in workflow
     assert 'if test "$PROFILE" = "aws-kms" || test "$PROFILE" = "all"' in workflow
+
+
+def test_release_behaviorally_qualifies_the_installed_local_kek_extra() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "scripts/smoke_local_kek_artifact.py" in workflow
+    assert 'if test "$PROFILE" = "local-kek" || test "$PROFILE" = "all"' in workflow
+    assert 'local-kek) profile_extras="[local-kek]"' in workflow
 
 
 def test_github_release_uses_the_requested_versions_release_record() -> None:
@@ -193,6 +211,7 @@ def test_adoption_bypasses_are_bound_to_exact_tags_not_a_version_range() -> None
         "v0.4.2",
         "v0.4.3",
         "v0.5.0",
+        "v0.6.0",
     ]
 
 
@@ -204,6 +223,16 @@ def test_release_050_pilot_bypass_is_explicit_default_off_and_not_reusable() -> 
     assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
     assert "one-time v0.5.0 Threvo-pilot release bypass" in workflow
     assert "release=v0.5.0" not in adoption_record
+
+
+def test_release_060_pilot_bypass_is_explicit_default_off_and_not_reusable() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    adoption_record = (ROOT / "docs/testing/gradual-reveal-adoption.md").read_text()
+
+    assert 'test "$RELEASE_TAG" = "v0.6.0"' in workflow
+    assert 'test "$SKIP_ADOPTION_GATE" = "true"' in workflow
+    assert "one-time v0.6.0 pilot-consolidation release bypass" in workflow
+    assert "release=v0.6.0" not in adoption_record
 
 
 def test_release_030_adoption_bypass_is_explicit_default_off_and_not_reusable() -> None:

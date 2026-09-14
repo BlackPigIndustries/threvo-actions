@@ -7,6 +7,7 @@ import pytest
 from tests.unit.test_runtime import (
     DeterministicSecrets,
     HostPorts,
+    authority_for,
     authorize,
     definition,
     prepare,
@@ -22,6 +23,7 @@ from threvo_actions import (
     VerificationResult,
     VerificationStatus,
 )
+from threvo_actions.authority import AuthorityEvidence, ExternalAuthorityAttestation
 from threvo_actions.evidence import (
     ActionEvidenceBundle,
     EvidenceValidationReason,
@@ -44,6 +46,7 @@ from threvo_actions.experimental import (
 from threvo_actions.experimental import (
     validate_evidence_bundle as experimental_validate_evidence_bundle,
 )
+from threvo_actions.models import ConfirmingAuthority
 from threvo_actions.recovery import ActionRecoveryView as CanonicalActionRecoveryView
 from threvo_actions.runtime import ProposalNotFoundError
 
@@ -170,6 +173,52 @@ def test_authorized_export_round_trips_as_immutable_minimized_json() -> None:
         serialized = bundle.model_dump_json()
         for secret in ("private-account-value", "ciphertext", "proposal_commitment"):
             assert secret not in serialized
+
+    asyncio.run(scenario())
+
+
+def test_export_binds_a_host_verified_external_attestation_by_reference() -> None:
+    async def scenario() -> None:
+        runtime, store, _, _ = runtime_parts()
+        action = definition(HostPorts(), DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        base = await authority_for(store, prepared.proposal_reference)
+        evidence = AuthorityEvidence.model_validate(
+            {
+                **base.model_dump(mode="python"),
+                "external_attestation": ExternalAuthorityAttestation(
+                    format="sd-jwt",
+                    issuer_reference="issuer:payments",
+                    artifact_reference="attestation:42",
+                    artifact_digest="sha256:" + "a" * 64,
+                ),
+            }
+        )
+        await runtime.record_authority(
+            action,
+            evidence=evidence,
+            authenticated_authority=ConfirmingAuthority(reference="user:manager"),
+        )
+
+        bundle = await runtime.export_evidence(
+            action,
+            proposal_reference=prepared.proposal_reference,
+            context=_context(),
+        )
+
+        summary = bundle.authority_summaries[0]
+        assert summary.external_attestation == evidence.external_attestation
+        tampered_summary = summary.model_copy(
+            update={
+                "external_attestation": summary.external_attestation.model_copy(
+                    update={"artifact_digest": "sha256:" + "b" * 64}
+                )
+            }
+        )
+        tampered = bundle.model_copy(update={"authority_summaries": (tampered_summary,)})
+        assert (
+            EvidenceValidationReason.DIGEST_MISMATCH in validate_evidence_bundle(tampered).reasons
+        )
 
     asyncio.run(scenario())
 

@@ -10,6 +10,15 @@ from ..evidence import (
     render_evidence_html,
     validate_evidence_bundle,
 )
+from ..recovery import (
+    RecoveryActionGroup,
+    RecoveryLeaseSchedule,
+    RecoveryWorker,
+    RecoveryWorkerDisposition,
+    RecoveryWorkerResult,
+)
+from ..registry import RecoveryAuthorizationPort, RecoveryContext
+from ..runtime import LifecycleCategory, LifecycleDisposition, classify_lifecycle
 from .application import (
     ActionApplication,
     ActionApplicationError,
@@ -44,6 +53,16 @@ __all__ = [
     "DependencyScopeFactory",
     "EvidenceValidationReport",
     "RegisteredAction",
+    "RecoveryAuthorizationPort",
+    "RecoveryActionGroup",
+    "RecoveryContext",
+    "RecoveryLeaseSchedule",
+    "RecoveryWorker",
+    "RecoveryWorkerDisposition",
+    "RecoveryWorkerResult",
+    "LifecycleDisposition",
+    "LifecycleCategory",
+    "classify_lifecycle",
     "render_evidence_html",
     "validate_evidence_bundle",
 ]

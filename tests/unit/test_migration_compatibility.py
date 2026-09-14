@@ -52,6 +52,13 @@ def test_packaged_migrations_publish_explicit_compatibility_metadata() -> None:
             False,
             True,
         ),
+        MigrationCompatibility(
+            4,
+            "004_external_authority_attestation.sql",
+            MigrationPhase.CONTRACT,
+            False,
+            True,
+        ),
     )
     assert sqlite_migration_compatibility() == (
         MigrationCompatibility(1, "001_action_runtime.sql", MigrationPhase.EXPAND, True, False),

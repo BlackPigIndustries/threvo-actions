@@ -108,6 +108,7 @@ from .postgres import (
     StripePostgresHostError,
     stripe_resource_lock_reference,
 )
+from .postgres_conformance import ExercisePool, PostgresStripeHostExerciseAdapter
 from .postgres_migrations import (
     StripePostgresMigration,
     migrate_stripe_postgres,
@@ -264,6 +265,8 @@ __all__ = [
     "BillingAuthorization",
     "CreditGateway",
     "InvoiceRepository",
+    "ExercisePool",
+    "PostgresStripeHostExerciseAdapter",
     "StripeBillingScenario",
     "SubscriptionGateway",
     "SubscriptionRepository",

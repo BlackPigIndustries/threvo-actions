@@ -104,6 +104,19 @@ def test_mysql_operator_recovery_migration_matches_python_contract() -> None:
     assert sql.index(drop_update_procedure) < sql.index(create_update_procedure)
 
 
+def test_mysql_external_attestation_migration_extends_evidence_validation() -> None:
+    sql = (
+        files("threvo_actions")
+        .joinpath("_migrations", "mysql", "004_external_authority_attestation.sql")
+        .read_text(encoding="utf-8")
+    )
+
+    assert "CREATE PROCEDURE threvo_actions_validate_proposal_data" in sql
+    assert "'$.external_attestation'" in sql
+    assert "'$.artifact_digest'" in sql
+    assert "CREATE PROCEDURE threvo_actions_runtime_update_proposal" in sql
+
+
 def test_mysql_grants_quote_accounts_and_keep_lanes_distinct() -> None:
     sql = render_mysql_grants(
         database="actions-db",

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Protocol
 
@@ -29,6 +31,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
     from contextlib import AbstractAsyncContextManager
 
 _JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, JsonValue])
@@ -68,6 +71,33 @@ class _Connection(Protocol):
 
 class ConnectionSource(Protocol):
     def acquire(self) -> AbstractAsyncContextManager[_Connection]: ...
+
+
+class TransactionalConnection(_Connection, Protocol):
+    """PostgreSQL connection whose caller-owned transaction can be verified."""
+
+    def is_in_transaction(self) -> bool: ...
+
+
+class TransactionOwnershipError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class CallerOwnedTransactionSource:
+    """Adapt one active host transaction for atomic local action writes.
+
+    Store methods create savepoints inside this transaction. The host owns the
+    outer commit or rollback and must not share the connection concurrently.
+    """
+
+    connection: TransactionalConnection
+
+    @asynccontextmanager
+    async def acquire(self) -> AsyncIterator[_Connection]:
+        if not self.connection.is_in_transaction():
+            raise TransactionOwnershipError("caller-owned transaction is not active")
+        yield self.connection
 
 
 class StoredDataCorruptionError(RuntimeError):

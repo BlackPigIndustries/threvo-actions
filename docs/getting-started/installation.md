@@ -4,7 +4,7 @@
 
 !!! note "Release availability"
 
-    These commands install the immutable `0.5.0` release after the signed tag
+    These commands install the immutable `0.6.0` release after the signed tag
     has completed the TestPyPI and PyPI release workflow. Never install a
     moving branch for a financial-action runtime.
 
@@ -12,7 +12,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run
 inside your project:
 
 ```bash
-uv add "threvo-actions==0.5.0"
+uv add "threvo-actions==0.6.0"
 ```
 
 The core package depends only on Pydantic and the Python standard library.
@@ -22,7 +22,7 @@ The core package depends only on Pydantic and the Python standard library.
 === "Stripe refunds"
 
     ```bash
-    uv add "threvo-actions[stripe]==0.5.0"
+    uv add "threvo-actions[stripe]==0.6.0"
     ```
 
     The async SDK adapter is optional. See the [Stripe guide](../integrations/stripe.md)
@@ -40,23 +40,34 @@ The core package depends only on Pydantic and the Python standard library.
     After the signed release completes, install the immutable package with:
 
     ```bash
-    uv add "threvo-actions[aws-kms]==0.5.0"
+    uv add "threvo-actions[aws-kms]==0.6.0"
     ```
 
     The extra installs the AES-GCM dependency, not an AWS SDK. Adapt the host's
     existing async KMS client and durable wrapped-key store to the small typed
     ports in the [AWS KMS guide](../integrations/aws-kms.md).
 
+=== "Local KEK protection"
+
+    ```bash
+    uv add "threvo-actions[local-kek]==0.6.0"
+    ```
+
+    Use this when the host already keeps a versioned 256-bit KEK in its secret
+    infrastructure. The library owns envelope encryption and the host owns KEK
+    retrieval plus durable wrapped-key storage. See the
+    [local KEK guide](../integrations/local-kek.md).
+
 === "PostgreSQL"
 
     ```bash
-    uv add "threvo-actions[postgres]==0.5.0"
+    uv add "threvo-actions[postgres]==0.6.0"
     ```
 
 === "MySQL"
 
     ```bash
-    uv add "threvo-actions[mysql]==0.5.0"
+    uv add "threvo-actions[mysql]==0.6.0"
     ```
 
     Use the official MySQL 8 adapter for production-oriented multi-worker
@@ -65,7 +76,7 @@ The core package depends only on Pydantic and the Python standard library.
 === "SQLAlchemy and Alembic"
 
     ```bash
-    uv add "threvo-actions[sqlalchemy]==0.5.0"
+    uv add "threvo-actions[sqlalchemy]==0.6.0"
     ```
 
     The host-framework recipe uses SQLAlchemy for application business data,
@@ -75,7 +86,7 @@ The core package depends only on Pydantic and the Python standard library.
 === "Pydantic AI"
 
     ```bash
-    uv add "threvo-actions[pydantic-ai]==0.5.0"
+    uv add "threvo-actions[pydantic-ai]==0.6.0"
     ```
 
     The integration pins the Pydantic AI version it is tested against but does
@@ -88,7 +99,7 @@ The core package depends only on Pydantic and the Python standard library.
     already includes it:
 
     ```bash
-    uv add "threvo-actions==0.5.0"
+    uv add "threvo-actions==0.6.0"
     ```
 
     It is supported for local development, evaluation, tests, and bounded

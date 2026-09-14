@@ -6,6 +6,45 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-15
+
+### Added
+
+- Add host-authorized operator recovery, an exhaustive public lifecycle
+  classification, and the installed bounded recovery worker previously confined
+  to the Stripe reference application.
+- Allow a host to supply its durable proposal reference at preparation time and
+  add caller-owned PostgreSQL transaction composition.
+- Add library-orchestrated PostgreSQL Stripe host exercises as an installed
+  integration rather than example-only code.
+- Add local, versioned KEK envelope protection with per-value keys,
+  authenticated metadata, rotation reads, and wrapped-key erasure.
+- Add a Pydantic AI brownfield layer that validates existing host tools and
+  marks them confirm-first without replacing the host confirmation system.
+- Allow authority evidence to retain a minimized reference and digest for an
+  externally verified attestation. Signature and artifact verification remain
+  host responsibilities.
+
+### Fixed
+
+- Require an explicit host recovery authorization port before resetting a
+  verification budget or recording an operator recovery receipt.
+- Correct terminal-state documentation after operator recovery made
+  `verification_unresolved` resumable; `is_terminal` now remains false while
+  that authorized recovery path exists, while `automatic_processing_closed`
+  tells unattended workers to stop.
+- Make the PostgreSQL Stripe deadline query explicitly timezone-aware and give
+  the host exercise a material cross-clock margin.
+- Extend the MySQL strict evidence contract and guarded append-only update
+  routine for optional external authority attestations through migration `004`.
+- Remove lifecycle classification tables from the Threvo pilot and use the
+  library's exhaustive categories for worker and product projections.
+
+### Documentation
+
+- Document transaction ownership, local KEK custody, existing-tool Pydantic AI
+  adoption, recovery authorization, and the Threvo pilot lessons.
+
 ## [0.5.0] - 2026-09-13
 
 ### Added
@@ -460,7 +499,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.1...v0.4.2

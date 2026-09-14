@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field, JsonValue, TypeAdapter, model_serializer, model_validator
 
-from .authority import AuthorityDecision
+from .authority import AuthorityDecision, ExternalAuthorityAttestation
 from .canonical import canonicalize_v1
 from .models import ActionType, EffectKind, ExperimentalModel, LifecycleStatus, SafeReference
 from .receipts import (
@@ -95,6 +95,7 @@ class EvidenceAuthoritySummary(ExperimentalModel):
     channel_assurance: SafeReference
     issued_at: datetime
     expires_at: datetime
+    external_attestation: ExternalAuthorityAttestation | None = None
 
 
 class ActionEvidenceBundle(ExperimentalModel):
@@ -181,6 +182,7 @@ def build_evidence_bundle(
                 channel_assurance=evidence.channel_assurance,
                 issued_at=evidence.issued_at,
                 expires_at=evidence.expires_at,
+                external_attestation=evidence.external_attestation,
             )
             for evidence in record.authority_evidence
         )

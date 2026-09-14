@@ -49,6 +49,7 @@ from threvo_actions.registry import (
     PreparationContext,
     PreparedAction,
     ReadContext,
+    RecoveryContext,
     ResolvedState,
     VerificationResult,
     VerificationStatus,
@@ -56,12 +57,15 @@ from threvo_actions.registry import (
 from threvo_actions.runtime import (
     ActionOperationResult,
     ActionRuntime,
+    AuthorizationDeniedError,
     InvalidAuthorityEvidenceError,
+    LifecycleCategory,
     OperationOutcome,
     ProposalNotFoundError,
     ProposalPersistenceOutcomeUnknownError,
     RetentionStoreUnavailableError,
     RuntimeReasonCode,
+    classify_lifecycle,
 )
 from threvo_actions.stores.base import EffectClaimResult, StoredProposal
 from threvo_actions.stores.memory import MemoryActionStore
@@ -88,6 +92,23 @@ def test_operation_result_derives_terminal_and_reconciliation_dispositions_exhau
         for status in LifecycleStatus
     }
 
+    assert {status: classify_lifecycle(status).category for status in LifecycleStatus} == {
+        LifecycleStatus.AWAITING_AUTHORITY: LifecycleCategory.AWAITING_AUTHORITY,
+        LifecycleStatus.DENIED: LifecycleCategory.REFUSED,
+        LifecycleStatus.EXPIRED: LifecycleCategory.STALE,
+        LifecycleStatus.AUTHORIZED: LifecycleCategory.PENDING,
+        LifecycleStatus.BLOCKED: LifecycleCategory.REFUSED,
+        LifecycleStatus.STALE: LifecycleCategory.STALE,
+        LifecycleStatus.SUPERSEDED: LifecycleCategory.STALE,
+        LifecycleStatus.EXECUTING: LifecycleCategory.PENDING,
+        LifecycleStatus.FAILED_KNOWN: LifecycleCategory.REFUSED,
+        LifecycleStatus.FAILED_UNKNOWN: LifecycleCategory.PENDING,
+        LifecycleStatus.VERIFICATION_PENDING: LifecycleCategory.PENDING,
+        LifecycleStatus.VERIFICATION_UNRESOLVED: LifecycleCategory.NEEDS_ATTENTION,
+        LifecycleStatus.PARTIALLY_SUCCEEDED: LifecycleCategory.NEEDS_ATTENTION,
+        LifecycleStatus.VERIFIED: LifecycleCategory.SETTLED,
+    }
+
     assert dispositions == {
         LifecycleStatus.AWAITING_AUTHORITY: (False, False),
         LifecycleStatus.DENIED: (True, False),
@@ -100,10 +121,12 @@ def test_operation_result_derives_terminal_and_reconciliation_dispositions_exhau
         LifecycleStatus.FAILED_KNOWN: (True, False),
         LifecycleStatus.FAILED_UNKNOWN: (False, True),
         LifecycleStatus.VERIFICATION_PENDING: (False, True),
-        LifecycleStatus.VERIFICATION_UNRESOLVED: (True, False),
+        LifecycleStatus.VERIFICATION_UNRESOLVED: (False, False),
         LifecycleStatus.PARTIALLY_SUCCEEDED: (True, False),
         LifecycleStatus.VERIFIED: (True, False),
     }
+
+    assert operation_result(LifecycleStatus.VERIFICATION_UNRESOLVED).automatic_processing_closed
 
 
 def test_library_reason_codes_are_typed_without_closing_host_codes() -> None:
@@ -388,6 +411,7 @@ class HostPorts:
         self.decide_allowed = True
         self.execute_allowed = True
         self.read_allowed = True
+        self.recovery_allowed = True
         self.erase_allowed = True
         self.authority_threshold = 1
         self.execution_status = ExecutionStatus.ACCEPTED
@@ -449,6 +473,15 @@ class HostPorts:
     async def can_read(self, proposal_reference: str, *, context: ReadContext) -> bool:
         del proposal_reference, context
         return self.read_allowed
+
+    async def can_recover(
+        self, proposal_reference: str, *, context: RecoveryContext
+    ) -> AuthorizationResult:
+        del proposal_reference, context
+        return AuthorizationResult(
+            allowed=self.recovery_allowed,
+            reason_code=None if self.recovery_allowed else "recovery_denied",
+        )
 
     async def evaluate(
         self,
@@ -582,6 +615,7 @@ def definition(
         target_identity=AuthoritativeTarget(reference="psp:refunds"),
         authority_audience="service:refunds",
         authority_channel_assurance="authenticated_session",
+        recovery_authorization=host,
     )
 
 
@@ -756,6 +790,29 @@ def test_preparation_persists_protected_private_state_and_never_executes() -> No
         assert "private-account-value" not in "".join(
             event.model_dump_json() for event in events.events
         )
+
+    asyncio.run(scenario())
+
+
+def test_preparation_accepts_a_host_owned_proposal_reference() -> None:
+    async def scenario() -> None:
+        runtime, store, _, _ = runtime_parts()
+        action = definition(HostPorts(), DeterministicSecrets())
+
+        result = await runtime.prepare(
+            action,
+            tenant_reference="tenant:a",
+            command=Command(order_reference="ORD-42"),
+            requesting_principal=RequestingPrincipal(reference="user:requester"),
+            proposal_reference="confirmation:existing-42",
+        )
+        record = await store.get("tenant:a", "confirmation:existing-42")
+
+        assert result.proposal_reference == "confirmation:existing-42"
+        assert record is not None
+        assert record.proposal_reference == "confirmation:existing-42"
+        assert record.commitment is not None
+        assert record.commitment.key_handle == "commitment:confirmation:existing-42"
 
     asyncio.run(scenario())
 
@@ -2478,6 +2535,50 @@ def test_operator_review_can_advance_a_waiting_verification_lease() -> None:
         )
 
         assert resumed.outcome is OperationOutcome.VERIFIED
+        assert host.executor_calls == 1
+        assert host.verifier_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_operator_review_requires_explicit_host_authorization_before_mutation() -> None:
+    async def scenario() -> None:
+        runtime, store, clock, _ = runtime_parts()
+        host = HostPorts()
+        host.recovery_allowed = False
+        host.verifications = [
+            VerificationResult[Result](status=VerificationStatus.TARGET_UNAVAILABLE)
+        ]
+        action = definition(host, DeterministicSecrets(), max_attempts=1)
+        prepared = await prepare(runtime, action)
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        clock.advance(timedelta(seconds=30))
+        unresolved = await runtime.reconcile(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        before = await store.get("tenant:a", prepared.proposal_reference)
+
+        with pytest.raises(AuthorizationDeniedError, match="recovery_denied"):
+            await runtime.resume_verification(
+                action,
+                tenant_reference="tenant:a",
+                proposal_reference=prepared.proposal_reference,
+                expected_revision=unresolved.revision,
+                operator=RecoveryOperator(reference="operator:untrusted"),
+                intervention_reference="case:untrusted",
+            )
+
+        after = await store.get("tenant:a", prepared.proposal_reference)
+        assert after == before
+        assert after is not None
+        assert not any(isinstance(receipt, RecoveryReceipt) for receipt in after.receipts)
         assert host.executor_calls == 1
         assert host.verifier_calls == 1
 
