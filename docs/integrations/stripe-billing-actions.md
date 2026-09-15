@@ -16,9 +16,9 @@ as `StripeActions.refunds`. Existing refund callers remain compatible.
 Scheduling cancellation does not end the subscription immediately. Withdrawal
 is supported only before that period ends. The host controls entitlements and
 any later response to actual subscription termination. Pending invoices and
-existing usage may still be billed. Initial support is for active, single-item,
-licensed subscriptions without schedules, pending updates, paused collection,
-custom cancellation dates or indirect Connect flows. Trials, metered items,
+existing usage may still be billed. Initial support is for active or trialing,
+single-item, licensed subscriptions without schedules, pending updates, paused
+collection, custom cancellation dates or indirect Connect flows. Metered items,
 multiple items, immediate cancellation and arbitrary dates are outside this
 contract. See [Stripe's cancellation semantics](https://docs.stripe.com/billing/subscriptions/cancel).
 

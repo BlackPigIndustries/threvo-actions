@@ -7,7 +7,7 @@ per-value keys, authenticated metadata, rotation reads, and cryptographic
 erasure used by the managed-KMS integration.
 
 ```bash
-uv add "threvo-actions[local-kek]==0.6.1"
+uv add "threvo-actions[local-kek]==0.6.2"
 ```
 
 The host implements two small ports:

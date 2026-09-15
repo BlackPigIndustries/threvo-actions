@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -12,6 +13,7 @@ from threvo_actions.integrations.stripe import (  # noqa: E402
     CreditNotePolicy,
     CreditNoteRequest,
     SubscriptionCancellationRequest,
+    SubscriptionObservation,
     SubscriptionOperation,
 )
 
@@ -34,6 +36,43 @@ def test_subscription_request_is_closed_strict_and_agent_safe():
         SubscriptionCancellationRequest.model_validate(
             {**request.model_dump(), "operation": "delete"}
         )
+
+
+def test_trialing_subscription_permits_period_end_cancellation():
+    observation = SubscriptionObservation(
+        subscription_id="sub_trialing123",
+        customer_id="cus_trialing123",
+        status="trialing",
+        livemode=False,
+        item_id="si_trialing123",
+        price_id="price_trialing123",
+        quantity=1,
+        period_start=datetime(2026, 9, 1, tzinfo=UTC),
+        period_end=datetime(2026, 10, 1, tzinfo=UTC),
+        cancel_at_period_end=False,
+        cancel_at=None,
+        supported=True,
+        correlation="",
+    )
+
+    assert observation.permits(
+        SubscriptionOperation.SCHEDULE,
+        now=datetime(2026, 9, 15, tzinfo=UTC),
+    )
+    scheduled = observation.model_copy(
+        update={
+            "cancel_at_period_end": True,
+            "cancel_at": observation.period_end,
+        }
+    )
+    assert scheduled.permits(
+        SubscriptionOperation.WITHDRAW,
+        now=datetime(2026, 9, 15, tzinfo=UTC),
+    )
+    assert not observation.model_copy(update={"status": "canceled"}).permits(
+        SubscriptionOperation.SCHEDULE,
+        now=datetime(2026, 9, 15, tzinfo=UTC),
+    )
 
 
 def test_credit_request_rejects_duplicate_lines_and_mixed_currencies():

@@ -50,7 +50,7 @@ and the compatible connector below.
 ## Existing connector
 
 ```bash
-uv add "threvo-actions[stripe]==0.6.1"
+uv add "threvo-actions[stripe]==0.6.2"
 ```
 
 Use `StripeRefundConnector` with `StripeSDKGateway` and the host's async
@@ -63,6 +63,11 @@ the optional dependency only when used.
 When composing `StripeActions`, pass the host's clock, identifiers, event sink,
 retention store and exact runtime revision when overriding runtime defaults.
 The facade shares one runtime and one clock across every configured group.
+
+Period-end cancellation accepts `active` and `trialing` subscriptions whose
+current period is established. For a trialing subscription, the observed
+period end is the cancellation boundary; the action does not imply immediate
+termination or suppress invoice items and usage that Stripe may still bill.
 
 Persist a `RefundIntent` and reserve its stable business identity before
 calling `submit`. Use `Money`/`Decimal` and the payment's authoritative currency

@@ -23,9 +23,9 @@ supported line. The [0.x pilot stabilization policy](stabilization.md) limits
 publication to corrective patches and explicitly reviewed, pilot-backed
 consolidation while its evidence gates remain open.
 
-## Supported at `0.6.1`
+## Supported at `0.6.2`
 
-The following surfaces are supported at the exact `0.6.1` release:
+The following surfaces are supported at the exact `0.6.2` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -53,8 +53,13 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.6.1` without another explicitly
+safety check is not permitted after `0.6.2` without another explicitly
 documented exception.
+
+`0.6.2` admits period-end cancellation and withdrawal for supported trialing
+subscriptions under the same safety checks as active subscriptions. It changes
+no action identity, serialized model, or database schema. Follow the
+[`0.6.2` migration record](releases/0.6.2.md).
 
 `0.6.1` corrects the 0.6.0 pilot surfaces. It completes recovery authorization
 through the gradual-reveal recipe, prevents unauthorized recovery calls from
