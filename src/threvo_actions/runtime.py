@@ -999,13 +999,6 @@ class ActionRuntime:
             raise ProposalNotFoundError
         if record.erasure_pending_at is not None or record.erased_at is not None:
             raise ProposalNotFoundError
-        if record.lifecycle_status not in {
-            LifecycleStatus.VERIFICATION_PENDING,
-            LifecycleStatus.VERIFICATION_UNRESOLVED,
-        }:
-            return self._result(record, self._outcome_for(record.lifecycle_status))
-        if record.revision != expected_revision:
-            return self._result(record, OperationOutcome.CONFLICT)
         now = self._clock.now()
         recovery_context = RecoveryContext(
             tenant_reference=tenant_reference,
@@ -1024,6 +1017,13 @@ class ActionRuntime:
                 recovery_authorization.reason_code
                 or RuntimeReasonCode.RECOVERY_NOT_AUTHORIZED.value
             )
+        if record.lifecycle_status not in {
+            LifecycleStatus.VERIFICATION_PENDING,
+            LifecycleStatus.VERIFICATION_UNRESOLVED,
+        }:
+            return self._result(record, self._outcome_for(record.lifecycle_status))
+        if record.revision != expected_revision:
+            return self._result(record, OperationOutcome.CONFLICT)
         causal_receipt: Receipt | None = next(
             (
                 receipt

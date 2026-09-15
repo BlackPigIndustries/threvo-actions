@@ -84,11 +84,12 @@ result = await action.resume_verification(
 )
 ```
 
-The definition must provide `recovery_authorization`. Its `can_recover()` method
+The definition must provide `recovery_authorization`. Gradual-reveal recipes
+set the same port on `ActionComponents`. Its `can_recover()` method
 receives a strict `RecoveryContext` containing the tenant, proposal, operator,
 intervention reference, and request time. The runtime calls it before writing a
-receipt, resetting the budget, or invoking the verifier. An absent port or a
-false result raises `AuthorizationDeniedError` with
+receipt, returning lifecycle or revision information, resetting the budget, or
+invoking the verifier. An absent port or a false result raises `AuthorizationDeniedError` with
 `recovery_not_authorized` and changes nothing.
 
 The host authenticates the operator before constructing `RecoveryOperator` and

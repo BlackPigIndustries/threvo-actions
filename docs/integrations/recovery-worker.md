@@ -25,7 +25,9 @@ PostgreSQL schedule in `examples/stripe_host/worker.py` remains a host recipe
 because queue ownership, retry timing, and operator escalation belong to the
 application. Its schema contains a separate `recovery_schedule` table. The schedule leases work
 with opaque tokens, defers failed or unchanged attempts, and rejects an old
-worker's acknowledgement after a newer lease was issued. It is operational
+worker's acknowledgement after a newer lease was issued. The worker reports
+that rejection as `lease_lost`; it never reports the attempted operation as
+completed. It is operational
 throttling; runtime compare-and-set, execution admission, authority, expiry,
 and verification leases remain authoritative.
 
@@ -44,14 +46,17 @@ and verification leases remain authoritative.
 
 The scan cutoff stays fixed across every keyset page. Rows changed during a scan
 may appear in the next scan. Route only an explicit registry of exact action
-namespace, name, and version. Unknown versions receive bounded attention and
-must never be imported dynamically or dropped.
+namespace, name, and version. Unknown versions receive suspended operator
+attention and must never be imported dynamically or dropped.
 
 Events and webhooks may wake a scan, but they are not the durable queue. Provider
 errors are sanitized to `recovery_operation_failed` and deferred; the worker
-does not retry in a tight loop. An accepted-but-unanswered mutation reconciles
-through an authoritative provider read and never calls `execute` merely because
-the response was lost.
+does not retry in a tight loop. Authorization denial is suspended as
+`recovery_authorization_denied` until the host explicitly reschedules it.
+`RecoveryLeaseSchedule.complete(next_attempt_at=None, attention_reason=...)`
+means suspended attention; both values absent mean successful removal. An
+accepted-but-unanswered mutation reconciles through an authoritative provider
+read and never calls `execute` merely because the response was lost.
 
 The PostgreSQL query relies on tenant scoping and existing lifecycle columns.
 Hosts with large per-tenant proposal volumes should inspect the actual query

@@ -167,7 +167,13 @@ class RecoveryActionGroup(Protocol):
 
 
 class RecoveryLeaseSchedule(Protocol):
-    """Host-owned durable scheduling; tokens prevent stale acknowledgements."""
+    """Host-owned durable scheduling; tokens prevent stale acknowledgements.
+
+    ``complete`` receives exactly one of three dispositions: no next attempt and
+    no reason removes completed work; a next attempt defers it; a reason without
+    a next attempt suspends it for operator attention. A false return means this
+    worker lost the lease and must not report the attempted disposition.
+    """
 
     async def claim(
         self, item: ActionWorkItem, *, now: datetime, lease_until: datetime
@@ -188,6 +194,7 @@ class RecoveryWorkerDisposition(StrEnum):
     DEFERRED = "deferred"
     ATTENTION = "attention"
     ALREADY_LEASED = "already_leased"
+    LEASE_LOST = "lease_lost"
 
 
 class RecoveryWorkerResult(ActionModel):
@@ -246,18 +253,22 @@ class RecoveryWorker:
         group = self.actions.get(key)
         if group is None or item.operation is ActionWorkOperation.ATTENTION:
             reason_code = item.reason_code or "recovery_action_unconfigured"
-            await self.schedule.complete(
+            acknowledged = await self.schedule.complete(
                 proposal_reference=item.proposal_reference,
                 token=token,
-                next_attempt_at=now + self.retry_delay,
+                next_attempt_at=None,
                 attention_reason=reason_code,
             )
+            if not acknowledged:
+                return self._lease_lost(item)
             return RecoveryWorkerResult(
                 proposal_reference=item.proposal_reference,
                 disposition=RecoveryWorkerDisposition.ATTENTION,
                 operation=item.operation,
                 reason_code=reason_code,
             )
+        from .runtime import AuthorizationDeniedError
+
         try:
             if item.operation is ActionWorkOperation.EXECUTE:
                 view = await group.read_recovery(item.proposal_reference, context=self.read_context)
@@ -265,12 +276,14 @@ class RecoveryWorker:
                     step.operation is ActionRecoveryOperation.EXECUTE
                     for step in view.recommended_steps
                 ):
-                    await self.schedule.complete(
+                    acknowledged = await self.schedule.complete(
                         proposal_reference=item.proposal_reference,
                         token=token,
                         next_attempt_at=now + self.retry_delay,
                         attention_reason="recovery_execution_deferred",
                     )
+                    if not acknowledged:
+                        return self._lease_lost(item)
                     return RecoveryWorkerResult(
                         proposal_reference=item.proposal_reference,
                         disposition=RecoveryWorkerDisposition.DEFERRED,
@@ -291,29 +304,57 @@ class RecoveryWorker:
                     tenant_reference=self.read_context.tenant_reference,
                     proposal_reference=item.proposal_reference,
                 )
+        except AuthorizationDeniedError:
+            acknowledged = await self.schedule.complete(
+                proposal_reference=item.proposal_reference,
+                token=token,
+                next_attempt_at=None,
+                attention_reason="recovery_authorization_denied",
+            )
+            if not acknowledged:
+                return self._lease_lost(item)
+            return RecoveryWorkerResult(
+                proposal_reference=item.proposal_reference,
+                disposition=RecoveryWorkerDisposition.ATTENTION,
+                operation=item.operation,
+                reason_code="recovery_authorization_denied",
+            )
         except Exception:
-            await self.schedule.complete(
+            acknowledged = await self.schedule.complete(
                 proposal_reference=item.proposal_reference,
                 token=token,
                 next_attempt_at=now + self.retry_delay,
                 attention_reason="recovery_operation_failed",
             )
+            if not acknowledged:
+                return self._lease_lost(item)
             return RecoveryWorkerResult(
                 proposal_reference=item.proposal_reference,
                 disposition=RecoveryWorkerDisposition.DEFERRED,
                 operation=item.operation,
                 reason_code="recovery_operation_failed",
             )
-        await self.schedule.complete(
+        acknowledged = await self.schedule.complete(
             proposal_reference=item.proposal_reference,
             token=token,
             next_attempt_at=None,
             attention_reason=None,
         )
+        if not acknowledged:
+            return self._lease_lost(item)
         return RecoveryWorkerResult(
             proposal_reference=item.proposal_reference,
             disposition=RecoveryWorkerDisposition.COMPLETED,
             operation=item.operation,
+        )
+
+    @staticmethod
+    def _lease_lost(item: ActionWorkItem) -> RecoveryWorkerResult:
+        return RecoveryWorkerResult(
+            proposal_reference=item.proposal_reference,
+            disposition=RecoveryWorkerDisposition.LEASE_LOST,
+            operation=item.operation,
+            reason_code="recovery_lease_lost",
         )
 
 

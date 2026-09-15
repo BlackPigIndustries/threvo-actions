@@ -8,14 +8,16 @@ from examples.stripe_host.worker import (
     RecoveryWorkerDisposition,
 )
 
-from threvo_actions import EvidenceConsumer, ReadContext
+from threvo_actions import ActionOperationResult, EvidenceConsumer, ReadContext
 from threvo_actions.integrations.stripe import StripeRefundScenario, stripe_refund_scenario
 from threvo_actions.recovery import (
+    ActionRecoveryView,
     ActionWorkCursor,
     ActionWorkItem,
     ActionWorkOperation,
     ActionWorkPage,
 )
+from threvo_actions.runtime import AuthorizationDeniedError
 from threvo_actions.testing import FixedClock
 
 NOW = datetime(2026, 9, 12, 12, 0, tzinfo=UTC)
@@ -44,6 +46,7 @@ class StaticSource:
 class MemorySchedule:
     def __init__(self) -> None:
         self.tokens: dict[str, tuple[str, datetime]] = {}
+        self.attention_reasons: dict[str, str] = {}
         self.sequence = 0
 
     async def claim(
@@ -65,15 +68,59 @@ class MemorySchedule:
         next_attempt_at: datetime | None,
         attention_reason: str | None,
     ) -> bool:
-        del attention_reason
         current = self.tokens.get(proposal_reference)
         if current is None or current[0] != token:
             return False
-        if next_attempt_at is None:
+        if next_attempt_at is None and attention_reason is None:
             del self.tokens[proposal_reference]
+            self.attention_reasons.pop(proposal_reference, None)
+        elif next_attempt_at is None:
+            self.tokens[proposal_reference] = (token, datetime.max.replace(tzinfo=UTC))
+            self.attention_reasons[proposal_reference] = attention_reason
         else:
             self.tokens[proposal_reference] = (token, next_attempt_at)
+            if attention_reason is not None:
+                self.attention_reasons[proposal_reference] = attention_reason
         return True
+
+
+class RejectedAcknowledgementSchedule(MemorySchedule):
+    async def complete(
+        self,
+        *,
+        proposal_reference: str,
+        token: str,
+        next_attempt_at: datetime | None,
+        attention_reason: str | None,
+    ) -> bool:
+        del proposal_reference, token, next_attempt_at, attention_reason
+        return False
+
+
+class DeniedActionGroup:
+    async def read_recovery(
+        self, proposal_reference: str, *, context: ReadContext
+    ) -> ActionRecoveryView:
+        del proposal_reference, context
+        raise AuthorizationDeniedError("private authorization diagnostic")
+
+    async def execute(
+        self, *, tenant_reference: str, proposal_reference: str
+    ) -> ActionOperationResult:
+        del tenant_reference, proposal_reference
+        raise AssertionError("execution must not follow a denied recovery read")
+
+    async def reconcile(
+        self, *, tenant_reference: str, proposal_reference: str
+    ) -> ActionOperationResult:
+        del tenant_reference, proposal_reference
+        raise AuthorizationDeniedError("private authorization diagnostic")
+
+    async def expire_due(
+        self, *, tenant_reference: str, proposal_reference: str
+    ) -> ActionOperationResult:
+        del tenant_reference, proposal_reference
+        raise AuthorizationDeniedError("private authorization diagnostic")
 
 
 def work_item(
@@ -198,5 +245,56 @@ def test_unknown_action_version_is_deferred_for_attention() -> None:
         result = await worker_for(demo, StaticSource((item,)), MemorySchedule()).scan(cutoff=NOW)
         assert result[0].disposition is RecoveryWorkerDisposition.ATTENTION
         assert result[0].reason_code == "recovery_action_unconfigured"
+
+    asyncio.run(scenario())
+
+
+def test_rejected_schedule_acknowledgement_is_reported_as_a_lost_lease() -> None:
+    async def scenario() -> None:
+        demo = stripe_refund_scenario()
+        prepared = await demo.prepare()
+        await demo.approve(prepared.proposal_reference)
+        schedule = RejectedAcknowledgementSchedule()
+        result = await worker_for(
+            demo,
+            StaticSource(
+                (work_item(demo, prepared.proposal_reference, ActionWorkOperation.EXECUTE),)
+            ),
+            schedule,
+        ).scan(cutoff=NOW)
+
+        assert result[0].disposition is RecoveryWorkerDisposition.LEASE_LOST
+        assert result[0].reason_code == "recovery_lease_lost"
+
+    asyncio.run(scenario())
+
+
+def test_authorization_denial_is_suspended_for_operator_attention() -> None:
+    async def scenario() -> None:
+        demo = stripe_refund_scenario()
+        item = work_item(demo, "proposal:denied", ActionWorkOperation.EXECUTE)
+        schedule = MemorySchedule()
+        action_type = item.action_type
+        worker = RecoveryWorker(
+            source=StaticSource((item,)),
+            schedule=schedule,
+            actions={
+                (action_type.namespace, action_type.name, action_type.version): DeniedActionGroup()
+            },
+            read_context=ReadContext(
+                tenant_reference="tenant:demo",
+                consumer=EvidenceConsumer(reference="user:requester"),
+            ),
+        )
+
+        first = await worker.scan(cutoff=NOW)
+        second = await worker.scan(cutoff=NOW + timedelta(minutes=1))
+
+        assert first[0].disposition is RecoveryWorkerDisposition.ATTENTION
+        assert first[0].reason_code == "recovery_authorization_denied"
+        assert schedule.attention_reasons[item.proposal_reference] == (
+            "recovery_authorization_denied"
+        )
+        assert second[0].disposition is RecoveryWorkerDisposition.ALREADY_LEASED
 
     asyncio.run(scenario())

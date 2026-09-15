@@ -71,7 +71,7 @@ class PostgresRecoveryLeaseSchedule:
         next_attempt_at: datetime | None,
         attention_reason: str | None,
     ) -> bool:
-        if next_attempt_at is None:
+        if next_attempt_at is None and attention_reason is None:
             query = f"""DELETE FROM {self._schema}.recovery_schedule
                 WHERE tenant_reference = $1 AND proposal_reference = $2
                   AND lease_token = $3"""  # noqa: S608 -- schema is strictly validated
@@ -80,6 +80,20 @@ class PostgresRecoveryLeaseSchedule:
                 self._tenant_reference,
                 proposal_reference,
                 token,
+            )
+        elif next_attempt_at is None:
+            query = f"""UPDATE {self._schema}.recovery_schedule
+                SET leased_until = 'infinity'::timestamptz,
+                    next_attempt_at = 'infinity'::timestamptz,
+                    attention_reason = $4
+                WHERE tenant_reference = $1 AND proposal_reference = $2
+                  AND lease_token = $3"""  # noqa: S608 -- schema is strictly validated
+            result = await self._pool.execute(
+                query,
+                self._tenant_reference,
+                proposal_reference,
+                token,
+                attention_reason,
             )
         else:
             query = f"""UPDATE {self._schema}.recovery_schedule

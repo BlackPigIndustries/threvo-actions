@@ -420,6 +420,7 @@ class HostPorts:
         self.executor_calls = 0
         self.verifier_calls = 0
         self.erasure_authorization_calls = 0
+        self.recovery_authorization_calls = 0
         self.mutations = 0
         self.mutate_at_execution_boundary = False
         self.pause_execution = False
@@ -478,6 +479,7 @@ class HostPorts:
         self, proposal_reference: str, *, context: RecoveryContext
     ) -> AuthorizationResult:
         del proposal_reference, context
+        self.recovery_authorization_calls += 1
         return AuthorizationResult(
             allowed=self.recovery_allowed,
             reason_code=None if self.recovery_allowed else "recovery_denied",
@@ -2581,6 +2583,50 @@ def test_operator_review_requires_explicit_host_authorization_before_mutation() 
         assert not any(isinstance(receipt, RecoveryReceipt) for receipt in after.receipts)
         assert host.executor_calls == 1
         assert host.verifier_calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_operator_recovery_authorizes_before_status_or_revision_is_disclosed() -> None:
+    async def scenario() -> None:
+        runtime, store, _, _ = runtime_parts()
+        host = HostPorts()
+        action = definition(host, DeterministicSecrets())
+        prepared = await prepare(runtime, action)
+        host.recovery_allowed = False
+
+        with pytest.raises(AuthorizationDeniedError, match="recovery_denied"):
+            await runtime.resume_verification(
+                action,
+                tenant_reference="tenant:a",
+                proposal_reference=prepared.proposal_reference,
+                expected_revision=999,
+                operator=RecoveryOperator(reference="operator:untrusted"),
+                intervention_reference="case:untrusted",
+            )
+
+        assert host.recovery_authorization_calls == 1
+
+        host.recovery_allowed = True
+        await authorize(runtime, store, action, prepared.proposal_reference)
+        waiting = await runtime.execute(
+            action,
+            tenant_reference="tenant:a",
+            proposal_reference=prepared.proposal_reference,
+        )
+        host.recovery_allowed = False
+
+        with pytest.raises(AuthorizationDeniedError, match="recovery_denied"):
+            await runtime.resume_verification(
+                action,
+                tenant_reference="tenant:a",
+                proposal_reference=prepared.proposal_reference,
+                expected_revision=waiting.revision + 1,
+                operator=RecoveryOperator(reference="operator:untrusted"),
+                intervention_reference="case:untrusted",
+            )
+
+        assert host.recovery_authorization_calls == 2
 
     asyncio.run(scenario())
 

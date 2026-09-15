@@ -1,17 +1,22 @@
-# 0.x stabilization policy
+# 0.x pilot stabilization policy
 
-Status: active after the owner-directed 0.6.0 pilot-consolidation release.
+Status: active after the 0.6.1 corrective release.
 
-The project is holding feature releases and public-surface expansion after the
-0.6.0 Threvo-pilot consolidation release. Development may continue on develop,
-but no new
-connector, Stripe action group, lifecycle, or authoring abstraction is eligible
-for publication during this period.
+The project is stabilizing the Threvo pilot line. Development may continue on
+develop, but publication is limited to corrective patches and an explicitly
+reviewed consolidation that is both observed in a real pilot integration and
+provider-neutral. New connectors and speculative action groups remain
+ineligible while this policy is active.
 
-A patch may be released only for a correctness, security, compatibility, or
-material documentation defect in the supported 0.5 contract. Patch work must
+A patch may be released for a correctness, security, compatibility, or
+material documentation defect in the supported contract. Patch work must
 remain additive or preserve already valid calls unless a fail-closed safety fix
 requires an explicit migration note.
+
+A pilot consolidation requires a recorded integration failure or duplicated
+host mechanism, a provider-neutral port or model, conformance coverage in the
+library and Threvo, and an owner decision naming the exact release. It does not
+count as independent adoption and cannot weaken the exit conditions below.
 
 The hold ends only after all of these conditions are recorded:
 
@@ -53,6 +58,11 @@ recovery worker, an installed Stripe PostgreSQL conformance adapter, and a
 brownfield Pydantic AI binding layer. This is a bounded consolidation of
 observed adopter needs, not permission for further connector or action-group
 expansion. It does not count as independent adoption or end the hold.
+
+The repository owner's 2026-09-15 direction also requires the 0.6.1 corrective
+release for the recovery-authoring, authorization-order, scheduler
+acknowledgement, and local-KEK outcome defects found during internal review.
+This is corrective work under the policy rather than another feature exception.
 
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
 source of truth. Neither 0.5.0 nor 0.6.0 claims otherwise.

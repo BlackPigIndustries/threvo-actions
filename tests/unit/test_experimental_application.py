@@ -36,6 +36,7 @@ from threvo_actions.models import (
     RequestingPrincipal,
 )
 from threvo_actions.registry import (
+    ActionDefinition,
     AuthorizationPort,
     AuthorizationResult,
     DefinitionConformanceError,
@@ -43,6 +44,7 @@ from threvo_actions.registry import (
     PreparationPort,
     PreparedAction,
     ReadContext,
+    RecoveryAuthorizationPort,
     RetentionPort,
     StateResolverPort,
     VerifierPort,
@@ -83,6 +85,10 @@ class Dependencies:
     def __init__(self) -> None:
         self.closed = False
         self.store = MemoryActionStore()
+        self.recovery_authorization = Mock(spec=RecoveryAuthorizationPort)
+        self.recovery_authorization.can_recover = AsyncMock(
+            return_value=AuthorizationResult(allowed=True)
+        )
 
     def close(self) -> None:
         self.closed = True
@@ -178,6 +184,7 @@ def _components(
         clock=FixedClock(),
         identifiers=SequenceIdentifiers(),
         runtime_revision="threvo-actions/0.1.3",
+        recovery_authorization=dependencies.recovery_authorization,
     )
 
 
@@ -426,6 +433,39 @@ def test_bound_facade_forwards_recovery_evidence_and_observation(
         operator=RecoveryOperator(reference="operator:test"),
         intervention_reference="case:test",
     )
+
+
+def test_bound_recovery_uses_the_recipe_authorization_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = ActionApplication[Dependencies]()
+    registered = application.register(specification(), bound_recipe())
+    application.freeze()
+    dependencies = Dependencies()
+    expected = object()
+
+    async def resume(
+        runtime: object,
+        definition: ActionDefinition[Command, PrivateSnapshot, Preview, Result],
+        **kwargs: object,
+    ) -> object:
+        del runtime, kwargs
+        assert definition.recovery_authorization is dependencies.recovery_authorization
+        return expected
+
+    monkeypatch.setattr(application_module.ActionRuntime, "resume_verification", resume)
+    with application.bind(registered, dependencies=dependencies) as bound:
+        result = asyncio.run(
+            bound.resume_verification(
+                tenant_reference="tenant:test",
+                proposal_reference="proposal:test",
+                expected_revision=7,
+                operator=RecoveryOperator(reference="operator:test"),
+                intervention_reference="case:test",
+            )
+        )
+
+    assert result is expected
 
 
 def test_repeated_bindings_keep_tenant_scoped_services_separate() -> None:
