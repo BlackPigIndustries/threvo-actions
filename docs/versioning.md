@@ -19,12 +19,13 @@ not mean every host repository is atomic, every provider version is qualified,
 or every experimental serialization is frozen. Those are separate evidence
 gates. Migration records and contract tests identify code compatibility, while
 release cadence separately affects whether adopters can evaluate and trust a
-supported line. The [0.4 stabilization policy](stabilization.md) pauses feature
-releases until its evidence gates pass.
+supported line. The [0.x pilot stabilization policy](stabilization.md) limits
+publication to corrective patches and explicitly reviewed, pilot-backed
+consolidation while its evidence gates remain open.
 
-## Supported at `0.6.0`
+## Supported at `0.6.1`
 
-The following surfaces are supported at the exact `0.6.0` release:
+The following surfaces are supported at the exact `0.6.1` release:
 
 - names listed in `threvo_actions.__all__` and `threvo_actions.__version__`;
 - documented public names in `threvo_actions.conformance` and
@@ -52,8 +53,15 @@ A later patch release may add optional fields with safe defaults, new enum
 members that callers are already required to handle as unknown, new public
 helpers, or bug and security fixes that preserve this contract. Removing a
 name, making a valid call invalid, changing a result's meaning, or weakening a
-safety check is not permitted after `0.6.0` without another explicitly
+safety check is not permitted after `0.6.1` without another explicitly
 documented exception.
+
+`0.6.1` corrects the 0.6.0 pilot surfaces. It completes recovery authorization
+through the gradual-reveal recipe, prevents unauthorized recovery calls from
+receiving lifecycle data, makes worker lease loss and denied authorization
+honest, and distinguishes definite local wrapped-key rejection. It changes no
+database schema. Follow the
+[`0.6.1` migration record](releases/0.6.1.md).
 
 `0.6.0` is the Threvo pilot consolidation release. It adds an explicit recovery
 authorization port, host-owned proposal references, lifecycle categories,

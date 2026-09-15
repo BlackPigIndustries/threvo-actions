@@ -7,7 +7,7 @@ per-value keys, authenticated metadata, rotation reads, and cryptographic
 erasure used by the managed-KMS integration.
 
 ```bash
-uv add "threvo-actions[local-kek]==0.6.0"
+uv add "threvo-actions[local-kek]==0.6.1"
 ```
 
 The host implements two small ports:
@@ -46,6 +46,14 @@ is lost must be visible to `get()`. The adapter reconciles a failed write before
 deciding whether it is safe to raise. If both the write and that read are
 uncertain it raises `LocalWrappedKeyPersistenceOutcomeUnknownError` rather than
 guessing.
+
+A store that proves a write did not persist may raise
+`LocalWrappedKeyWriteRejectedError`; the adapter propagates that definite result
+without attempting reconciliation. A PostgreSQL store participating in a
+caller-owned transaction should perform `put()` inside a savepoint. This keeps
+the connection usable for `get()` after a statement rejection. Do not catch a
+database exception inside an open transaction and then attempt reconciliation
+on the transaction's aborted connection.
 
 The library does not read environment variables, choose secret names, persist
 keys, or create database roles. Production hosts should separate wrapped-key

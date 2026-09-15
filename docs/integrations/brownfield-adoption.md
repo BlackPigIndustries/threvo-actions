@@ -26,6 +26,13 @@ The Stripe PostgreSQL exercise is installed as
 ordinary writer path; importing a checklist or returning declared outcomes is
 not conformance evidence.
 
+`proposal_reference` is a host-owned identity, not an idempotency key. A second
+`prepare()` call with the same reference does not replay the earlier result:
+preparation may have read different business state, generated new protected
+material, or produced another receipt identity. Read the existing proposal and
+continue its lifecycle, or handle `ProposalAlreadyExistsError`; do not retry
+preparation blindly.
+
 ## What remains application-owned
 
 The application still authenticates people and agents, reconstructs current

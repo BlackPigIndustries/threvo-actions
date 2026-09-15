@@ -6,6 +6,22 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-15
+
+### Fixed
+
+- Wire `RecoveryAuthorizationPort` through gradual-reveal `ActionComponents`.
+- Authorize recovery before returning lifecycle, revision, preview, or result data.
+- Report rejected recovery-schedule acknowledgements as `lease_lost` and suspend
+  authorization denials for operator attention.
+- Preserve wrapped-key write rejections that an adapter proves did not persist.
+
+### Documentation
+
+- Define host proposal references as identities rather than idempotency keys,
+  document transaction-safe local-KEK writes, and describe the actual pilot
+  stabilization policy.
+
 ## [0.6.0] - 2026-09-15
 
 ### Added
@@ -499,7 +515,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.4.2...v0.4.3

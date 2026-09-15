@@ -46,6 +46,7 @@ from ..registry import (
     GovernedExecutorPort,
     PreparationPort,
     ReadContext,
+    RecoveryAuthorizationPort,
     RetentionPort,
     StateResolverPort,
     VerifierPort,
@@ -180,6 +181,7 @@ class ActionComponents(Generic[CommandT, PrivateSnapshotT, PreviewT, ResultT]):
     identifiers: IdentifierProvider | None = None
     event_sink: EventSink | None = None
     runtime_revision: str | None = None
+    recovery_authorization: RecoveryAuthorizationPort | None = None
 
 
 _REQUIRED_COMPONENT_FIELDS = (
@@ -574,6 +576,7 @@ class ActionApplication(Generic[DepsT]):
             target_identity=specification.target_identity,
             authority_audience=specification.authority_audience,
             authority_channel_assurance=specification.authority_channel_assurance,
+            recovery_authorization=components.recovery_authorization,
             verification_delay=specification.verification_delay,
             max_verification_attempts=specification.max_verification_attempts,
             effect_kind=specification.effect_kind,

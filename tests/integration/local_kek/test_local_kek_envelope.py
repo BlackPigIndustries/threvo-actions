@@ -11,6 +11,7 @@ from threvo_actions.integrations.local_kek import (
     LocalKekMaterial,
     LocalWrappedDataKey,
     LocalWrappedKeyDeleteOutcome,
+    LocalWrappedKeyWriteRejectedError,
 )
 from threvo_actions.models import ProposalIdentity
 
@@ -142,5 +143,29 @@ def test_tenant_rebinding_and_missing_old_kek_fail_closed() -> None:
         del keks.keys[payload.key_version]
         with pytest.raises(KeyError):
             await protection.unprotect_for(proposal_identity=identity, payload=payload)
+
+    asyncio.run(scenario())
+
+
+def test_definite_store_rejection_is_not_reclassified_as_uncertain() -> None:
+    class RejectedStore(MemoryEnvelopeStore):
+        async def put(self, *, key_handle: str, envelope: LocalWrappedDataKey) -> None:
+            del key_handle, envelope
+            raise LocalWrappedKeyWriteRejectedError("wrapped-key write was rolled back")
+
+        async def get(self, *, key_handle: str) -> LocalWrappedDataKey | None:
+            del key_handle
+            raise AssertionError("a definite rejection must not be reconciled")
+
+    async def scenario() -> None:
+        protection = LocalKekEnvelopeProtection(
+            keks=MemoryKekProvider(),
+            envelopes=RejectedStore(),
+        )
+        with pytest.raises(LocalWrappedKeyWriteRejectedError):
+            await protection.protect_for(
+                proposal_identity=_identity(),
+                canonical_payload=b"secret",
+            )
 
     asyncio.run(scenario())

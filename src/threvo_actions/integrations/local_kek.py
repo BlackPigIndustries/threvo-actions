@@ -79,7 +79,12 @@ class LocalWrappedKeyDeleteOutcome(StrEnum):
 
 
 class LocalWrappedKeyStore(Protocol):
-    """Authoritative persistence for proposal-bound locally wrapped keys."""
+    """Authoritative persistence for proposal-bound locally wrapped keys.
+
+    A failed ``put`` must leave ``get`` usable for acknowledgement
+    reconciliation, including inside caller-owned transactions. A store that
+    proves no write persisted may raise ``LocalWrappedKeyWriteRejectedError``.
+    """
 
     async def put(self, *, key_handle: str, envelope: LocalWrappedDataKey) -> None: ...
 
@@ -109,6 +114,10 @@ class LocalWrappedKeyPersistenceOutcomeUnknownError(RuntimeError):
         self.key_handle = key_handle
         self.purpose = purpose
         super().__init__("local wrapped-key persistence outcome is unknown")
+
+
+class LocalWrappedKeyWriteRejectedError(RuntimeError):
+    """A wrapped-key store proved that its attempted write did not persist."""
 
 
 class LocalKekEnvelopeProtection(
@@ -376,6 +385,8 @@ class LocalKekEnvelopeProtection(
         try:
             await self._envelopes.put(key_handle=handle, envelope=envelope)
         except BaseException as failure:
+            if isinstance(failure, LocalWrappedKeyWriteRejectedError):
+                raise
             try:
                 persisted = await self._envelopes.get(key_handle=handle)
             except BaseException as reconciliation_failure:
@@ -491,4 +502,5 @@ __all__ = [
     "LocalWrappedKeyDeleteOutcome",
     "LocalWrappedKeyPersistenceOutcomeUnknownError",
     "LocalWrappedKeyStore",
+    "LocalWrappedKeyWriteRejectedError",
 ]

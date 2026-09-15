@@ -44,6 +44,8 @@ on Pydantic's shallow `frozen` behavior.
 ordinary typed Python protocol or frozen dataclass. Given fresh `DepsT`, it
 produces the action-specific ports and providers required to construct an
 `ActionDefinition`. Pydantic does not validate or own those live objects.
+Recipes that enable operator recovery supply `recovery_authorization` through
+`ActionComponents`; omission remains a fail-closed configuration.
 
 Host-supplied recipe callables are trusted application code. The library can
 prove that its own objects do not retain scoped resources; it cannot prove
