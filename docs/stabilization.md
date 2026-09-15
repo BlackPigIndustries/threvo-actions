@@ -1,6 +1,6 @@
 # 0.x pilot stabilization policy
 
-Status: active after the 0.6.1 corrective release.
+Status: active after the 0.6.2 corrective release.
 
 The project is stabilizing the Threvo pilot line. Development may continue on
 develop, but publication is limited to corrective patches and an explicitly
@@ -64,5 +64,12 @@ release for the recovery-authoring, authorization-order, scheduler
 acknowledgement, and local-KEK outcome defects found during internal review.
 This is corrective work under the policy rather than another feature exception.
 
+The Threvo provider qualification on 2026-09-15 demonstrated that the supported
+period-end cancellation action refused the `trialing` subscriptions the pilot
+creates for new customers. Version 0.6.2 corrects that provider eligibility
+boundary without changing action identity, persistence, authority, reservation,
+or verification semantics. This is corrective work under the policy rather
+than a new action-group exception.
+
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
-source of truth. Neither 0.5.0 nor 0.6.0 claims otherwise.
+source of truth. No 0.5.x or 0.6.x release claims otherwise.

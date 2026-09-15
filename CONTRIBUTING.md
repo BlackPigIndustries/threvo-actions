@@ -116,6 +116,16 @@ Candidate qualification, signed tags, artifact identity, TestPyPI/PyPI
 verification, and protected environments remain mandatory. See the
 [`0.5.0` release record](docs/releases/0.5.0.md).
 
+The repository owner's 2026-09-15 direction permits the exact corrective
+`v0.6.2` tag with `skip_adoption_gate=true`. The Threvo pilot demonstrated that
+the supported cancellation action refused trialing subscriptions created by
+the pilot's ordinary billing flow. The patch expands provider eligibility
+without changing action identities, persistence, authority, reservation, or
+verification semantics. It does not count as outside adoption or resume
+feature releases. Candidate qualification, signed tags, artifact identity,
+TestPyPI/PyPI verification, and protected environments remain mandatory. See
+the [`0.6.2` release record](docs/releases/0.6.2.md).
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as

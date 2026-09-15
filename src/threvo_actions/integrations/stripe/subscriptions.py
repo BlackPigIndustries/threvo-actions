@@ -109,7 +109,7 @@ class SubscriptionObservation(ExperimentalModel):
     def permits(self, operation: SubscriptionOperation, *, now: datetime) -> bool:
         return (
             self.supported
-            and self.status == "active"
+            and self.status in {"active", "trialing"}
             and self.period_start <= now < self.period_end
             and self.cancel_at_period_end == (operation is SubscriptionOperation.WITHDRAW)
             and (
