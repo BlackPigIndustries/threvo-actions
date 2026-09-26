@@ -216,3 +216,11 @@ The distribution contains a version-matched Agent Skills guide:
 
 The guide teaches coding agents the same authority, persistence, recovery, and
 verification boundaries as the Python documentation.
+
+## Threvo workspace integration
+
+This directory is a separate repository and Python distribution. The backend
+uses the published release pinned in `../backend/pyproject.toml`, resolved in
+`../uv.lock`. Changes here require a release and an explicit backend dependency
+update before the application executes them. The host integration is described
+in [the workspace architecture](../docs/platform/ARCHITECTURE.md#accountable-action-lifecycle).
