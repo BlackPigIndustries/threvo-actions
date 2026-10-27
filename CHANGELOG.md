@@ -6,6 +6,14 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Fixed
+
+- The MySQL store works with PyMySQL 1.2.3, which a fresh install of the
+  `mysql` extra resolves. aiomysql 0.3.2 escapes `bytes` parameters with a
+  PyMySQL function that 1.2.3 disabled after GHSA-x4f8-9hx9-hpp9, so every
+  effect claim failed with `'str' object is not callable`. The effect identity
+  is now sent as hex and decoded by `UNHEX` in SQL.
+
 ### Changed
 
 - The `docs` extra requires `mkdocstrings[python]>=1.0.7,<2`; 0.30 fails to

@@ -164,6 +164,9 @@ def _stored_json(value: object) -> str:
     raise MySQLStoredDataCorruptionError("stored action data is corrupt")
 
 
+# aiomysql 0.3.2 cannot escape bytes parameters on PyMySQL >= 1.2.3, which
+# disabled the escaper it imports (GHSA-x4f8-9hx9-hpp9). The identity is sent
+# as hex and decoded by UNHEX, which escapes safely in every charset.
 def _effect_identity(action_type: ActionType, semantic_effect_reference: str) -> bytes:
     _validate_mysql_effect_identity(action_type, semantic_effect_reference)
     encoded_components = (
@@ -456,11 +459,11 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
                     SELECT proposal_reference, action_namespace, action_name, action_version,
                            semantic_effect_reference
                     FROM threvo_actions_effect_claims
-                    WHERE tenant_reference = %s AND effect_identity = %s
+                    WHERE tenant_reference = %s AND effect_identity = UNHEX(%s)
                     """,
                     (
                         tenant_reference,
-                        _effect_identity(action_type, semantic_effect_reference),
+                        _effect_identity(action_type, semantic_effect_reference).hex(),
                     ),
                 )
                 row = await cursor.fetchone()
@@ -500,11 +503,11 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             SELECT proposal_reference, action_namespace, action_name, action_version,
                    semantic_effect_reference
             FROM threvo_actions_effect_claims
-            WHERE tenant_reference = %s AND effect_identity = %s
+            WHERE tenant_reference = %s AND effect_identity = UNHEX(%s)
             """,
             (
                 proposal.tenant_reference,
-                _effect_identity(proposal.action_type, proposal.semantic_effect_reference),
+                _effect_identity(proposal.action_type, proposal.semantic_effect_reference).hex(),
             ),
         )
         row = await cursor.fetchone()
@@ -543,10 +546,10 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             return EffectClaimResult.OWNED_BY_PROPOSAL
         changed = await _procedure_rowcount(
             cursor,
-            "CALL threvo_actions_transfer_effect_claim(%s,%s,%s,%s,%s)",
+            "CALL threvo_actions_transfer_effect_claim(%s,UNHEX(%s),%s,%s,%s)",
             (
                 proposal.tenant_reference,
-                identity,
+                identity.hex(),
                 owner,
                 proposal.proposal_reference,
                 _mysql_datetime(admitted_at),
