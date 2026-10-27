@@ -6,6 +6,11 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+### Changed
+
+- The `docs` extra requires `mkdocstrings[python]>=1.0.7,<2`; 0.30 fails to
+  build against pymdown-extensions 12.
+
 ## [0.6.2] - 2026-09-15
 
 ### Fixed
