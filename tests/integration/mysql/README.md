@@ -10,7 +10,9 @@ its own database. CI runs them on MySQL 8.0 and 8.4 for Python 3.11–3.13.
 - `test_privileges.py`: the runtime and retention credentials have separate
   database capabilities.
 - `test_migrations.py`: migrations are idempotent and checksum-protected, and
-  every kind of schema drift fails `inspect` and `migrate`.
+  the drift kinds covered (engine, columns, indexes and primary key, foreign
+  key, checks, triggers, routines, identifier case, invoker security) fail
+  `inspect` and `migrate`.
 - `conftest.py` and `support.py`: database creation and shared fixtures.
 
 Pass the effect identity, or any other binary value, as hex through

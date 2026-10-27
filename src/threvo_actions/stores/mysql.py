@@ -166,7 +166,7 @@ def _stored_json(value: object) -> str:
 
 # aiomysql 0.3.2 cannot escape bytes parameters on PyMySQL >= 1.2.3, which
 # disabled the escaper it imports (GHSA-x4f8-9hx9-hpp9). The identity is sent
-# as hex and decoded by UNHEX, which escapes safely in every charset.
+# as hex, plain ASCII that needs no escaping in any charset, and decoded by UNHEX.
 def _effect_identity(action_type: ActionType, semantic_effect_reference: str) -> bytes:
     _validate_mysql_effect_identity(action_type, semantic_effect_reference)
     encoded_components = (
