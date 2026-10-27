@@ -8,7 +8,8 @@ financial authority or bypass the runtime.
 uv add "threvo-actions[pydantic-ai]==0.6.2"
 ```
 
-The integration is tested against `pydantic-ai-slim==2.33.0`. It installs no
+The extra admits `pydantic-ai-slim>=2.33.0,<3`; the integration tests run
+against the version in `uv.lock`, 2.61.0 since 27/10/2026. It installs no
 provider SDK. The complete example below uses `FunctionModel`, so it runs
 offline without an API key.
 

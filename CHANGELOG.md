@@ -10,6 +10,11 @@ and uses Semantic Versioning for the supported surface described in
 
 - The `docs` extra requires `mkdocstrings[python]>=1.0.7,<2`; 0.30 fails to
   build against pymdown-extensions 12.
+- The lock, which the test suite runs on, moves Pydantic AI to 2.61.0 and
+  Pydantic to 2.14.1. It also crosses major or minor lines in SQLAlchemy
+  (2.1.6), python-dateutil (3.0.0) and logfire-api (5.4.0). Published
+  requirements are unchanged apart from `mkdocstrings`; a host still resolves
+  its own versions inside the ranges in `pyproject.toml`.
 
 ## [0.6.2] - 2026-09-15
 
