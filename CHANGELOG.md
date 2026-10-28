@@ -8,6 +8,13 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [0.6.3] - 2026-10-28
 
+### Security
+
+- Fix [GHSA-prj8-64c4-w44x](https://github.com/BlackPigIndustries/threvo-actions/security/advisories/GHSA-prj8-64c4-w44x):
+  on non-`utf8mb4` multibyte connection charsets, text reaching the MySQL
+  stores could alter SQL statements. Versions 0.1.2 through 0.6.2 are affected
+  when the `mysql` extra is used with such a pool.
+
 ### Fixed
 
 - The MySQL store works with PyMySQL 1.2.3, which a fresh install of the
