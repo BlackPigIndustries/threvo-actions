@@ -16,6 +16,14 @@ and uses Semantic Versioning for the supported surface described in
 
 ### Changed
 
+- The MySQL stores bind text parameters as hex-encoded UTF-8 and read text
+  columns back the same way, so stored and returned text no longer depends on
+  the pool's charset. Text that is not valid UTF-8 raises
+  `MySQLAdapterLimitError` before any statement runs; a proposal carrying such
+  text fails before a connection opens.
+- MySQL lookups match tenant and proposal references exactly, as the SQLite
+  and Postgres stores do; a reference with trailing spaces no longer finds the
+  unpadded one.
 - The `docs` extra requires `mkdocstrings[python]>=1.0.7,<2`; 0.30 fails to
   build against pymdown-extensions 12.
 - The lock, which the test suite runs on, moves Pydantic AI to 2.61.0 and

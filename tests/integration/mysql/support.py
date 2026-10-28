@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 
 from threvo_actions.authority import AuthorityDecision, AuthorityEvidence
@@ -9,6 +10,8 @@ from threvo_actions.stores.base import StoredProposal
 
 NOW = datetime.now(UTC).replace(microsecond=0)
 ACTION_TYPE = ActionType(namespace="example.billing", name="refund", version=1)
+_HEX = re.compile(r"[0-9a-f]*")
+_PLACEHOLDER = re.compile(r"CONVERT\(UNHEX\(%s\)|UNHEX\(%s\)|%s")
 
 
 def proposal(
@@ -59,3 +62,19 @@ def authority(record: StoredProposal) -> AuthorityEvidence:
         issued_at=NOW,
         expires_at=NOW + timedelta(minutes=5),
     )
+
+
+def sent_text(executed: list[tuple[str, tuple[object, ...]]]) -> list[str]:
+    """Decode each text parameter, failing if any string is bound outside a hex placeholder."""
+
+    text: list[str] = []
+    for query, args in executed:
+        placeholders = [match.group(0) for match in _PLACEHOLDER.finditer(query)]
+        for placeholder, arg in zip(placeholders, args, strict=True):
+            if placeholder == "%s":
+                assert not isinstance(arg, str), query
+                continue
+            assert isinstance(arg, str) and _HEX.fullmatch(arg), query
+            if placeholder.startswith("CONVERT"):
+                text.append(bytes.fromhex(arg).decode())
+    return text

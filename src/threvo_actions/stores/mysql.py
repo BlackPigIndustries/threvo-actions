@@ -91,6 +91,23 @@ def _mysql_proposal_json(proposal: StoredProposal) -> str:
     )
 
 
+# Text travels in both directions as the hex of its UTF-8 bytes, so stored and
+# returned values do not depend on the pool's charset. Binary values use
+# UNHEX(%s) alone.
+_TEXT = "CONVERT(UNHEX(%s) USING utf8mb4) COLLATE utf8mb4_bin"
+
+
+def _utf8(value: str) -> bytes:
+    try:
+        return value.encode()
+    except UnicodeEncodeError:
+        raise MySQLAdapterLimitError("MySQL text must be valid UTF-8") from None
+
+
+def _text(value: str) -> str:
+    return _utf8(value).hex()
+
+
 def _validated_datetime(value: datetime) -> datetime:
     validated = _AWARE_DATETIME_ADAPTER.validate_python(value, strict=True)
     if validated.year < _MIN_MYSQL_DATETIME_YEAR:
@@ -116,6 +133,7 @@ def _validated_proposal(proposal: StoredProposal) -> StoredProposal:
             )
     _validated_datetime(validated.created_at)
     _validated_datetime(validated.expires_at)
+    _text(_mysql_proposal_json(validated))
     return validated
 
 
@@ -127,7 +145,7 @@ def _validate_mysql_effect_identity(
         ("action namespace", action_type.namespace),
         ("action name", action_type.name),
     ):
-        if len(value.encode()) > _MAX_MYSQL_TEXT_BYTES:
+        if len(_utf8(value)) > _MAX_MYSQL_TEXT_BYTES:
             raise MySQLAdapterLimitError(
                 f"MySQL {field} cannot exceed {_MAX_MYSQL_TEXT_BYTES} UTF-8 bytes"
             )
@@ -135,9 +153,12 @@ def _validate_mysql_effect_identity(
         raise MySQLAdapterLimitError("MySQL action version exceeds INT UNSIGNED")
 
 
-def _stored_string(value: object) -> str:
+def _stored_text(value: object) -> str:
     if isinstance(value, str):
-        return value
+        try:
+            return bytes.fromhex(value).decode()
+        except ValueError:
+            pass
     raise MySQLStoredDataCorruptionError("stored action data is corrupt")
 
 
@@ -153,27 +174,16 @@ def _stored_datetime(value: object) -> datetime:
     raise MySQLStoredDataCorruptionError("stored action data is corrupt")
 
 
-def _stored_json(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, bytes):
-        try:
-            return value.decode()
-        except UnicodeDecodeError:
-            raise MySQLStoredDataCorruptionError("stored action data is corrupt") from None
-    raise MySQLStoredDataCorruptionError("stored action data is corrupt")
-
-
 # aiomysql 0.3.2 cannot escape bytes parameters on PyMySQL >= 1.2.3, which
 # disabled the escaper it imports (GHSA-x4f8-9hx9-hpp9). The identity is sent
-# as hex, plain ASCII that needs no escaping in any charset, and decoded by UNHEX.
+# as hex and decoded by UNHEX, like every text parameter.
 def _effect_identity(action_type: ActionType, semantic_effect_reference: str) -> bytes:
     _validate_mysql_effect_identity(action_type, semantic_effect_reference)
     encoded_components = (
-        action_type.namespace.encode(),
-        action_type.name.encode(),
+        _utf8(action_type.namespace),
+        _utf8(action_type.name),
         str(action_type.version).encode(),
-        semantic_effect_reference.encode(),
+        _utf8(semantic_effect_reference),
     )
     canonical = b"".join(
         str(len(component)).encode() + b":" + component for component in encoded_components
@@ -214,33 +224,37 @@ class _MySQLStoreBase:
     ) -> StoredProposal | None:
         await cursor.execute(
             f"""
-            SELECT tenant_reference, proposal_reference, action_namespace, action_name,
-                   action_version, semantic_effect_reference, effect_kind,
-                   lifecycle_status, revision, created_at, expires_at, proposal_data
+            SELECT HEX(tenant_reference), HEX(proposal_reference), HEX(action_namespace),
+                   HEX(action_name), action_version, HEX(semantic_effect_reference),
+                   HEX(effect_kind), HEX(lifecycle_status), revision, created_at, expires_at,
+                   HEX(CAST(proposal_data AS CHAR CHARACTER SET utf8mb4))
             FROM threvo_actions_proposals
-            WHERE tenant_reference = %s AND proposal_reference = %s
+            WHERE tenant_reference = {_TEXT} AND proposal_reference = {_TEXT}
             {"FOR UPDATE" if for_update else ""}
             """,
-            (tenant_reference, proposal_reference),
+            (_text(tenant_reference), _text(proposal_reference)),
         )
         row = await cursor.fetchone()
         if row is None:
             return None
         if len(row) != 12:
             raise MySQLStoredDataCorruptionError("stored action data is corrupt")
+        # utf8mb4_bin ignores trailing spaces, so only an exact match is the proposal.
+        if (_stored_text(row[0]), _stored_text(row[1])) != (tenant_reference, proposal_reference):
+            return None
         try:
-            proposal = StoredProposal.model_validate_json(_stored_json(row[11]))
+            proposal = StoredProposal.model_validate_json(_stored_text(row[11]))
         except Exception:
             raise MySQLStoredDataCorruptionError("stored action data is corrupt") from None
         indexed_identity = (
-            _stored_string(row[0]),
-            _stored_string(row[1]),
-            _stored_string(row[2]),
-            _stored_string(row[3]),
+            _stored_text(row[0]),
+            _stored_text(row[1]),
+            _stored_text(row[2]),
+            _stored_text(row[3]),
             _stored_integer(row[4]),
-            _stored_string(row[5]),
-            _stored_string(row[6]),
-            _stored_string(row[7]),
+            _stored_text(row[5]),
+            _stored_text(row[6]),
+            _stored_text(row[7]),
             _stored_integer(row[8]),
             _stored_datetime(row[9]),
             _stored_datetime(row[10]),
@@ -271,16 +285,17 @@ class _MySQLStoreBase:
     ) -> None:
         changed = await _procedure_rowcount(
             cursor,
-            "CALL threvo_actions_runtime_update_proposal(%s,%s,%s,%s,%s,%s,%s,%s)",
+            "CALL threvo_actions_runtime_update_proposal("
+            f"{_TEXT},{_TEXT},%s,{_TEXT},{_TEXT},%s,%s,{_TEXT})",
             (
-                current.tenant_reference,
-                current.proposal_reference,
+                _text(current.tenant_reference),
+                _text(current.proposal_reference),
                 current.revision,
-                current.lifecycle_status.value,
-                updated.lifecycle_status.value,
+                _text(current.lifecycle_status.value),
+                _text(updated.lifecycle_status.value),
                 updated.revision,
                 _mysql_datetime(updated.expires_at),
-                _mysql_proposal_json(updated),
+                _text(_mysql_proposal_json(updated)),
             ),
         )
         if changed != 1:
@@ -298,20 +313,21 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             try:
                 changed = await _procedure_rowcount(
                     cursor,
-                    "CALL threvo_actions_create_proposal(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "CALL threvo_actions_create_proposal("
+                    f"{_TEXT},{_TEXT},{_TEXT},{_TEXT},%s,{_TEXT},{_TEXT},{_TEXT},%s,%s,%s,{_TEXT})",
                     (
-                        proposal.tenant_reference,
-                        proposal.proposal_reference,
-                        proposal.action_type.namespace,
-                        proposal.action_type.name,
+                        _text(proposal.tenant_reference),
+                        _text(proposal.proposal_reference),
+                        _text(proposal.action_type.namespace),
+                        _text(proposal.action_type.name),
                         proposal.action_type.version,
-                        proposal.semantic_effect_reference,
-                        proposal.effect_kind,
-                        proposal.lifecycle_status.value,
+                        _text(proposal.semantic_effect_reference),
+                        _text(proposal.effect_kind),
+                        _text(proposal.lifecycle_status.value),
                         proposal.revision,
                         _mysql_datetime(proposal.created_at),
                         _mysql_datetime(proposal.expires_at),
-                        _mysql_proposal_json(proposal),
+                        _text(_mysql_proposal_json(proposal)),
                     ),
                 )
                 if changed != 1:
@@ -454,37 +470,44 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
     ) -> str | None:
         async with self._pool.acquire() as connection, connection.cursor() as cursor:
             try:
-                await cursor.execute(
-                    """
-                    SELECT proposal_reference, action_namespace, action_name, action_version,
-                           semantic_effect_reference
-                    FROM threvo_actions_effect_claims
-                    WHERE tenant_reference = %s AND effect_identity = UNHEX(%s)
-                    """,
-                    (
-                        tenant_reference,
-                        _effect_identity(action_type, semantic_effect_reference).hex(),
-                    ),
+                return await self._effect_owner(
+                    cursor, tenant_reference, action_type, semantic_effect_reference
                 )
-                row = await cursor.fetchone()
-                if row is None:
-                    return None
-                self._validate_claim_identity(row, action_type, semantic_effect_reference)
-                return _stored_string(row[0])
             finally:
                 await connection.rollback()
 
     @staticmethod
-    def _validate_claim_identity(
-        row: tuple[object, ...],
+    async def _effect_owner(
+        cursor: _Cursor,
+        tenant_reference: str,
         action_type: ActionType,
         semantic_effect_reference: str,
-    ) -> None:
-        if len(row) != 5 or (
-            _stored_string(row[1]),
-            _stored_string(row[2]),
-            _stored_integer(row[3]),
-            _stored_string(row[4]),
+    ) -> str | None:
+        await cursor.execute(
+            f"""
+            SELECT HEX(tenant_reference), HEX(proposal_reference), HEX(action_namespace),
+                   HEX(action_name), action_version, HEX(semantic_effect_reference)
+            FROM threvo_actions_effect_claims
+            WHERE tenant_reference = {_TEXT} AND effect_identity = UNHEX(%s)
+            """,
+            (
+                _text(tenant_reference),
+                _effect_identity(action_type, semantic_effect_reference).hex(),
+            ),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        if len(row) != 6:
+            raise MySQLStoredDataCorruptionError("stored effect identity is corrupt")
+        # utf8mb4_bin ignores trailing spaces, so only an exact match is the claim.
+        if _stored_text(row[0]) != tenant_reference:
+            return None
+        if (
+            _stored_text(row[2]),
+            _stored_text(row[3]),
+            _stored_integer(row[4]),
+            _stored_text(row[5]),
         ) != (
             action_type.namespace,
             action_type.name,
@@ -492,29 +515,19 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             semantic_effect_reference,
         ):
             raise MySQLStoredDataCorruptionError("stored effect identity is corrupt")
+        return _stored_text(row[1])
 
     async def _claim_owner(
         self,
         cursor: _Cursor,
         proposal: StoredProposal,
     ) -> str | None:
-        await cursor.execute(
-            """
-            SELECT proposal_reference, action_namespace, action_name, action_version,
-                   semantic_effect_reference
-            FROM threvo_actions_effect_claims
-            WHERE tenant_reference = %s AND effect_identity = UNHEX(%s)
-            """,
-            (
-                proposal.tenant_reference,
-                _effect_identity(proposal.action_type, proposal.semantic_effect_reference).hex(),
-            ),
+        return await self._effect_owner(
+            cursor,
+            proposal.tenant_reference,
+            proposal.action_type,
+            proposal.semantic_effect_reference,
         )
-        row = await cursor.fetchone()
-        if row is None:
-            return None
-        self._validate_claim_identity(row, proposal.action_type, proposal.semantic_effect_reference)
-        return _stored_string(row[0])
 
     async def _claim_effect(
         self,
@@ -528,10 +541,10 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             try:
                 changed = await _procedure_rowcount(
                     cursor,
-                    "CALL threvo_actions_claim_effect(%s,%s,%s)",
+                    f"CALL threvo_actions_claim_effect({_TEXT},{_TEXT},%s)",
                     (
-                        proposal.tenant_reference,
-                        proposal.proposal_reference,
+                        _text(proposal.tenant_reference),
+                        _text(proposal.proposal_reference),
                         _mysql_datetime(admitted_at),
                     ),
                 )
@@ -546,12 +559,12 @@ class MySQLActionStore(_MySQLStoreBase, ActionStore):
             return EffectClaimResult.OWNED_BY_PROPOSAL
         changed = await _procedure_rowcount(
             cursor,
-            "CALL threvo_actions_transfer_effect_claim(%s,UNHEX(%s),%s,%s,%s)",
+            f"CALL threvo_actions_transfer_effect_claim({_TEXT},UNHEX(%s),{_TEXT},{_TEXT},%s)",
             (
-                proposal.tenant_reference,
+                _text(proposal.tenant_reference),
                 identity.hex(),
-                owner,
-                proposal.proposal_reference,
+                _text(owner),
+                _text(proposal.proposal_reference),
                 _mysql_datetime(admitted_at),
             ),
         )
@@ -592,12 +605,12 @@ class MySQLRetentionStore(_MySQLStoreBase, RetentionStore):
                 validate_proposal_update(current=current, updated=updated)
                 changed = await _procedure_rowcount(
                     cursor,
-                    "CALL threvo_actions_mark_erasure_pending(%s,%s,%s,%s)",
+                    f"CALL threvo_actions_mark_erasure_pending({_TEXT},{_TEXT},%s,{_TEXT})",
                     (
-                        tenant_reference,
-                        proposal_reference,
+                        _text(tenant_reference),
+                        _text(proposal_reference),
                         expected_revision,
-                        _mysql_proposal_json(updated),
+                        _text(_mysql_proposal_json(updated)),
                     ),
                 )
                 if changed != 1:
@@ -636,12 +649,12 @@ class MySQLRetentionStore(_MySQLStoreBase, RetentionStore):
                 validate_proposal_update(current=current, updated=updated)
                 changed = await _procedure_rowcount(
                     cursor,
-                    "CALL threvo_actions_complete_erasure(%s,%s,%s,%s)",
+                    f"CALL threvo_actions_complete_erasure({_TEXT},{_TEXT},%s,{_TEXT})",
                     (
-                        tenant_reference,
-                        proposal_reference,
+                        _text(tenant_reference),
+                        _text(proposal_reference),
                         expected_revision,
-                        _mysql_proposal_json(updated),
+                        _text(_mysql_proposal_json(updated)),
                     ),
                 )
                 if changed != 1:
