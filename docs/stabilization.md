@@ -1,6 +1,6 @@
 # 0.x pilot stabilization policy
 
-Status: active after the 0.6.2 corrective release.
+Status: active after the 0.6.3 corrective release.
 
 The project is stabilizing the Threvo pilot line. Development may continue on
 develop, but publication is limited to corrective patches and an explicitly
@@ -70,6 +70,13 @@ creates for new customers. Version 0.6.2 corrects that provider eligibility
 boundary without changing action identity, persistence, authority, reservation,
 or verification semantics. This is corrective work under the policy rather
 than a new action-group exception.
+
+Dependency qualification on 2026-10-27 demonstrated that a fresh install of
+the 0.6.2 `mysql` extra resolves PyMySQL 1.2.3, under which every MySQL effect
+claim fails. Version 0.6.3 corrects that and makes the MySQL stores' text
+handling independent of the pool's connection charset, without changing action
+identity, persistence schema, authority, reservation, or verification
+semantics. This is corrective work under the policy.
 
 The [outside-host status](testing/stripe-outside-adoption-status.md) remains the
 source of truth. No 0.5.x or 0.6.x release claims otherwise.

@@ -126,6 +126,17 @@ feature releases. Candidate qualification, signed tags, artifact identity,
 TestPyPI/PyPI verification, and protected environments remain mandatory. See
 the [`0.6.2` release record](docs/releases/0.6.2.md).
 
+The repository owner's 2026-10-28 direction permits the exact corrective
+`v0.6.3` tag with `skip_adoption_gate=true`. A fresh install of the 0.6.2
+`mysql` extra resolves PyMySQL 1.2.3, under which every MySQL effect claim
+fails. The patch corrects that and makes the MySQL stores' text handling
+independent of the pool's connection charset, without changing action
+identities, database schemas, authority, reservation, or verification
+semantics. It does not count as outside adoption or resume feature releases.
+Candidate qualification, signed tags, artifact identity, TestPyPI/PyPI
+verification, and protected environments remain mandatory. See the [`0.6.3`
+release record](docs/releases/0.6.3.md).
+
 The release workflow fails before building or publishing when the candidate
 source commit is not already contained in `origin/main`, or when the signed tag
 does not resolve to that exact commit. Do not approve a release environment as

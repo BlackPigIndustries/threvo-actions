@@ -2,14 +2,16 @@
 
 ## Supported versions
 
-The `0.1.x` release line receives security fixes. Development snapshots and
-older `0.x` lines are unsupported. See `docs/versioning.md` for the distinction
-between the supported Python API and experimental interoperability surfaces.
+The latest `0.6.x` patch release receives security fixes; pin it exactly.
+Development snapshots and older `0.x` releases are unsupported. See
+`docs/versioning.md` for the distinction between the supported Python API and
+experimental interoperability surfaces.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected vulnerability. Use GitHub's private
-security-advisory reporting for the repository. Include affected revision,
+Do not open a public issue for a suspected vulnerability. Use GitHub's
+[private vulnerability reporting](https://github.com/BlackPigIndustries/threvo-actions/security/advisories/new)
+for the repository. Include affected revision,
 impact, reproduction steps using synthetic data, and any suggested mitigation.
 Do not include live credentials, payment data, or personal data.
 
