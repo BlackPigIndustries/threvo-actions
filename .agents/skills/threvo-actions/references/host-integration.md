@@ -141,8 +141,11 @@ retrying. Never rewrite an already-recorded migration checksum.
 MySQL 8 migrations are also forward-only and explicit. Run `threvo-actions
 mysql inspect` and `mysql migrate` through a named DSN environment variable.
 Use MySQL 8.0.16 or newer with InnoDB, `utf8mb4`, and `autocommit=False` pools;
-MariaDB is a separate unsupported target. Grant runtime and retention users only
-the documented table and security-definer procedure lanes. Do not grant either
+MariaDB is a separate unsupported target. The stores raise
+`MySQLAdapterLimitError` for text that is not valid UTF-8, including lookup
+references, before sending it, and match references exactly. Grant runtime
+and retention users only the documented table and security-definer procedure
+lanes. Do not grant either
 application user table-wide `UPDATE`, routine alteration, trigger, or migration
 permissions. The runtime user receives `SELECT` on proposals and `EXECUTE` on
 `threvo_actions_create_proposal`; it does not receive direct proposal `INSERT`.

@@ -5,6 +5,10 @@ package is `threvo_actions`; it is not part of the Threvo backend package.
 
 ## Commands
 
+Run from this repository. The backend consumes the published version pinned
+in its own `pyproject.toml` and lockfile; editing this checkout does not
+change the backend runtime dependency.
+
 ```bash
 uv sync --extra dev
 uv run ruff check .

@@ -210,10 +210,10 @@ def test_runtime_and_retention_credentials_have_separate_database_capabilities()
                             "INSERT INTO threvo_actions_effect_claims "
                             "(tenant_reference, effect_identity, action_namespace, action_name, "
                             "action_version, semantic_effect_reference, proposal_reference, "
-                            "admitted_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                            "admitted_at) VALUES (%s,UNHEX(%s),%s,%s,%s,%s,%s,%s)",
                             (
                                 original.tenant_reference,
-                                b"0" * 32,
+                                (b"0" * 32).hex(),
                                 original.action_type.namespace,
                                 original.action_type.name,
                                 original.action_type.version,
@@ -557,10 +557,10 @@ def test_runtime_and_retention_credentials_have_separate_database_capabilities()
                     assert (
                         await _procedure_rowcount(
                             cursor,
-                            "CALL threvo_actions_transfer_effect_claim(%s,%s,%s,%s,%s)",
+                            "CALL threvo_actions_transfer_effect_claim(%s,UNHEX(%s),%s,%s,%s)",
                             (
                                 original.tenant_reference,
-                                claim_row[0],
+                                claim_row[0].hex(),
                                 original.proposal_reference,
                                 replacement.proposal_reference,
                                 NOW.replace(tzinfo=None),

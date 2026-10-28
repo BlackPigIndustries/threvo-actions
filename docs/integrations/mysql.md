@@ -12,7 +12,7 @@ it does not claim storage encryption or deletion from external copies.
 ## Install and migrate explicitly
 
 ```bash
-uv add "threvo-actions[mysql]==0.6.2"
+uv add "threvo-actions[mysql]==0.6.3"
 read -rsp 'MySQL migration DSN: ' ACTIONS_MIGRATOR_DATABASE_URL && printf '\n'
 export ACTIONS_MIGRATOR_DATABASE_URL
 threvo-actions mysql inspect --dsn-env ACTIONS_MIGRATOR_DATABASE_URL
@@ -66,7 +66,9 @@ The full source is copyable:
 ## Create the stores in an application
 
 `aiomysql` pools must use `utf8mb4` and `autocommit=False` so each guarded
-operation owns its transaction:
+operation owns its transaction. The stores send and read text as hex-encoded
+UTF-8, so text that is not valid UTF-8, such as a lone surrogate, raises
+`MySQLAdapterLimitError` before it reaches the database:
 
 ```python
 import aiomysql

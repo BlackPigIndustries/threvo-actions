@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Never
 
@@ -17,15 +18,18 @@ from threvo_actions.conformance import (
 )
 from threvo_actions.models import ActionType, LifecycleStatus
 from threvo_actions.store_security import MYSQL_STORE_SECURITY_PROFILE
-from threvo_actions.stores.base import ProposalAlreadyExistsError
+from threvo_actions.stores.base import EffectClaimResult, ProposalAlreadyExistsError
 from threvo_actions.stores.mysql import (
     MySQLActionStore,
     MySQLAdapterLimitError,
     MySQLRetentionStore,
+    MySQLStoredDataCorruptionError,
 )
 
 from .conftest import _connection, migrated_pool, require_test_dsn
-from .support import NOW, authority, proposal
+from .support import NOW, authority, proposal, sent_text
+
+_CALL = re.compile(r"CALL threvo_actions_(\w+)\(")
 
 
 class _NoConnectionPool:
@@ -443,5 +447,229 @@ def test_maximum_public_references_and_expiry_update_round_trip() -> None:
             assert (
                 await store.get(original.tenant_reference, original.proposal_reference) == updated
             )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("charset", ["gbk", "latin1"])
+def test_a_non_utf8mb4_pool_keeps_text_its_charset_cannot_represent(charset: str) -> None:
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, database):
+            charset_pool = await aiomysql.create_pool(
+                minsize=1,
+                maxsize=2,
+                **{**_connection(require_test_dsn(), database=database), "charset": charset},
+            )
+            try:
+                store = MySQLActionStore(charset_pool)
+                retention = MySQLRetentionStore(charset_pool)
+                original = proposal(
+                    "proposal:żółw-😀", tenant="tenant:łódź-😀", effect="refund:ß-😀"
+                ).model_copy(update={"display_preview": {"summary": "Ελλάδα 😀"}})
+                await store.create(original)
+                for reader in (store, MySQLActionStore(pool)):
+                    stored = await reader.get(
+                        original.tenant_reference, original.proposal_reference
+                    )
+                    assert stored == original
+                denied = original.model_copy(
+                    update={"lifecycle_status": LifecycleStatus.DENIED, "revision": 1}
+                )
+                assert await store.compare_and_set(
+                    tenant_reference=original.tenant_reference,
+                    proposal_reference=original.proposal_reference,
+                    expected_revision=0,
+                    expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                    updated=denied,
+                )
+                assert await retention.mark_erasure_pending(
+                    tenant_reference=original.tenant_reference,
+                    proposal_reference=original.proposal_reference,
+                    expected_revision=1,
+                    pending_at=NOW,
+                )
+                assert await retention.complete_erasure(
+                    tenant_reference=original.tenant_reference,
+                    proposal_reference=original.proposal_reference,
+                    expected_revision=2,
+                    erased_at=NOW,
+                )
+                erased = await store.get(original.tenant_reference, original.proposal_reference)
+                assert erased is not None
+                assert erased.erased_at is not None
+            finally:
+                charset_pool.close()
+                await charset_pool.wait_closed()
+
+    asyncio.run(scenario())
+
+
+def test_lookups_match_references_exactly() -> None:
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, _):
+            store = MySQLActionStore(pool)
+            lower = proposal("proposal:x", tenant="tenant:a")
+            upper = proposal("proposal:x", tenant="TENANT:A")
+            await store.create(lower)
+            await store.create(upper)
+            assert await store.get("tenant:a", "proposal:x") == lower
+            assert await store.get("TENANT:A", "proposal:x") == upper
+            assert await store.get("tenant:a ", "proposal:x") is None
+            assert await store.get("tenant:a", "proposal:x ") is None
+
+            authorized = lower.model_copy(
+                update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
+            )
+            assert not await store.compare_and_set(
+                tenant_reference="tenant:a ",
+                proposal_reference="proposal:x",
+                expected_revision=0,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=authorized,
+            )
+            assert await store.compare_and_set(
+                tenant_reference="tenant:a",
+                proposal_reference="proposal:x",
+                expected_revision=0,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=authorized,
+            )
+            assert (
+                await store.admit_execution(
+                    tenant_reference="tenant:a",
+                    proposal_reference="proposal:x",
+                    expected_revision=1,
+                    admitted_at=NOW,
+                    updated=authorized.model_copy(
+                        update={"lifecycle_status": LifecycleStatus.EXECUTING, "revision": 2}
+                    ),
+                )
+                is EffectClaimResult.ACQUIRED
+            )
+            for tenant, owner in (("tenant:a", "proposal:x"), ("tenant:a ", None)):
+                assert (
+                    await store.get_effect_claim_owner(
+                        tenant_reference=tenant,
+                        action_type=lower.action_type,
+                        semantic_effect_reference=lower.semantic_effect_reference,
+                    )
+                    == owner
+                )
+
+    asyncio.run(scenario())
+
+
+def test_rows_that_disagree_with_their_proposal_raise_corruption_errors() -> None:
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, _):
+            store = MySQLActionStore(pool)
+            original = proposal("proposal:tampered")
+            await store.create(original)
+            authorized = original.model_copy(
+                update={"lifecycle_status": LifecycleStatus.AUTHORIZED, "revision": 1}
+            )
+            assert await store.compare_and_set(
+                tenant_reference=original.tenant_reference,
+                proposal_reference=original.proposal_reference,
+                expected_revision=0,
+                expected_statuses=(LifecycleStatus.AWAITING_AUTHORITY,),
+                updated=authorized,
+            )
+            assert (
+                await store.admit_execution(
+                    tenant_reference=original.tenant_reference,
+                    proposal_reference=original.proposal_reference,
+                    expected_revision=1,
+                    admitted_at=NOW,
+                    updated=authorized.model_copy(
+                        update={"lifecycle_status": LifecycleStatus.EXECUTING, "revision": 2}
+                    ),
+                )
+                is EffectClaimResult.ACQUIRED
+            )
+            async with pool.acquire() as connection, connection.cursor() as cursor:
+                await cursor.execute(
+                    "ALTER TABLE threvo_actions_effect_claims "
+                    "DROP CHECK threvo_actions_effect_identity_digest"
+                )
+                await cursor.execute(
+                    "UPDATE threvo_actions_effect_claims SET action_name = 'tampered'"
+                )
+                await cursor.execute("DROP TRIGGER threvo_actions_enforce_proposal_update")
+                await cursor.execute(
+                    "ALTER TABLE threvo_actions_proposals DROP CHECK threvo_actions_json_expires"
+                )
+                await cursor.execute(
+                    "UPDATE threvo_actions_proposals "
+                    "SET expires_at = expires_at + INTERVAL 1 SECOND"
+                )
+                await connection.commit()
+
+            with pytest.raises(MySQLStoredDataCorruptionError, match="effect identity"):
+                await store.get_effect_claim_owner(
+                    tenant_reference=original.tenant_reference,
+                    action_type=original.action_type,
+                    semantic_effect_reference=original.semantic_effect_reference,
+                )
+            with pytest.raises(MySQLStoredDataCorruptionError, match="indexes disagree"):
+                await store.get(original.tenant_reference, original.proposal_reference)
+
+    asyncio.run(scenario())
+
+
+def test_every_text_parameter_reaches_mysql_as_utf8_hex(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[tuple[str, tuple[object, ...]]] = []
+    execute = aiomysql.Cursor.execute
+
+    async def recording_execute(
+        self: aiomysql.Cursor, query: str, args: tuple[object, ...] | None = None
+    ) -> int:
+        sent.append((query, args or ()))
+        rowcount: int = await execute(self, query, args)
+        return rowcount
+
+    monkeypatch.setattr(aiomysql.Cursor, "execute", recording_execute)
+
+    async def scenario() -> None:
+        async with migrated_pool() as (pool, _):
+            sent.clear()
+            store = MySQLActionStore(pool)
+            retention = MySQLRetentionStore(pool)
+            original = proposal("proposal:'报销' \\ wire", tenant="tenant:'北京'")
+            await assert_action_store_conforms(
+                StoreConformanceCase(
+                    store=store,
+                    retention_store=retention,
+                    original=original,
+                    evidence=authority(original),
+                    observed_at=NOW,
+                )
+            )
+            erasable = proposal("proposal:'erasable'", tenant=original.tenant_reference)
+            await store.create(erasable)
+            assert await retention.mark_erasure_pending(
+                tenant_reference=erasable.tenant_reference,
+                proposal_reference=erasable.proposal_reference,
+                expected_revision=0,
+                pending_at=NOW,
+            )
+            assert await retention.complete_erasure(
+                tenant_reference=erasable.tenant_reference,
+                proposal_reference=erasable.proposal_reference,
+                expected_revision=1,
+                erased_at=NOW,
+            )
+            called = {match.group(1) for query, _ in sent if (match := _CALL.search(query))}
+            assert called == {
+                "claim_effect",
+                "complete_erasure",
+                "create_proposal",
+                "mark_erasure_pending",
+                "runtime_update_proposal",
+                "transfer_effect_claim",
+            }
+            text = sent_text(sent)
+            assert original.tenant_reference in text
+            assert original.proposal_reference in text
 
     asyncio.run(scenario())

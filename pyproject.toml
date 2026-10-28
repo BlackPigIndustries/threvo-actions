@@ -1,6 +1,6 @@
 [project]
 name = "threvo-actions"
-version = "0.6.2"
+version = "0.6.3"
 description = "Approval, execution, verification, and recovery controls for consequential actions"
 readme = "README.md"
 license = "Apache-2.0"
@@ -28,7 +28,7 @@ threvo-actions = "threvo_actions.cli:main"
 [project.optional-dependencies]
 aws-kms = ["cryptography>=44.0.0"]
 local-kek = ["cryptography>=44.0.0"]
-mysql = ["aiomysql>=0.3.2,<1", "cryptography>=44.0.0"]
+mysql = ["aiomysql>=0.3.2,<1", "cryptography>=44.0.0", "PyMySQL>=1.2.3,<2"]
 postgres = ["asyncpg>=0.30.0,<1"]
 sqlalchemy = [
     "alembic>=1.19.1,<2",
@@ -38,7 +38,7 @@ sqlalchemy = [
 pydantic-ai = ["pydantic-ai-slim>=2.33.0,<3"]
 docs = [
     "mkdocs-material>=9.6.23,<10",
-    "mkdocstrings[python]>=0.30.1,<1",
+    "mkdocstrings[python]>=1.0.7,<2",
 ]
 dev = [
     "alembic>=1.19.1,<2",

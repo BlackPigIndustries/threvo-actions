@@ -18,9 +18,9 @@ from pydantic_ai import Agent, DeferredToolRequests, ModelRetry, RunContext
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
-    RetryPromptPart,
     TextPart,
     ToolCallPart,
+    ToolReturnPart,
 )
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.function import AgentInfo, FunctionModel
@@ -233,7 +233,7 @@ def test_real_agent_dispatch_keeps_invalid_arguments_out_of_retry_prompts() -> N
                     for message in messages
                     if isinstance(message, ModelRequest)
                     for part in message.parts
-                    if isinstance(part, RetryPromptPart)
+                    if isinstance(part, ToolReturnPart) and part.outcome == "retried"
                 ]
                 assert len(retry_parts) == 1
                 assert str(retry_parts[0].content) == (

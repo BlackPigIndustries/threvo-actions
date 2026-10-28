@@ -6,6 +6,37 @@ and uses Semantic Versioning for the supported surface described in
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-10-28
+
+### Fixed
+
+- The MySQL store works with PyMySQL 1.2.3, which a fresh install of the
+  `mysql` extra resolves. aiomysql 0.3.2 escapes `bytes` parameters with a
+  PyMySQL function that 1.2.3 disabled after GHSA-x4f8-9hx9-hpp9, so every
+  effect claim failed with `'str' object is not callable`. The effect identity
+  is now sent as hex and decoded by `UNHEX` in SQL.
+- The `mysql` extra requires `PyMySQL>=1.2.3,<2`, the release the MySQL suites
+  qualify.
+
+### Changed
+
+- The MySQL stores bind text parameters as hex-encoded UTF-8 and read text
+  columns back the same way, so stored and returned text no longer depends on
+  the pool's charset. Text that is not valid UTF-8 raises
+  `MySQLAdapterLimitError` before any statement runs; a proposal carrying such
+  text fails before a connection opens.
+- MySQL lookups match tenant and proposal references exactly, as the SQLite
+  and Postgres stores do; a reference with trailing spaces no longer finds the
+  unpadded one.
+- The `docs` extra requires `mkdocstrings[python]>=1.0.7,<2`; 0.30 fails to
+  build against pymdown-extensions 12.
+- The lock, which the test suite runs on, moves Pydantic AI to 2.61.0 and
+  Pydantic to 2.14.1. It also crosses major or minor lines in SQLAlchemy
+  (2.1.6), python-dateutil (3.0.0) and logfire-api (5.4.0). Published
+  requirements are unchanged apart from `mkdocstrings` and the `mysql` extra's
+  PyMySQL floor; a host still resolves its own versions inside the ranges in
+  `pyproject.toml`.
+
 ## [0.6.2] - 2026-09-15
 
 ### Fixed
@@ -528,7 +559,8 @@ and uses Semantic Versioning for the supported surface described in
 - Receipt serialization, canonicalization, physical database schemas, and the
   example cross-service envelope remain experimental interoperability surfaces.
 
-[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/BlackPigIndustries/threvo-actions/compare/v0.5.0...v0.6.0

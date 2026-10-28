@@ -50,7 +50,7 @@ The library implements none of those protocols. See the explicit
 or start with the [first-action guide](docs/getting-started/first-action.md).
 
 > [!IMPORTANT]
-> Version **0.6.2** is the current supported release. Pin the exact patch for
+> Version **0.6.3** is the current supported release. Pin the exact patch for
 > consequential actions and review the [versioning policy](docs/versioning.md).
 > Receipt serialization, canonicalization, physical database layouts, and the
 > namespaced gradual-reveal authoring API retain their documented experimental
@@ -63,16 +63,16 @@ authoring API, and read migration notes before every minor-line upgrade.
 
 Python 3.11 through 3.13 is supported.
 
-    uv add "threvo-actions==0.6.2"
+    uv add "threvo-actions==0.6.3"
 
 Install only the integrations the application uses:
 
-    uv add "threvo-actions[postgres]==0.6.2"
-    uv add "threvo-actions[mysql]==0.6.2"
-    uv add "threvo-actions[sqlalchemy]==0.6.2"
-    uv add "threvo-actions[pydantic-ai]==0.6.2"
-    uv add "threvo-actions[local-kek]==0.6.2"
-    uv add "threvo-actions[stripe]==0.6.2"
+    uv add "threvo-actions[postgres]==0.6.3"
+    uv add "threvo-actions[mysql]==0.6.3"
+    uv add "threvo-actions[sqlalchemy]==0.6.3"
+    uv add "threvo-actions[pydantic-ai]==0.6.3"
+    uv add "threvo-actions[local-kek]==0.6.3"
+    uv add "threvo-actions[stripe]==0.6.3"
 
 The base package includes the governed Stripe facade and its typed gateway
 protocols. The Stripe extra adds the maintained Stripe SDK transports and
@@ -216,3 +216,11 @@ The distribution contains a version-matched Agent Skills guide:
 
 The guide teaches coding agents the same authority, persistence, recovery, and
 verification boundaries as the Python documentation.
+
+## Threvo workspace integration
+
+This directory is a separate repository and Python distribution. The backend
+uses the published release pinned in `../backend/pyproject.toml`, resolved in
+`../uv.lock`. Changes here require a release and an explicit backend dependency
+update before the application executes them. The host integration is described
+in [the workspace architecture](../docs/platform/ARCHITECTURE.md#accountable-action-lifecycle).
