@@ -5,6 +5,13 @@ unless `THREVO_ACTIONS_TEST_MYSQL_DSN` points at one with root rights, for
 example `mysql://root:root@127.0.0.1:3306/mysql`; each test creates and drops
 its own database. CI runs them on MySQL 8.0 and 8.4 for Python 3.11–3.13.
 
+A skip prints as green, so a run without the DSN proves nothing about MySQL.
+With `THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1` a missing DSN fails these tests
+instead of skipping them. The CI `mysql` job sets it, as do the other jobs
+that provide a test database (`tests/unit/test_database_jobs_require_their_dsn.py`
+holds them to that). Set it locally whenever a run has to prove the MySQL path,
+for example after a lock refresh that moves aiomysql or PyMySQL.
+
 - `test_store.py`: the shared store contract, pool and security profile,
   compare-and-set, races, storage limits, exact reference matching, text
   their charset cannot represent on `gbk` and `latin1` pools, and the wire

@@ -18,7 +18,10 @@ _TEST_DSN = os.environ.get("THREVO_ACTIONS_TEST_POSTGRES_DSN")
 
 def require_test_dsn() -> str:
     if _TEST_DSN is None:
-        pytest.skip("set THREVO_ACTIONS_TEST_POSTGRES_DSN to run PostgreSQL integration tests")
+        reason = "set THREVO_ACTIONS_TEST_POSTGRES_DSN to run PostgreSQL integration tests"
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     return _TEST_DSN
 
 

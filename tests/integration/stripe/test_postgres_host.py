@@ -54,10 +54,13 @@ def _dsn() -> str:
         "THREVO_ACTIONS_STRIPE_TEST_DSN"
     )
     if value is None:
-        pytest.skip(
+        reason = (
             "set THREVO_ACTIONS_TEST_POSTGRES_DSN or "
             "THREVO_ACTIONS_STRIPE_TEST_DSN to run PostgreSQL integration tests"
         )
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     return value
 
 

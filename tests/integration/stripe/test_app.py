@@ -124,7 +124,10 @@ def settings(dsn):
 async def application():
     dsn = os.environ.get("THREVO_ACTIONS_STRIPE_TEST_DSN")
     if not dsn:
-        pytest.skip("set THREVO_ACTIONS_STRIPE_TEST_DSN to a dedicated ta_stripe_test_* database")
+        reason = "set THREVO_ACTIONS_STRIPE_TEST_DSN to a dedicated ta_stripe_test_* database"
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     pool = await asyncpg.create_pool(dsn, min_size=2, max_size=5)
     try:
         name = await pool.fetchval("SELECT current_database()")
