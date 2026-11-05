@@ -10,3 +10,7 @@ dist/
 site/
 *.egg-info/
 __pycache__/
+
+# Compound Engineering: personal config and review scratch
+.compound-engineering/config.local.yaml
+.context/compound-engineering/

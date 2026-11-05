@@ -46,7 +46,10 @@ def _dsn() -> str:
         "THREVO_ACTIONS_TEST_POSTGRES_DSN"
     )
     if value is None:
-        pytest.skip("set THREVO_ACTIONS_STRIPE_TEST_DSN to run approval-store tests")
+        reason = "set THREVO_ACTIONS_STRIPE_TEST_DSN to run approval-store tests"
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     return value
 
 

@@ -1,0 +1,7 @@
+# Compound Engineering -- team config for this repository (CE 3.35.0, 04/11/2026).
+# Key reference: config.example.yaml (a verbatim copy of the plugin template).
+# Personal overrides: config.local.yaml in this folder (gitignored).
+
+# Commit, push and PRs follow this repository's git rules and the user's
+# request. Do not start a standing PR watch after ce-commit-push-pr opens a PR.
+auto_babysit: false

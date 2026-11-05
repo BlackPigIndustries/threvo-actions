@@ -19,7 +19,10 @@ _TEST_DSN = os.environ.get("THREVO_ACTIONS_TEST_MYSQL_DSN")
 
 def require_test_dsn() -> str:
     if _TEST_DSN is None:
-        pytest.skip("set THREVO_ACTIONS_TEST_MYSQL_DSN to run MySQL integration tests")
+        reason = "set THREVO_ACTIONS_TEST_MYSQL_DSN to run MySQL integration tests"
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_TEST_DATABASE") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_TEST_DATABASE=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     return _TEST_DSN
 
 

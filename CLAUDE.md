@@ -3,6 +3,17 @@
 `threvo-actions` is an independent experimental Python distribution. Its import
 package is `threvo_actions`; it is not part of the Threvo backend package.
 
+Plans for this package live in `docs/plans/` and are published in the docs site
+nav. When this checkout sits inside the Threvo workspace, run Compound
+Engineering learnings capture (`ce-compound`) from the workspace root. Run
+`ce-work` as `mode:return-to-caller <plan>` on a private branch or worktree; it
+still commits each unit locally, so reviews cover the commits it made. Shipping
+here: after the three independent reviews (plan coverage, correctness/security,
+test quality), commit with the workspace `ship` skill, or `ce-commit` when this
+repo is opened alone. Push only when the user asks. Open a PR with
+`ce-commit-push-pr` only when the user asks for one (running `lfg` counts), from
+a feature branch, never `develop` (for a hotfix, state the base `main`).
+
 ## Commands
 
 Run from this repository. The backend consumes the published version pinned
