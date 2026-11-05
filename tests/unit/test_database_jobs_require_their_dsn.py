@@ -109,7 +109,18 @@ def _run_sandbox_suite(
     )
 
 
+def _require_the_stripe_app_extra() -> None:
+    # The main test job installs no stripe-app extra; ci.yml's stripe job runs these.
+    # Ask a fresh interpreter: other tests put stand-in modules in sys.modules.
+    probe = subprocess.run(  # noqa: S603 — fixed interpreter and static test program.
+        [sys.executable, "-c", "import asyncpg, stripe"], capture_output=True, check=False
+    )
+    if probe.returncode != 0:
+        pytest.skip("needs the stripe-app extra (stripe and asyncpg)")
+
+
 def test_without_its_secrets_the_sandbox_suite_skips_unless_required() -> None:
+    _require_the_stripe_app_extra()
     skipped = _run_sandbox_suite(required=False)
     assert skipped.returncode == 0, skipped.stdout + skipped.stderr
     assert " skipped" in skipped.stdout and " failed" not in skipped.stdout
@@ -124,6 +135,8 @@ def test_without_its_secrets_the_sandbox_suite_skips_unless_required() -> None:
 def test_a_required_sandbox_run_without_its_extra_never_passes(module: str) -> None:
     # The conftest's module-level importorskip errors as an initial conftest
     # (05/11/2026); a module-level skip in the test files would pass green.
+    # Block one import while the other is present, so each is the cause.
+    _require_the_stripe_app_extra()
     required = _run_sandbox_suite(required=True, block=module)
     assert required.returncode not in (0, 5), required.stdout + required.stderr
     assert f"could not import '{module}'" in required.stdout + required.stderr

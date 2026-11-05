@@ -19,4 +19,5 @@ DSN cannot report green while running none of them. A job that runs
 `THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"`. The same file also runs that suite
 in a subprocess without its secrets (05/11/2026): it skips without the flag,
 fails with it, and never passes when the `stripe` or `asyncpg` extra is missing
-under the flag.
+under the flag. Those subprocess tests need the `stripe-app` extra, so they skip
+in the main test job and run in `ci.yml`'s `stripe` job.

@@ -119,7 +119,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --extra dev --extra stripe-app --locked
-      - run: uv run pytest -q tests/integration/stripe
+      - run: uv run pytest -q tests/integration/stripe tests/unit/test_database_jobs_require_their_dsn.py
 
   aws-kms:
     runs-on: ubuntu-latest
