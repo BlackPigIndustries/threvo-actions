@@ -206,6 +206,10 @@ def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> 
         ("--confcutdir=tests", False),
         ("--maxfail=1", False),
         ("tests/integration/stripe", False),
+        # Each value-taking letter ends the walk: a k after it is its value.
+        *((f"-{letter}km", False) for letter in "cnoprW"),
+        # A flag letter does not: a k after it is -k.
+        *((f"-{letter}k", True) for letter in "lqsvx"),
     ],
 )
 def test_the_stripe_scanner_reads_each_argument_as_pytest_does(
