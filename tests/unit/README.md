@@ -27,5 +27,7 @@ pytest run line naming the file as its own argument, with nothing on that line
 that leaves tests out or stops them running (`--ignore*`, `--deselect`, `-k`,
 `-m` alone or in a cluster such as `-qk`, `--co`), no shell list operator
 (`||`, `|`, `&`, `;`: the default shell has no `pipefail`, so `| tee` would hide
-a failure), no `continue-on-error` on the job and no `PYTEST_ADDOPTS` in the
-workflow.
+a failure), no `addopts` override, no `continue-on-error` or `if: false` on
+the job or its steps, and no `PYTEST_ADDOPTS` in the workflow. A parametrized
+test pins which arguments count, so `--cov`, `--color` or `-pno:randomly` stay
+allowed.

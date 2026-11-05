@@ -129,11 +129,26 @@ def _require_the_stripe_app_extra(program: str = "import asyncpg, stripe") -> No
 
 _PYTEST_RUN = re.compile(r"^\s+- run: uv run pytest\b(?P<arguments>[^\n]*)", re.MULTILINE)
 _THIS_FILE = "tests/unit/test_database_jobs_require_their_dsn.py"
-# Options that can leave a named file's tests out or stop them running, in any
-# spelling pytest accepts.
-_LEAVES_OUT = ("--ignore", "--deselect", "-k", "-m", "--co", "--collect-only")
-# -k or -m inside a cluster of short flags, such as -qk.
-_CLUSTERED = re.compile(r"-[A-Za-z]*[km][A-Za-z]*")
+# Long options that leave a named file's tests out or stop them running.
+_LEAVES_OUT = ("--ignore", "--deselect")
+_COLLECTS_ONLY = ("--co", "--collect-only")
+# Short options whose value is the rest of their cluster, as in -pno:randomly.
+_TAKES_A_VALUE = set("cnoprW")
+_SKIPPED_JOB = re.compile(r"^\s+(?:- )?if:\s*(?:\$\{\{\s*)?false\b", re.MULTILINE)
+
+
+def _leaves_tests_out(token: str) -> bool:
+    """Whether one pytest argument can leave tests out, in any spelling pytest accepts."""
+    if token in _COLLECTS_ONLY or token.startswith(_LEAVES_OUT) or "addopts" in token:
+        return True
+    if token.startswith("--") or not token.startswith("-"):
+        return False
+    for option in token[1:]:  # a cluster of short flags, such as -qk
+        if option in "km":
+            return True
+        if option in _TAKES_A_VALUE or not option.isalpha():
+            return False
+    return False
 
 
 def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> None:
@@ -148,19 +163,55 @@ def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> 
     assert _EXTRA_REQUIRED.search(job), 'add THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"'
     assert runs, "a pytest run line in the stripe job must name this file as an argument"
     assert "continue-on-error" not in job, "the stripe job must fail when these tests fail"
+    assert not _SKIPPED_JOB.search(job), "the stripe job and its steps must run"
     assert "PYTEST_ADDOPTS" not in workflow, "options belong on the pytest line, where this reads"
     for tokens in runs:
-        leaving_out = [
-            token
-            for token in tokens
-            if token.startswith(_LEAVES_OUT) or _CLUSTERED.fullmatch(token)
-        ]
+        leaving_out = [token for token in tokens if _leaves_tests_out(token)]
         assert not leaving_out, (
             f"the stripe job's pytest line may not leave tests out: {leaving_out}"
         )
         # The default shell has no pipefail, so `| tee` hides a failure as `||` does.
         control = [token for token in tokens if set(token) & set("|&;")]
         assert not control, f"the stripe job's pytest line may not run in a shell list: {control}"
+
+
+@pytest.mark.parametrize(
+    ("token", "leaves_out"),
+    [
+        ("--ignore=tests/unit", True),
+        ("--ignore-glob=tests/unit/*", True),
+        ("--deselect=tests/unit/x.py::y", True),
+        ("--co", True),
+        ("--collect-only", True),
+        ("-k", True),
+        ("-knot_sandbox", True),
+        ("-m", True),
+        ("-qk", True),
+        ("-qm", True),
+        ("-qktest_every", True),
+        ("-qknot sandbox", True),
+        ("addopts=-k nothing", True),
+        ("-oaddopts=-k nothing", True),
+        ("--override-ini=addopts=-k nothing", True),
+        ("-q", False),
+        ("-ra", False),
+        ("-x", False),
+        ("-n", False),
+        ("auto", False),
+        ("-pno:randomly", False),
+        ("-pmy_plugin", False),
+        ("-Werror", False),
+        ("--cov=threvo_actions", False),
+        ("--color=yes", False),
+        ("--confcutdir=tests", False),
+        ("--maxfail=1", False),
+        ("tests/integration/stripe", False),
+    ],
+)
+def test_the_stripe_scanner_reads_each_argument_as_pytest_does(
+    token: str, leaves_out: bool
+) -> None:
+    assert _leaves_tests_out(token) is leaves_out
 
 
 def test_a_missing_extra_skips_unless_its_job_requires_it(
