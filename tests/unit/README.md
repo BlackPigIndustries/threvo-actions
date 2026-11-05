@@ -16,4 +16,7 @@ sets a test DSN and runs `tests/integration` must also set
 their DSN; with that flag they fail instead, so a job that loses or renames its
 DSN cannot report green while running none of them. A job that runs
 `tests/qualification/stripe` must likewise set
-`THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"`.
+`THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"`. The same file also runs that suite
+in a subprocess without its secrets (05/11/2026): it skips without the flag,
+fails with it, and never passes when the `stripe` or `asyncpg` extra is missing
+under the flag.

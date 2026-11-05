@@ -13,8 +13,13 @@ failure.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 _JOB = re.compile(r"^  ([A-Za-z0-9_-]+):[ \t]*(?:#.*)?\n", re.MULTILINE)
@@ -72,3 +77,53 @@ def test_every_job_that_runs_the_stripe_sandbox_qualification_requires_it() -> N
     assert missing == [], (
         f'add THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1" to the env of these jobs: {missing}'
     )
+
+
+def _run_sandbox_suite(
+    *, required: bool, block: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run the qualification suite as CI does, without its secrets."""
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("THREVO_ACTIONS_") and key not in {"GITHUB_SHA"}
+    }
+    if required:
+        env["THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX"] = "1"
+    # A module set to None in sys.modules raises ImportError on import, as a
+    # missing optional extra would.
+    program = (
+        "import sys\n"
+        f"if {block!r}: sys.modules[{block!r}] = None\n"
+        "import pytest\n"
+        "sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '-m', 'stripe_sandbox',"
+        " 'tests/qualification/stripe']))\n"
+    )
+    return subprocess.run(  # noqa: S603 — fixed interpreter and static test program.
+        [sys.executable, "-c", program],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_without_its_secrets_the_sandbox_suite_skips_unless_required() -> None:
+    skipped = _run_sandbox_suite(required=False)
+    assert skipped.returncode == 0, skipped.stdout + skipped.stderr
+    assert " skipped" in skipped.stdout and " failed" not in skipped.stdout
+
+    required = _run_sandbox_suite(required=True)
+    assert required.returncode == 1, required.stdout + required.stderr
+    assert "THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX=1" in required.stdout
+    assert " passed" not in required.stdout
+
+
+@pytest.mark.parametrize("module", ["stripe", "asyncpg"])
+def test_a_required_sandbox_run_without_its_extra_never_passes(module: str) -> None:
+    # The conftest's module-level importorskip errors as an initial conftest
+    # (05/11/2026); a module-level skip in the test files would pass green.
+    required = _run_sandbox_suite(required=True, block=module)
+    assert required.returncode not in (0, 5), required.stdout + required.stderr
+    assert f"could not import '{module}'" in required.stdout + required.stderr
