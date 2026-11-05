@@ -14,4 +14,6 @@ rows, so the update, claim, transfer and erasure statements are checked by
 sets a test DSN and runs `tests/integration` must also set
 `THREVO_ACTIONS_REQUIRE_TEST_DATABASE: "1"`. The database suites skip without
 their DSN; with that flag they fail instead, so a job that loses or renames its
-DSN cannot report green while running none of them.
+DSN cannot report green while running none of them. A job that runs
+`tests/qualification/stripe` must likewise set
+`THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"`.

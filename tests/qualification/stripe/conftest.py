@@ -27,5 +27,8 @@ def sandbox_config() -> StripeSandboxConfig:
                 stripe_sdk_version=stripe.VERSION,
             )
         )
-        pytest.skip("set THREVO_ACTIONS_STRIPE_SANDBOX_API_KEY and THREVO_ACTIONS_STRIPE_TEST_DSN")
+        reason = "set THREVO_ACTIONS_STRIPE_SANDBOX_API_KEY and THREVO_ACTIONS_STRIPE_TEST_DSN"
+        if os.environ.get("THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX") == "1":
+            pytest.fail(f"THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX=1: {reason}", pytrace=False)
+        pytest.skip(reason)
     return config

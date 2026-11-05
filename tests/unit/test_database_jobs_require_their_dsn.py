@@ -1,5 +1,9 @@
 """A workflow job that provides a test database must fail, not skip, without its DSN.
 
+The same holds for the Stripe sandbox qualification and its secret: each job
+that runs ``tests/qualification/stripe`` sets
+``THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX``.
+
 The database suites skip when their DSN variable is unset, so a job that lost or
 renamed its DSN would report green while running none of them. Each job that sets
 a ``THREVO_ACTIONS_*TEST*_DSN`` variable and runs ``tests/integration`` therefore
@@ -19,6 +23,10 @@ _DSN = re.compile(r"^ +THREVO_ACTIONS_\w*TEST\w*_DSN:", re.MULTILINE)
 # runs the suites. The scan reads text because PyYAML is not a declared dependency.
 _REQUIRED = re.compile(
     r"""^      THREVO_ACTIONS_REQUIRE_TEST_DATABASE: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
+)
+_SANDBOX_SUITE = re.compile(r"(?<!--ignore=)tests/qualification/stripe")
+_SANDBOX_REQUIRED = re.compile(
+    r"""^      THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
 )
 
 
@@ -44,4 +52,23 @@ def test_every_job_that_provides_a_test_database_requires_it() -> None:
     missing = [job for job, required in database_jobs.items() if not required]
     assert missing == [], (
         f'add THREVO_ACTIONS_REQUIRE_TEST_DATABASE: "1" to the env of these jobs: {missing}'
+    )
+
+
+def test_every_job_that_runs_the_stripe_sandbox_qualification_requires_it() -> None:
+    """The sandbox suite skips without its secret, writing a not-exercised report.
+
+    A qualification job that lost the secret would otherwise report green.
+    """
+    sandbox_jobs = {
+        f"{path.name}:{name}": bool(_SANDBOX_REQUIRED.search(job))
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        for name, job in _jobs(path.read_text()).items()
+        if _SANDBOX_SUITE.search(job)
+    }
+
+    assert "stripe-qualification.yml:refunds" in sandbox_jobs, "fix the scanner"
+    missing = [job for job, required in sandbox_jobs.items() if not required]
+    assert missing == [], (
+        f'add THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1" to the env of these jobs: {missing}'
     )

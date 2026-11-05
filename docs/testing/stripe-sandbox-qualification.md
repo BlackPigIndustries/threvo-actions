@@ -30,7 +30,9 @@ The runner pins Stripe API `2026-02-25.clover` and records the installed SDK
 version, source revision, account mode, evidence class, scenario,
 database/provider participation, and cleanup status. Reports contain no API
 keys, charge IDs, refund IDs, customer data, or raw provider payloads. Missing
-inputs produce `not_exercised`; they never become an offline pass.
+inputs produce `not_exercised`; they never become an offline pass. Locally the
+cases then skip. The workflow sets `THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX=1`, so
+there a missing secret fails the run (05/11/2026).
 
 ## Current scenarios
 
