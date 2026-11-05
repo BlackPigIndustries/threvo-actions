@@ -129,8 +129,9 @@ def _require_the_stripe_app_extra(program: str = "import asyncpg, stripe") -> No
 
 _PYTEST_RUN = re.compile(r"^\s+- run: uv run pytest\b(?P<arguments>[^\n]*)", re.MULTILINE)
 _THIS_FILE = "tests/unit/test_database_jobs_require_their_dsn.py"
-# Options that can leave a named file's tests out, in any spelling pytest accepts.
-_LEAVES_OUT = ("--ignore", "--deselect", "-k")
+# Options that can leave a named file's tests out or stop them running, in any
+# spelling pytest accepts.
+_LEAVES_OUT = ("--ignore", "--deselect", "-k", "-m", "--co", "--collect-only")
 
 
 def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> None:
@@ -143,11 +144,13 @@ def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> 
 
     assert _EXTRA_REQUIRED.search(job), 'add THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"'
     assert runs, "a pytest run line in the stripe job must name this file as an argument"
+    assert "continue-on-error" not in job, "the stripe job must fail when these tests fail"
     for tokens in runs:
         leaving_out = [token for token in tokens if token.startswith(_LEAVES_OUT)]
         assert not leaving_out, (
             f"the stripe job's pytest line may not leave tests out: {leaving_out}"
         )
+        assert "||" not in tokens, "the stripe job's pytest line may not mask its exit status"
 
 
 def test_a_missing_extra_skips_unless_its_job_requires_it(
