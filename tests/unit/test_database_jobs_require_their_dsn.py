@@ -33,6 +33,9 @@ _SANDBOX_SUITE = re.compile(r"(?<!--ignore=)tests/qualification/stripe")
 _SANDBOX_REQUIRED = re.compile(
     r"""^      THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
 )
+_EXTRA_REQUIRED = re.compile(
+    r"""^      THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
+)
 
 
 def _jobs(workflow: str) -> dict[str, str]:
@@ -109,14 +112,43 @@ def _run_sandbox_suite(
     )
 
 
-def _require_the_stripe_app_extra() -> None:
-    # The main test job installs no stripe-app extra; ci.yml's stripe job runs these.
+def _require_the_stripe_app_extra(program: str = "import asyncpg, stripe") -> None:
+    # The main test job installs no stripe-app extra; ci.yml's stripe job runs these
+    # with THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA=1, where a skip would hide them.
     # Ask a fresh interpreter: other tests put stand-in modules in sys.modules.
     probe = subprocess.run(  # noqa: S603 — fixed interpreter and static test program.
-        [sys.executable, "-c", "import asyncpg, stripe"], capture_output=True, check=False
+        [sys.executable, "-c", program], capture_output=True, check=False
     )
-    if probe.returncode != 0:
-        pytest.skip("needs the stripe-app extra (stripe and asyncpg)")
+    if probe.returncode == 0:
+        return
+    if os.environ.get("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA") == "1":
+        pytest.fail("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA=1 but stripe or asyncpg is missing")
+    pytest.skip("needs the stripe-app extra (stripe and asyncpg)")
+
+
+def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> None:
+    job = _jobs((ROOT / ".github" / "workflows" / "ci.yml").read_text())["stripe"]
+
+    assert _EXTRA_REQUIRED.search(job), 'add THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"'
+    assert "tests/unit/test_database_jobs_require_their_dsn.py" in job
+
+
+def test_a_missing_extra_skips_unless_its_job_requires_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing = "import threvo_actions_module_that_does_not_exist"
+    # Catch every outcome: a skip escaping pytest.raises(fail) would report this
+    # test as skipped, not failed.
+    monkeypatch.delenv("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA", raising=False)
+    with pytest.raises(BaseException) as unrequired:
+        _require_the_stripe_app_extra(missing)
+    assert unrequired.type is pytest.skip.Exception
+
+    monkeypatch.setenv("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA", "1")
+    with pytest.raises(BaseException) as required:
+        _require_the_stripe_app_extra(missing)
+    assert required.type is pytest.fail.Exception
+    assert "REQUIRE_STRIPE_APP_EXTRA=1" in str(required.value)
 
 
 def test_without_its_secrets_the_sandbox_suite_skips_unless_required() -> None:

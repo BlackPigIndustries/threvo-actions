@@ -20,4 +20,7 @@ DSN cannot report green while running none of them. A job that runs
 in a subprocess without its secrets (05/11/2026): it skips without the flag,
 fails with it, and never passes when the `stripe` or `asyncpg` extra is missing
 under the flag. Those subprocess tests need the `stripe-app` extra, so they skip
-in the main test job and run in `ci.yml`'s `stripe` job.
+in the main test job and run in `ci.yml`'s `stripe` job, which sets
+`THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"` so a missing extra fails there
+instead of skipping. The scanner checks that the job keeps both the flag and
+the file.
