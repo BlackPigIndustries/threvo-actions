@@ -126,11 +126,22 @@ def _require_the_stripe_app_extra(program: str = "import asyncpg, stripe") -> No
     pytest.skip("needs the stripe-app extra (stripe and asyncpg)")
 
 
+_PYTEST_RUN = re.compile(r"^\s+- run: uv run pytest\b(?P<arguments>[^#\n]*)", re.MULTILINE)
+_THIS_FILE = re.compile(r"(?<!--ignore=)tests/unit/test_database_jobs_require_their_dsn\.py")
+_DESELECT = re.compile(r"(?:^|\s)(?:-k|--deselect)\b")
+
+
 def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> None:
     job = _jobs((ROOT / ".github" / "workflows" / "ci.yml").read_text())["stripe"]
+    runs = [
+        match["arguments"]
+        for match in _PYTEST_RUN.finditer(job)
+        if _THIS_FILE.search(match["arguments"])
+    ]
 
     assert _EXTRA_REQUIRED.search(job), 'add THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"'
-    assert "tests/unit/test_database_jobs_require_their_dsn.py" in job
+    assert runs, "a pytest run line in the stripe job must name this file (not in a comment)"
+    assert not any(_DESELECT.search(arguments) for arguments in runs), "no -k or --deselect"
 
 
 def test_a_missing_extra_skips_unless_its_job_requires_it(
