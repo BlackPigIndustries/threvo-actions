@@ -41,6 +41,8 @@ jobs:
       THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_LINE_MINOR }}
       THREVO_ACTIONS_STRIPE_PAID_INVOICE_EXPECTED_TOTAL_MINOR: ${{ vars.THREVO_ACTIONS_STRIPE_PAID_INVOICE_EXPECTED_TOTAL_MINOR }}
       THREVO_ACTIONS_QUALIFICATION_REPORT_DIR: qualification-reports
+      # A missing sandbox secret fails the run instead of skipping it green.
+      THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

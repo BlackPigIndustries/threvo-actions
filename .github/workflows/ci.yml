@@ -110,6 +110,7 @@ jobs:
     env:
       THREVO_ACTIONS_STRIPE_TEST_DSN: postgresql://postgres:postgres@localhost:5432/ta_stripe_test_ci
       THREVO_ACTIONS_REQUIRE_TEST_DATABASE: "1"
+      THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
@@ -119,7 +120,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --extra dev --extra stripe-app --locked
-      - run: uv run pytest -q tests/integration/stripe
+      - run: uv run pytest -q tests/integration/stripe tests/unit/test_database_jobs_require_their_dsn.py
 
   aws-kms:
     runs-on: ubuntu-latest

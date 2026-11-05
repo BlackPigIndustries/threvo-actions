@@ -14,4 +14,20 @@ rows, so the update, claim, transfer and erasure statements are checked by
 sets a test DSN and runs `tests/integration` must also set
 `THREVO_ACTIONS_REQUIRE_TEST_DATABASE: "1"`. The database suites skip without
 their DSN; with that flag they fail instead, so a job that loses or renames its
-DSN cannot report green while running none of them.
+DSN cannot report green while running none of them. A job that runs
+`tests/qualification/stripe` must likewise set
+`THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1"`. The same file also runs that suite
+in a subprocess without its secrets (05/11/2026): it skips without the flag,
+fails with it, and never passes when the `stripe` or `asyncpg` extra is missing
+under the flag. Those subprocess tests need the `stripe-app` extra, so they skip
+in the main test job and run in `ci.yml`'s `stripe` job, which sets
+`THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"` so a missing extra fails there
+instead of skipping. The scanner checks that the job keeps the flag and a
+pytest run line naming the file as its own argument, with nothing on that line
+that leaves tests out or stops them running (`--ignore*`, `--deselect`, `-k`,
+`-m` alone or in a cluster such as `-qk`, `--co`), no shell list operator
+(`||`, `|`, `&`, `;`: the default shell has no `pipefail`, so `| tee` would hide
+a failure), no `addopts` override, no `continue-on-error` or `if: false` on
+the job or its steps, and no `PYTEST_ADDOPTS` in the workflow. A parametrized
+test pins which arguments count, so `--cov`, `--color` or `-pno:randomly` stay
+allowed.

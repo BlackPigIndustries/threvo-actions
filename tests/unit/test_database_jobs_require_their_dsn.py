@@ -1,5 +1,9 @@
 """A workflow job that provides a test database must fail, not skip, without its DSN.
 
+The same holds for the Stripe sandbox qualification and its secret: each job
+that runs ``tests/qualification/stripe`` sets
+``THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX``.
+
 The database suites skip when their DSN variable is unset, so a job that lost or
 renamed its DSN would report green while running none of them. Each job that sets
 a ``THREVO_ACTIONS_*TEST*_DSN`` variable and runs ``tests/integration`` therefore
@@ -9,8 +13,14 @@ failure.
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 _JOB = re.compile(r"^  ([A-Za-z0-9_-]+):[ \t]*(?:#.*)?\n", re.MULTILINE)
@@ -19,6 +29,13 @@ _DSN = re.compile(r"^ +THREVO_ACTIONS_\w*TEST\w*_DSN:", re.MULTILINE)
 # runs the suites. The scan reads text because PyYAML is not a declared dependency.
 _REQUIRED = re.compile(
     r"""^      THREVO_ACTIONS_REQUIRE_TEST_DATABASE: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
+)
+_SANDBOX_SUITE = re.compile(r"(?<!--ignore=)tests/qualification/stripe")
+_SANDBOX_REQUIRED = re.compile(
+    r"""^      THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
+)
+_EXTRA_REQUIRED = re.compile(
+    r"""^      THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: *(["']?)1\1 *(?:#.*)?$""", re.MULTILINE
 )
 
 
@@ -45,3 +62,198 @@ def test_every_job_that_provides_a_test_database_requires_it() -> None:
     assert missing == [], (
         f'add THREVO_ACTIONS_REQUIRE_TEST_DATABASE: "1" to the env of these jobs: {missing}'
     )
+
+
+def test_every_job_that_runs_the_stripe_sandbox_qualification_requires_it() -> None:
+    """The sandbox suite skips without its secret, writing a not-exercised report.
+
+    A qualification job that lost the secret would otherwise report green.
+    """
+    sandbox_jobs = {
+        f"{path.name}:{name}": bool(_SANDBOX_REQUIRED.search(job))
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        for name, job in _jobs(path.read_text()).items()
+        if _SANDBOX_SUITE.search(job)
+    }
+
+    assert "stripe-qualification.yml:refunds" in sandbox_jobs, "fix the scanner"
+    missing = [job for job, required in sandbox_jobs.items() if not required]
+    assert missing == [], (
+        f'add THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX: "1" to the env of these jobs: {missing}'
+    )
+
+
+def _run_sandbox_suite(
+    *, required: bool, block: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run the qualification suite as CI does, without its secrets."""
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("THREVO_ACTIONS_") and key not in {"GITHUB_SHA"}
+    }
+    if required:
+        env["THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX"] = "1"
+    # A module set to None in sys.modules raises ImportError on import, as a
+    # missing optional extra would.
+    program = (
+        "import sys\n"
+        f"if {block!r}: sys.modules[{block!r}] = None\n"
+        "import pytest\n"
+        "sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '-m', 'stripe_sandbox',"
+        " 'tests/qualification/stripe']))\n"
+    )
+    return subprocess.run(  # noqa: S603 — fixed interpreter and static test program.
+        [sys.executable, "-c", program],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _require_the_stripe_app_extra(program: str = "import asyncpg, stripe") -> None:
+    # The main test job installs no stripe-app extra; ci.yml's stripe job runs these
+    # with THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA=1, where a skip would hide them.
+    # Ask a fresh interpreter: other tests put stand-in modules in sys.modules.
+    probe = subprocess.run(  # noqa: S603 — fixed interpreter and static test program.
+        [sys.executable, "-c", program], capture_output=True, check=False
+    )
+    if probe.returncode == 0:
+        return
+    if os.environ.get("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA") == "1":
+        pytest.fail("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA=1 but stripe or asyncpg is missing")
+    pytest.skip("needs the stripe-app extra (stripe and asyncpg)")
+
+
+_PYTEST_RUN = re.compile(r"^\s+- run: uv run pytest\b(?P<arguments>[^\n]*)", re.MULTILINE)
+_THIS_FILE = "tests/unit/test_database_jobs_require_their_dsn.py"
+# Long options that leave a named file's tests out or stop them running.
+_LEAVES_OUT = ("--ignore", "--deselect")
+_COLLECTS_ONLY = ("--co", "--collect-only")
+# Short options whose value is the rest of their cluster, as in -pno:randomly.
+_TAKES_A_VALUE = set("cnoprW")
+_SKIPPED_JOB = re.compile(r"^\s+(?:- )?if:\s*(?:\$\{\{\s*)?false\b", re.MULTILINE)
+
+
+def _leaves_tests_out(token: str) -> bool:
+    """Whether one pytest argument can leave tests out, in any spelling pytest accepts."""
+    if token in _COLLECTS_ONLY or token.startswith(_LEAVES_OUT) or "addopts" in token:
+        return True
+    if token.startswith("--") or not token.startswith("-"):
+        return False
+    for option in token[1:]:  # a cluster of short flags, such as -qk
+        if option in "km":
+            return True
+        if option in _TAKES_A_VALUE or not option.isalpha():
+            return False
+    return False
+
+
+def test_the_stripe_job_runs_the_subprocess_tests_and_requires_their_extra() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    job = _jobs(workflow)["stripe"]
+    runs = [
+        tokens
+        for match in _PYTEST_RUN.finditer(job)
+        if _THIS_FILE in (tokens := shlex.split(match["arguments"], comments=True))
+    ]
+
+    assert _EXTRA_REQUIRED.search(job), 'add THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA: "1"'
+    assert runs, "a pytest run line in the stripe job must name this file as an argument"
+    assert "continue-on-error" not in job, "the stripe job must fail when these tests fail"
+    assert not _SKIPPED_JOB.search(job), "the stripe job and its steps must run"
+    assert "PYTEST_ADDOPTS" not in workflow, "options belong on the pytest line, where this reads"
+    for tokens in runs:
+        leaving_out = [token for token in tokens if _leaves_tests_out(token)]
+        assert not leaving_out, (
+            f"the stripe job's pytest line may not leave tests out: {leaving_out}"
+        )
+        # The default shell has no pipefail, so `| tee` hides a failure as `||` does.
+        control = [token for token in tokens if set(token) & set("|&;")]
+        assert not control, f"the stripe job's pytest line may not run in a shell list: {control}"
+
+
+@pytest.mark.parametrize(
+    ("token", "leaves_out"),
+    [
+        ("--ignore=tests/unit", True),
+        ("--ignore-glob=tests/unit/*", True),
+        ("--deselect=tests/unit/x.py::y", True),
+        ("--co", True),
+        ("--collect-only", True),
+        ("-k", True),
+        ("-knot_sandbox", True),
+        ("-m", True),
+        ("-qk", True),
+        ("-qm", True),
+        ("-qktest_every", True),
+        ("-qknot sandbox", True),
+        ("addopts=-k nothing", True),
+        ("-oaddopts=-k nothing", True),
+        ("--override-ini=addopts=-k nothing", True),
+        ("-q", False),
+        ("-ra", False),
+        ("-x", False),
+        ("-n", False),
+        ("auto", False),
+        ("-pno:randomly", False),
+        ("-pmy_plugin", False),
+        ("-Werror", False),
+        ("--cov=threvo_actions", False),
+        ("--color=yes", False),
+        ("--confcutdir=tests", False),
+        ("--maxfail=1", False),
+        ("tests/integration/stripe", False),
+        # Each value-taking letter ends the walk: a k after it is its value.
+        *((f"-{letter}km", False) for letter in "cnoprW"),
+        # A flag letter does not: a k after it is -k.
+        *((f"-{letter}k", True) for letter in "lqsvx"),
+    ],
+)
+def test_the_stripe_scanner_reads_each_argument_as_pytest_does(
+    token: str, leaves_out: bool
+) -> None:
+    assert _leaves_tests_out(token) is leaves_out
+
+
+def test_a_missing_extra_skips_unless_its_job_requires_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing = "import threvo_actions_module_that_does_not_exist"
+    # Catch every outcome: a skip escaping pytest.raises(fail) would report this
+    # test as skipped, not failed.
+    monkeypatch.delenv("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA", raising=False)
+    with pytest.raises(BaseException) as unrequired:
+        _require_the_stripe_app_extra(missing)
+    assert unrequired.type is pytest.skip.Exception
+
+    monkeypatch.setenv("THREVO_ACTIONS_REQUIRE_STRIPE_APP_EXTRA", "1")
+    with pytest.raises(BaseException) as required:
+        _require_the_stripe_app_extra(missing)
+    assert required.type is pytest.fail.Exception
+    assert "REQUIRE_STRIPE_APP_EXTRA=1" in str(required.value)
+
+
+def test_without_its_secrets_the_sandbox_suite_skips_unless_required() -> None:
+    _require_the_stripe_app_extra()
+    skipped = _run_sandbox_suite(required=False)
+    assert skipped.returncode == 0, skipped.stdout + skipped.stderr
+    assert " skipped" in skipped.stdout and " failed" not in skipped.stdout
+
+    required = _run_sandbox_suite(required=True)
+    assert required.returncode == 1, required.stdout + required.stderr
+    assert "THREVO_ACTIONS_REQUIRE_STRIPE_SANDBOX=1" in required.stdout
+    assert " passed" not in required.stdout
+
+
+@pytest.mark.parametrize("module", ["stripe", "asyncpg"])
+def test_a_required_sandbox_run_without_its_extra_never_passes(module: str) -> None:
+    # The conftest's module-level importorskip errors as an initial conftest
+    # (05/11/2026); a module-level skip in the test files would pass green.
+    # Block one import while the other is present, so each is the cause.
+    _require_the_stripe_app_extra()
+    required = _run_sandbox_suite(required=True, block=module)
+    assert required.returncode not in (0, 5), required.stdout + required.stderr
+    assert f"could not import '{module}'" in required.stdout + required.stderr
