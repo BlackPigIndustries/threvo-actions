@@ -25,5 +25,7 @@ in the main test job and run in `ci.yml`'s `stripe` job, which sets
 instead of skipping. The scanner checks that the job keeps the flag and a
 pytest run line naming the file as its own argument, with nothing on that line
 that leaves tests out or stops them running (`--ignore*`, `--deselect`, `-k`,
-`-m`, `--co`), no `|| ...` masking its exit status, and no `continue-on-error`
-on the job.
+`-m` alone or in a cluster such as `-qk`, `--co`), no shell list operator
+(`||`, `|`, `&`, `;`: the default shell has no `pipefail`, so `| tee` would hide
+a failure), no `continue-on-error` on the job and no `PYTEST_ADDOPTS` in the
+workflow.
