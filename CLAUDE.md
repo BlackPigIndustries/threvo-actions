@@ -7,9 +7,9 @@ Plans for this package live in `docs/plans/` and are published in the docs site
 nav. When this checkout sits inside the Threvo workspace, run Compound
 Engineering learnings capture (`ce-compound`) from the workspace root. Run
 `ce-work` as `mode:return-to-caller <plan>` on a private branch or worktree; it
-still commits each unit locally, so reviews cover the commits it made. Shipping
-here: after the three independent reviews (plan coverage, correctness/security,
-test quality), commit with the workspace `ship` skill, or `ce-commit` when this
+still commits each unit locally, so the read covers the commits it made. Shipping
+here: after the one independent read the workspace contract sizes by what the
+change can break (none for inert prose), commit with the workspace `ship` skill, or `ce-commit` when this
 repo is opened alone. Push only when the user asks. Open a PR with
 `ce-commit-push-pr` only when the user asks for one (running `lfg` counts), from
 a feature branch, never `develop` (for a hotfix, state the base `main`).
